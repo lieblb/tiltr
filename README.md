@@ -37,9 +37,10 @@ The last step can take up to 30 minutes on first install.
 You then need to download the source code of ILIAS you want to test against and move it to `testilias/web/ILIAS`, e.g.:
 
 ```
+cd /path/to/testilias
 wget https://github.com/ILIAS-eLearning/ILIAS/archive/v5.3.5.tar.gz
 tar xzfv v5.3.5.tar.gz
-mv ILIAS-5.3.5 ilias-docker/web/ILIAS
+mv ILIAS-5.3.5 web/ILIAS
 ```
 
 TestILIAS will instrument your ILIAS code on the first run and automatically build a fully functional installation (you will not need to perform a setup).
