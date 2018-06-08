@@ -25,6 +25,7 @@ args = parser.parse_args()
 
 base = os.path.dirname(os.path.realpath(__file__))
 os.chdir(base)  # important for docker-compose later
+_, docker_compose_name = os.path.split(base)
 
 tmp_path = os.path.join(base, "headless", "robot", "tmp")
 if not os.path.exists(tmp_path):
@@ -37,7 +38,7 @@ if os.path.isfile(machines_path):
 def publish_machines(machines):
 	with open(machines_path + ".tmp", "w") as f:
 		f.write(json.dumps(machines))
-	os.rename(machines_path + ".tmp", machines_path)
+	os.rename(machines_path + ".tmp", machines_path)  # hopefully atomic
 
 ilias_path = os.path.realpath(os.path.join(base, "web", "ILIAS"))
 if not os.path.isdir(ilias_path) or not os.path.exists(os.path.join(ilias_path, "ilias.php")):
@@ -91,7 +92,11 @@ try:
 		while True:
 			try:
 				machine_ip = subprocess.check_output([
-					"docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "iliasdocker_machine_%d" % (i + 1)]).strip()
+					"docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "%s_machine_%d" % (docker_compose_name, (i + 1))]).strip()
+				if len(str(machine_ip)) == 0:
+					print("failed to lookup machine %d. shutting down." % i)
+					subprocess.call(["docker-compose", "stop"])
+					sys.exit()
 				break
 			except subprocess.CalledProcessError:
 				time.sleep(1)
@@ -101,15 +106,26 @@ try:
 
 	publish_machines(machines)
 
-	print("Robot UI is at http://%s:11150" % socket.gethostname())
+	print("TestILIAS is at http://%s:11150" % socket.gethostname())
+
+	def check_alive():
+		status = subprocess.check_output(["docker", "inspect", "-f", "{{.State.Status}}", "%s_master_1" % docker_compose_name]).strip()
+		if py3:
+			status = status.decode("utf-8")
+		return status != "exited"
 
 	while True:
+		if not check_alive():
+			print("master has shut down unexpectedly. try a docker logs %s_master_1" % docker_compose_name)
+			subprocess.call(["docker-compose", "stop"])
+			sys.exit()
 		line = compose.stdout.readline()
 		if py3:
 			line = line.decode("utf-8")
 		if line != '':
 			if filter_log(line):
 				log.write(line)
+
 except KeyboardInterrupt:
 	print("Please wait while docker-compose is shutting down.")
 	subprocess.call(["docker-compose", "stop"])
