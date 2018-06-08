@@ -15,7 +15,7 @@ $(function() {
 			workaroundKeys.push(key);
 			var help = workarounds[i][1];
 			$("#workarounds-accordion-content").append('<label class="checkbox"><input id="' +
-				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label id="' + key + '_help"><p class="help"></p>');
+				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label><p id="' + key + '_help" class="help"></p>');
 			$("#" + key + "_help").text(help);
 		}
 	});
