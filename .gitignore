@@ -2,4 +2,6 @@
 *.pyc
 headless/robot/pkg/venv
 headless/robot/pkg/.idea
-
+headless/robot/tmp
+web/ILIAS
+docker-compose.log

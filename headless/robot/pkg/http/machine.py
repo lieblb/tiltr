@@ -21,8 +21,15 @@ from ..driver import TakeExamCommand
 
 class GlobalState:
 	def __init__(self):
-		self.browser = Browser(headless=True)
+		self.browser = None
 		self.runner = None
+
+	def init_browser(self, machine_index):
+		log_path = "tmp/geckodriver.machine_%d.log" % machine_index
+		open(log_path, 'w').close()  # empty log file
+		if self.browser is None:
+			self.browser = Browser(headless=True, log_path=log_path)
+		return self.browser
 
 
 class Runner(threading.Thread):
@@ -78,7 +85,7 @@ class StartHandler(tornado.web.RequestHandler):
 		if self.state.runner is None:
 			command_json = self.get_argument("command_json")
 			command = TakeExamCommand(from_json=command_json)
-			self.state.runner = Runner(self.state.browser, batch, command)
+			self.state.runner = Runner(self.state.init_browser(command.machine_index), batch, command)
 			self.state.runner.start()
 
 		self.finish()
