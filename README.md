@@ -1,7 +1,7 @@
 
 # TestILIAS
 
-TestILIAS is a portable, scalable software testing kit for verifying the correctness of essential functions of the Test & Assessment module of ILIAS 5.
+TestILIAS is an open source, portable, scalable software testing kit for verifying the correctness of essential functions of the Test & Assessment module of ILIAS 5.
 
 It's self-contained, rather easy to install on a single local machine (tested so far on Linux and macOS) or a server, and allows to run tests using a configurable number of parallel test users.
 
@@ -63,6 +63,8 @@ Be patient during the first setup, it may take some time. If your installation i
 
 ## Starting Test Runs
 
+<img src="https://github.com/lieblb/testilias/blob/master/docs/main-ui.jpg?raw=true">
+
 Start an automatic test run via the "Start" button. "Loop" allows to to run test runs indefinitely (i.e. start a new run as soon as one ends). Workarounds gives you a list of problems currently known in ILIAS. Turning one of these checkboxes on will mean that your tests will fail sooner or later.
 
 Clicking on the ILIAS link below the header will bring you to TestILIAS' internal ILIAS installation. You can login as root using the password "odysseus".
@@ -71,7 +73,11 @@ The results table gives you detailed protocols of each test run as well as the e
 
 ## Response Times
 
+<img src="https://github.com/lieblb/testilias/blob/master/docs/response-times-ui.jpg?raw=true">
+
 ## Status
+
+<img src="https://github.com/lieblb/testilias/blob/master/docs/status-ui.jpg?raw=true">
 
 During test runs, TestILIAS allows you to keep track of what's happening on the various client machines:
 
