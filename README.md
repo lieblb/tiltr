@@ -84,6 +84,10 @@ During test runs, TestILIAS allows you to keep track of what's happening on the 
 
 # Technical stuff
 
+## Debugging startup problems
+
+Commands like `docker ps` and `docker logs testilias_master_1` are your friend.
+
 ## Recreating the docker-compose configuration
 
 Strange things happen with docker sometimes and you want to completely recreate the complete docker-compose setup. Here's one way to do this (note that this deletes all dangling volumes of all docker containers, so be very careful if you're not a dedicated machine):
