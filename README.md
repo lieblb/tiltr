@@ -58,6 +58,8 @@ After TestILIAS started up, you should be able to access the TestILIAS main GUI 
 
 `http://mymachine:11150/`
 
+Please note that the default network setup globally exposes your port; if your firewall does not block it, other people will be able to reach your TestILIAS installation from outside (you can change this by changing TestILIAS' `docker-compose.yml`).
+
 Be patient during the first setup, it may take some time. If your installation is local, `mymachine` will be `localhost`.
 
 # The TestILIAS UI
