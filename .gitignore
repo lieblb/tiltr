@@ -1,0 +1,5 @@
+.DS_Store
+*.pyc
+headless/robot/pkg/venv
+headless/robot/pkg/.idea
+

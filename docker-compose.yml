@@ -1,0 +1,53 @@
+version: '3'
+
+services:
+  web:
+    build: web
+    ports:
+      - "11145:80"
+    expose:
+      - "80"
+    volumes:
+      - ./web/ILIAS:/var/www/html/ILIAS
+    networks:
+      - net
+
+  db:
+    build: db
+    environment:
+      MYSQL_ROOT_PASSWORD: dev
+      MYSQL_USER: dev
+      MYSQL_PASSWORD: dev
+      MYSQL_DATABASE: ilias
+    networks:
+      - net
+
+  master:
+    build: headless
+    ports:
+      - "11150:80"
+    expose:
+      - "80"
+    volumes:
+      - ./headless/robot:/robot
+    working_dir: /robot
+    entrypoint: python -m pkg master
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - net
+  
+  machine:
+    build: headless
+    volumes:
+      - ./headless/robot:/robot
+    working_dir: /robot
+    entrypoint: python -m pkg machine
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - net
+
+networks:
+  net:
+    driver: bridge

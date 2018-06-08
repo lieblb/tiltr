@@ -1,0 +1,99 @@
+<html>
+	<head>
+		<link rel="stylesheet" type="text/css" href="/static/bulma/css/bulma.min.css">
+		<link rel="stylesheet" href="/static/open-iconic/font/css/open-iconic.min.css">
+		<link rel="stylesheet" href="/static/bulma-accordion/dist/bulma-accordion.min.css">
+
+		<script src="/static/jquery/dist/jquery.min.js"></script>
+		<script src="/static/plotly.js/dist/plotly.min.js"></script>
+		<script src="/static/bulma-accordion/dist/bulma-accordion.min.js"></script>
+
+		<script>
+			var NUM_MACHINES = {{ num_machines }};
+		</script>
+		<script src="static/default/main.js"></script>
+	</head>
+	<body>
+		<section class="hero is-primary">
+		  <div class="hero-body">
+			<div class="container">
+			  <h1 class="title">
+				TestILIAS
+			  </h1>
+			  <h2 class="subtitle">
+				  <a href="http://{{ilias_url}}/ILIAS/" target="_blank">ILIAS {{ ilias_version }}</a>
+			  </h2>
+			</div>
+		  </div>
+		</section>
+		<section class="section">
+		    <div class="container">
+				<div class="control">
+					<a class="button is-medium" id="start">Start</a>
+					
+					<a id="run-loop" class="button is-medium">Loop</a>
+
+					<span class="is-pulled-right">
+						{{ num_machines }} machines connected.
+					</span>
+				</div>
+
+				<section class="accordions" style="margin-top:2em;">
+					<article id="workarounds-accordion" class="accordion is-active">
+						<div class="accordion-header toggle">
+							<p>Workarounds</p>
+						</div>
+						<div class="accordion-body">
+							<div id="workarounds-accordion-content" class="accordion-content">
+							</div>
+						</div>
+					</article>
+				</section>
+
+				<article class="message is-info" id="resultsview" style="margin-top:2em;">
+					<div class="message-header">
+					Results
+					<button class="delete" id="delete-results"></button>
+					</div>
+					<div class="message-body">
+						<table class="table is-fullwidth">
+							<tbody id="results">
+							</tbody>
+						</table>
+					</div>
+				</article>
+
+				<article class="message is-info" id="performance-view" style="margin-top:2em;">
+					<div class="message-header">
+					Response Times
+					</div>
+					<div id="performance-plot"></div>
+				</article>
+
+
+				<section class="accordions" style="margin-top:2em;">
+					<article id="status-accordion" class="accordion">
+						<div class="accordion-header toggle">
+							<p>Status</p>
+						</div>
+						<div class="accordion-body">
+							<div class="accordion-content">
+
+								<div class="control" style="padding-top:1em;">
+									<textarea class="textarea" id="log" rows="20" readonly>
+									</textarea>
+								</div>
+
+								<div style="padding-top:1em;"></div>
+
+							    <div id="images" class="container box">
+								</div>
+
+							</div>
+						</div>
+					</article>
+				</section>
+			</div>
+		</div>
+	</body>
+</html>
