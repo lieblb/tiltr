@@ -11,6 +11,7 @@ import json
 import random
 
 from drivers import Login, TestDriver, Test
+from ..result import Result
 
 
 def random_text(n, random_chars):
@@ -120,11 +121,11 @@ class TakeExamCommand:
 				break
 
 	def _pass3(self, driver, report):
-		for i in range(5):
-			driver.goto_next_or_previous_question()
+		for i in range(len(self.questions)):
 			driver.verify_answer()
 			if random.random() < 0.5:
 				driver.randomize_answer()
+			driver.goto_next_or_previous_question()
 
 	def run(self, browser, report):
 		report("running test on machine #%s (%s)." % (self.machine_index, self.machine))
@@ -144,19 +145,23 @@ class TakeExamCommand:
 					context = RandomContext(self.workarounds)
 				
 				with test_driver.start(context, self.questions) as exam_driver:
-					self._pass1(exam_driver, report)
-					self._pass2(exam_driver, report)
-					self._pass3(exam_driver, report)
+					try:
+						self._pass1(exam_driver, report)
+						self._pass2(exam_driver, report)
+						self._pass3(exam_driver, report)
 
-					result = exam_driver.get_expected_result()
-		except Exception as e:
+						result = exam_driver.get_expected_result()
+					except Exception as e:
+						traceback.print_exc()
+						report("test aborted with error: %s" % traceback.format_exc())
+
+						result = exam_driver.get_expected_result()
+						result.add("failed_with_error", str(e))
+						return result
+		except:
 			traceback.print_exc()
-			report("test aborted.")
-
-			result = exam_driver.get_expected_result()
-			result.add("failed_with_error", str(e))
-			return result
+			report("test aborted with error: %s" % traceback.format_exc())
+			return None
 
 		report("done running test.")
 		return result
-

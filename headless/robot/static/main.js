@@ -20,51 +20,66 @@ $(function() {
 		}
 	});
 
+	function getIcon(name) {
+		return $($("#icon_" + name).html());
+	}
+
 	function updateResults() {
 		$.getJSON(host + "/results.json", function(results) {
+			$("#results-overview").empty();
 			$("#results").empty();
 
-			if (results.length == 0) {
-				$("#resultsview").hide();
-				$("#performance-view").hide();
+			if (results.entries.length == 0) {
+				$("#results-accordions").hide();
 			} else {
-				$("#resultsview").show();
-				$("#performance-view").show();
+				$("#results-accordions").show();
 			}
 
-			for (var i = 0; i < results.length; i++) {
+			for (var status in results.counts) {
+				var count = results.counts[status];
+
 				var tr = $("<tr></tr>");
-				tr.append($("<td>" + results[i].time + "</td>"));
 
-				if (results[i].success == "OK") {
-					var icon = $('<td><span id="result-ok" class="icon has-text-success"><span class="oi iconic-size-lg" data-glyph="circle-check" style="font-size:1em;"></span></span></td>');
-					tr.append(icon);
-				} else {
-					var icon = $('<td><span id="result-ok" class="icon has-text-danger"><span class="oi iconic-size-lg" data-glyph="circle-x" style="font-size:1em;"></span></span></td>');
-					tr.append(icon);
-				}
+				var td;
 
-				tr.append($("<td>" + results[i].success + ".</td>"));
+				td = $("<td></td>");
+				td.html(getIcon("status_" + status));
+				tr.append(td);
 
-				tr.append($('<td><a href="' + host + '/result/' + results[i].batch + '.zip">Download</a></td>'));
+				td = $("<td></td>");
+				td.text(count.runs);
+				tr.append(td);
+
+				td = $("<td></td>");
+				td.text(count.users);
+				tr.append(td);
+
+				$("#results-overview").append(tr);
+            }
+
+			var entries = results.entries;
+			for (var i = 0; i < entries.length; i++) {
+				var tr = $("<tr></tr>");
+				tr.append($("<td>" + entries[i].time + "</td>"));
+
+				var td = $("<td></td>");
+				td.append(getIcon("status_" + entries[i].success));
+				tr.append(td);
+
+				tr.append($("<td>" + entries[i].success + ".</td>"));
+
+				tr.append($('<td><a href="' + host + '/result/' + entries[i].batch + '.zip">Download</a></td>'));
 
 				$("#results").append(tr);
 			}
 
-			if (results.length > 0) {
-				//console.log("loading performance data");
+			if (entries.length > 0) {
 				$.getJSON(host + "/performance.json", function(performance) {
-					//console.log("received performance data", performance);
-
 					var trace = {
 					    x: performance,
 					    type: 'histogram'
 					};
 					var layout = {
-						/*title: 'Response Times',
-					    xaxis: {
-							title: 'Seconds'
-					    }*/						
 					};
 					var data = [trace];
 					Plotly.newPlot('performance-plot', data, layout);

@@ -289,7 +289,10 @@ class LongTextAnswerPlainHTML(AbstractLongTextAnswer):
 
 class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 	def _get_ui(self, context):
-		iframe_id = self.browser.find_by_css(".ilc_question_TextQuestion iframe").first["id"]
+		iframe_css = ".ilc_question_TextQuestion iframe"
+		if not self.browser.is_element_present_by_css(iframe_css):
+			raise Exception("could not find ilc_question_TextQuestion iframe")
+		iframe_id = self.browser.find_by_css(iframe_css).first["id"]
 
 		with self.browser.get_iframe(iframe_id) as iframe:
 			selector = "#tinymce"
@@ -304,7 +307,10 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 			return "\n".join(paragraphs)
 
 	def _set_ui(self, value, context):
-		iframe_id = self.browser.find_by_css(".ilc_question_TextQuestion iframe").first["id"]
+		iframe_css = ".ilc_question_TextQuestion iframe"
+		if not self.browser.is_element_present_by_css(iframe_css):
+			raise Exception("could not find ilc_question_TextQuestion iframe")
+		iframe_id = self.browser.find_by_css(iframe_css).first["id"]
 
 		with self.browser.get_iframe(iframe_id) as iframe:
 			selector = "#tinymce"

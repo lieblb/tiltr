@@ -27,7 +27,7 @@ def get_ilias_version():
 	from splinter import Browser
 	log_path = "tmp/geckodriver.master.log"
 	open(log_path, 'w').close()  # empty log file
-	browser = Browser(headless=True, log_path=log_path)
+	browser = Browser(headless=True, log_path=log_path, wait_time=5)
 	browser.visit("http://web:80/ILIAS")
 
 	# if this is the first startup of ILIAS, it can take quite some time, until it's available.

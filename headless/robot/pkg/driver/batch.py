@@ -320,7 +320,8 @@ class Batch(threading.Thread):
 
 			try:
 				with open_results() as db:
-					db.put(batch_id=self.batch_id, success=success, xls=xls, protocol=protocol)
+					db.put(batch_id=self.batch_id, success=success, xls=xls,
+						protocol=protocol, num_users=len(users))
 					db.put_performance_data(performance_data)
 			finally:
 				self.report_master("finished with status %s." % success)

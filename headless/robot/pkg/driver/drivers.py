@@ -67,10 +67,15 @@ class Login:
 
 
 def goto_administration_page(browser, id):
-	if not browser.find_by_css("#mm_adm_tr"):
+	if not browser.is_element_present_by_css("#mm_adm_tr"):
 		browser.visit("http://web:80/ILIAS")
-	browser.find_by_css("#mm_adm_tr").click()
-	browser.find_by_css("#%s" % id).click()
+	for i in range(5):
+		browser.find_by_css("#mm_adm_tr").click()
+		if browser.is_element_present_by_css("#%s" % id):
+			browser.find_by_css("#%s" % id).click()
+			return
+		time.sleep(1)
+	raise Exception("goto_administration_page failed.")
 
 
 def goto_test_administration(browser):
@@ -278,19 +283,30 @@ class ExamDriver:
 					self.report("goto next question.")
 					self.browser.find_by_css('a[data-nextcmd="nextQuestion"]').click()
 					self.confirm_save()
+					return True
 				else:
 					self.report("goto previous question.")
 					self.browser.find_by_css('a[data-nextcmd="previousQuestion"]').click()
 					self.confirm_save()
+					return False
 
 	def has_next_question(self):
 		return self.browser.is_element_present_by_css('a[data-nextcmd="nextQuestion"]')
 
+	def has_previous_question(self):
+		return self.browser.is_element_present_by_css('a[data-nextcmd="previousQuestion"]')
+
 	def confirm_save(self):
-		for button in self.browser.find_by_css("#tst_save_on_navigation_button"):
-			if button.visible:
-				with wait_for_page_load(self.browser):
-					self.browser.find_by_css("#tst_save_on_navigation_button").click()
+		if self.browser.is_element_present_by_css("#tst_save_on_navigation_button"):
+			for i in range(2):
+				try:
+					nav = self.browser.find_by_css("#tst_save_on_navigation_button")
+					if nav and nav.first.visible:
+						with wait_for_page_load(self.browser):
+							nav.first.click()
+				except:
+					# guard against StaleElementReferenceException
+					pass
 
 	def get_sequence_id(self):
 		return int(http_get_parameters(self.browser.url)["sequence"])
@@ -395,6 +411,7 @@ class TestDriver():
 		self.browser = browser
 		self.test = test
 		self.report = report
+		self.cached_link = None
 
 	def import_test(self):
 		self.report("importing test.")
@@ -579,6 +596,10 @@ class TestDriver():
 		self.browser.find_by_css('input[name="cmd[confirmDeleteAllUserResults]"]').click()		
 
 	def goto(self):
+		if self.cached_link is not None:
+			self.browser.visit(self.cached_link)
+			return True
+
 		for i in range(5):
 			self.browser.visit("http://web:80/ILIAS/")
 			self.browser.find_by_css(".glyphicon-search").click()
@@ -607,7 +628,8 @@ class TestDriver():
 				if link.visible:
 					with wait_for_page_load(self.browser):
 						link.click()
-						return True
+					self.cached_link = self.browser.url
+					return True
 			time.sleep(1)
 
 		return False
@@ -617,11 +639,13 @@ class TestDriver():
 		if self.browser.is_element_present_by_css("input[name='cmd[resumePlayer]']"):
 			if not allow_resume:
 				raise Exception("test has already been started by this user. aborting.")
-			self.browser.find_by_css("input[name='cmd[resumePlayer]']").click()
+			with wait_for_page_load(self.browser):
+				self.browser.find_by_css("input[name='cmd[resumePlayer]']").click()
 		else:
 			startButton = self.browser.find_by_css("input[name='cmd[startPlayer]']")
 			if startButton:
-				startButton.click()
+				with wait_for_page_load(self.browser):
+					startButton.click()
 			else:
 				raise Exception("user does not have rights to start this test. aborting.")
 

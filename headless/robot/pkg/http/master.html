@@ -12,6 +12,21 @@
 			var NUM_MACHINES = {{ num_machines }};
 		</script>
 		<script src="static/default/main.js"></script>
+
+		<script id="icon_status_OK" type="text/plain">
+			<span id="result-ok" class="icon has-text-success">
+				<span class="oi iconic-size-lg" data-glyph="circle-check" style="font-size:1em;">
+				</span>
+			</span>
+		</script>
+
+		<script id="icon_status_FAIL" type="text/plain">
+			<span id="result-ok" class="icon has-text-danger">
+				<span class="oi iconic-size-lg" data-glyph="circle-x" style="font-size:1em;">
+				</span>
+			</span>
+		</script>
+
 	</head>
 	<body>
 		<section class="hero is-primary">
@@ -50,27 +65,6 @@
 					</article>
 				</section>
 
-				<article class="message is-info" id="resultsview" style="margin-top:2em;">
-					<div class="message-header">
-					Results
-					<button class="delete" id="delete-results"></button>
-					</div>
-					<div class="message-body">
-						<table class="table is-fullwidth">
-							<tbody id="results">
-							</tbody>
-						</table>
-					</div>
-				</article>
-
-				<article class="message is-info" id="performance-view" style="margin-top:2em;">
-					<div class="message-header">
-					Response Times
-					</div>
-					<div id="performance-plot"></div>
-				</article>
-
-
 				<section class="accordions" style="margin-top:2em;">
 					<article id="status-accordion" class="accordion">
 						<div class="accordion-header toggle">
@@ -93,6 +87,62 @@
 						</div>
 					</article>
 				</section>
+
+				<article id="results-accordions" class="message is-info" style="margin-top:2em;">
+					<div class="message-header">
+					Results
+					<button class="delete" id="delete-results"></button>
+					</div>
+					<div class="message-body">
+
+					<section class="accordions">
+						<article id="results-summary-accordion" class="accordion is-active">
+							<div class="accordion-header toggle">
+								<p>Summary</p>
+							</div>
+							<div class="accordion-body">
+								<table class="table is-fullwidth">
+									<thead>
+										<td></td>
+										<td>Runs</td>
+										<td>Users</td>
+									</thead>
+									<tbody id="results-overview">
+									</tbody>
+								</table>
+							</div>
+						</article>
+
+						<article id="results-accordion" class="accordion" style="margin-top:2em;">
+							<div class="accordion-header toggle">
+								<p>Details</p>
+							</div>
+							<div class="accordion-body">
+								<div id="results-accordion-content" class="accordion-content">
+									<table class="table is-fullwidth">
+										<tbody id="results">
+										</tbody>
+									</table>
+								</div>
+							</div>
+						</article>
+
+						<article class="accordion" style="margin-top:2em;">
+							<div class="accordion-header toggle">
+								<p>Performance</p>
+							</div>
+							<div class="accordion-body">
+								<div id="results-performance-content" class="accordion-content">
+									<div id="performance-plot"></div>
+								</div>
+							</div>
+						</article>
+					</section>
+
+
+					</div>
+				</article>
+
 			</div>
 		</div>
 	</body>

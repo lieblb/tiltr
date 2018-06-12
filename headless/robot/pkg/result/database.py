@@ -20,7 +20,7 @@ class DB:
 		db_path = os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "results.db")
 		self.db = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
 		c = self.db.cursor()
-		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT)")
+		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT, nusers INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
 		self.db.commit()
 		c.close()
@@ -29,10 +29,10 @@ class DB:
 	def __exit__(self, *args):
 		self.db.close()
 
-	def put(self, batch_id, success, xls, protocol):
+	def put(self, batch_id, success, xls, protocol, num_users):
 		c = self.db.cursor()
-		c.execute("INSERT INTO results (created, batch, success, xls, protocol) VALUES (?, ?, ?, ?, ?)",
-			(datetime.datetime.now(), batch_id, success, sqlite3.Binary(xls), protocol))
+		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers) VALUES (?, ?, ?, ?, ?, ?)",
+			(datetime.datetime.now(), batch_id, success, sqlite3.Binary(xls), protocol, num_users))
 		self.db.commit()
 		c.close()
 
@@ -44,6 +44,17 @@ class DB:
 
 	def get_json(self):
 		c = self.db.cursor()
+
+		c.execute("SELECT success, COUNT(success), SUM(nusers) FROM results GROUP BY success")
+		counts = dict(OK=dict(runs=0, users=0), FAIL=dict(runs=0, users=0))
+		while True:
+			row = c.fetchone()
+			if row is None:
+				break
+			counts[row[0]] = dict(
+				runs=row[1],
+				users=row[2])
+
 		c.execute("SELECT created, batch, success FROM results ORDER BY created")
 
 		entries = []
@@ -60,7 +71,7 @@ class DB:
 				success=success
 			))
 		c.close()
-		return json.dumps(entries)
+		return json.dumps(dict(counts=counts, entries=entries))
 
 	def get_performance_data_json(self):
 		c = self.db.cursor()

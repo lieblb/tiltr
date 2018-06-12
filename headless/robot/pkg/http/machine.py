@@ -7,9 +7,9 @@
 
 import threading
 import traceback
-import StringIO
 import sys
 import json
+import time
 
 import tornado.ioloop
 import tornado.web
@@ -21,24 +21,27 @@ from ..driver import TakeExamCommand
 
 class GlobalState:
 	def __init__(self):
-		self.browser = None
 		self.runner = None
+		self.wait_time = 10
 
-	def init_browser(self, machine_index):
+	def create_browser(self, machine_index, wait_time):
 		log_path = "tmp/geckodriver.machine_%d.log" % machine_index
 		open(log_path, 'w').close()  # empty log file
-		if self.browser is None:
-			self.browser = Browser(headless=True, log_path=log_path)
-		return self.browser
+		return Browser(headless=True, log_path=log_path, wait_time=wait_time)
 
 
 class Runner(threading.Thread):
-	def __init__(self, browser, batch, command):
+	def __init__(self, state, wait_time, batch, command):
 		threading.Thread.__init__(self)
-		self.browser = browser
+		self.browser = state.create_browser(command.machine_index, wait_time)
+		self.wait_time = wait_time
 		self.batch = batch
 		self.command = command
+
 		self.screenshot = None
+		self.screenshot_valid_time = time.time()
+		self.screenshot_keep = 5
+
 		self.messages = []
 
 	def get_batch(self):
@@ -46,20 +49,27 @@ class Runner(threading.Thread):
 
 	def run(self):
 		def report(*args):
-			self.screenshot = self.browser.driver.get_screenshot_as_base64()
+			if time.time() > self.screenshot_valid_time:
+				try:
+					self.screenshot = self.browser.driver.get_screenshot_as_base64()
+					self.screenshot_valid_time = time.time() + self.screenshot_keep
+				except:
+					pass # screenshot failed
+
 			self.messages.append(["ECHO", " ".join("%s" % arg for arg in args)])
 
 		try:
+			report("machine browser has wait time %d." % self.wait_time)
 			expected_result = self.command.run(self.browser, report)
-			self.messages.append(["DONE", expected_result.to_json()])
+			if expected_result is None:
+				self.messages.append(["ERROR", "no result obtained"])
+			else:
+				self.messages.append(["DONE", expected_result.to_json()])
 		except:
 			traceback.print_exc()
-
-			buffer = StringIO.StringIO()
-			traceback.print_exc(file=buffer)
-			message = buffer.getvalue()
-
-			self.messages.append(["ERROR", message])
+			self.messages.append(["ERROR", traceback.format_exc()])
+		finally:
+			self.browser.quit()
 
 	def get_messages(self, index):
 		return self.messages[index:]
@@ -82,10 +92,12 @@ class StartHandler(tornado.web.RequestHandler):
 		if self.state.runner and not self.state.runner.is_alive():
 			self.state.runner = None
 
+		wait_time = 10
+
 		if self.state.runner is None:
 			command_json = self.get_argument("command_json")
 			command = TakeExamCommand(from_json=command_json)
-			self.state.runner = Runner(self.state.init_browser(command.machine_index), batch, command)
+			self.state.runner = Runner(self.state, wait_time, batch, command)
 			self.state.runner.start()
 
 		self.finish()

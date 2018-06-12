@@ -23,7 +23,7 @@ class Workarounds:
 			(
 				# see https://www.ilias.de/mantis/view.php?id=23143.
 				"supports_dollar_in_cloze",
-				"<, > cause problems in cloze questions, e.g. \"cv$1a\" becomes \"cva\"."
+				"$ cause problems in cloze questions, e.g. \"cv$1a\" becomes \"cva\"."
 			),
 			(
 				"supports_empty_answers",
