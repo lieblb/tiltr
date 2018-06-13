@@ -42,10 +42,12 @@ def get_ilias_version():
 
 
 class Looper(threading.Thread):
-	def __init__(self, state, workarounds):
+	def __init__(self, state, test_name, workarounds, wait_time):
 		threading.Thread.__init__(self)
 		self.state = state
+		self.test_name = test_name
 		self.workarounds = workarounds
+		self.wait_time = wait_time
 		self.done = False
 
 	def run(self):
@@ -54,7 +56,7 @@ class Looper(threading.Thread):
 				self.state.batch = None
 
 			if self.state.batch is None:
-				self.state.start_batch(self.workarounds)
+				self.state.start_batch(self.test_name, self.workarounds, self.wait_time)
 
 			time.sleep(1)
 
@@ -81,7 +83,7 @@ class GlobalState:
 			self.looper = Looper(self, self.batch.workarounds)
 			self.looper.start()
 
-	def start_batch(self, workarounds):
+	def start_batch(self, test_name, workarounds, wait_time):
 		if self.batch and self.batch.is_done():
 			self.batch = None
 
@@ -90,13 +92,12 @@ class GlobalState:
 			return None
 
 		if self.batch is None:
-			test_name = "1527690895__0__tst_306"  # Astronomie
-			self.batch = Batch(self.machines, ilias_version, test_name, workarounds)
+			self.batch = Batch(self.machines, ilias_version, test_name, workarounds, wait_time)
 			self.batch.start()
 
 		if self.looping:
 			if self.looper is None:
-				self.looper = Looper(self, workarounds)
+				self.looper = Looper(self, test_name, workarounds, wait_time)
 				self.looper.start()
 			else:
 				self.looper.workarounds = workarounds
@@ -136,7 +137,8 @@ class StartBatchHandler(tornado.web.RequestHandler):
 
 	def post(self):
 		workarounds = Workarounds(from_json=json.loads(self.request.body))
-		batch_id = self.state.start_batch(workarounds)
+		test_name = "1527690895__0__tst_306"  # Astronomie
+		batch_id = self.state.start_batch(test_name, workarounds, 10)
 
 		if batch_id is None:
 			self.write("error")

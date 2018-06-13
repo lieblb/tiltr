@@ -91,6 +91,7 @@ class TakeExamCommand:
 		self.username = data["username"]
 		self.password = data["password"]
 		self.test_id = data["test_id"]
+		self.wait_time = data["wait_time"]
 
 	def to_json(self):
 		return json.dumps(dict(
@@ -101,7 +102,8 @@ class TakeExamCommand:
 			password=self.password,
 			test_id=self.test_id,
 			questions=pickle.dumps(self.questions, pickle.HIGHEST_PROTOCOL).encode('base64'),
-			workarounds=pickle.dumps(self.workarounds, pickle.HIGHEST_PROTOCOL).encode('base64')))
+			workarounds=pickle.dumps(self.workarounds, pickle.HIGHEST_PROTOCOL).encode('base64'),
+			wait_time=self.wait_time))
 
 	def _pass1(self, driver, report):
 		driver.goto_first_question()
@@ -151,13 +153,10 @@ class TakeExamCommand:
 						self._pass3(exam_driver, report)
 
 						result = exam_driver.get_expected_result()
-					except Exception as e:
+					except:
 						traceback.print_exc()
 						report("test aborted with error: %s" % traceback.format_exc())
-
-						result = exam_driver.get_expected_result()
-						result.add("failed_with_error", str(e))
-						return result
+						return Result.from_error(traceback.format_exc())
 		except:
 			traceback.print_exc()
 			report("test aborted with error: %s" % traceback.format_exc())

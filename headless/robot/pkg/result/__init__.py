@@ -65,6 +65,12 @@ class Result:
 		assert key not in self.properties
 		self.properties[key] = value
 
+	@staticmethod
+	def from_error(err):
+		r = Result("error")
+		r.add("error", err)
+		return r
+
 	def get(self, key):
 		return self.properties.get(key, None)
 

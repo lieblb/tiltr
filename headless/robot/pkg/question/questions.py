@@ -106,8 +106,6 @@ class ClozeQuestion():
 			score += choice_score
 			answers[gap.index] = choice
 
-		print("random answer:", answers, score)
-
 		return answers, score
 
 

@@ -49,6 +49,7 @@ def take_exam(args):
 
 	result_json = None
 	report("master", "passing take_exam to %s." % machine)
+	sleep_time = 1
 
 	try:
 		r = requests.post("http://%s:8888/start/%s" % (machine, batch_id),
@@ -61,7 +62,7 @@ def take_exam(args):
 		index = 0
 
 		while result_json is None:
-			time.sleep(1)
+			time.sleep(sleep_time)
 
 			r = requests.get("http://%s:8888/monitor/%s/%d" % (machine, batch_id, index))
 			if r.status_code != 200:
@@ -81,10 +82,10 @@ def take_exam(args):
 
 			index += len(messages)
 
-	except Exception as e:
+	except:
 		traceback.print_exc()
-		report("master", "machine %s failed: %s" % (machine, str(e)))
-		raise e
+		report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+		return Result.from_error(traceback.format_exc())
 
 	assert result_json is not None
 	report("master", "received take_exam results from %s." % machine)
@@ -92,7 +93,7 @@ def take_exam(args):
 
 
 class Batch(threading.Thread):
-	def __init__(self, machines, ilias_version, test_name, workarounds):
+	def __init__(self, machines, ilias_version, test_name, workarounds, wait_time):
 		threading.Thread.__init__(self)
 
 		self.sockets = []
@@ -100,6 +101,7 @@ class Batch(threading.Thread):
 		self.machines = machines
 		self.ilias_version = ilias_version
 		self.workarounds = workarounds
+		self.wait_time = wait_time
 
 		self.machines_lookup = dict((v, k) for k, v in machines.iteritems())
 		self.machines_lookup["master"] = "master"
@@ -119,7 +121,9 @@ class Batch(threading.Thread):
 			self.report_master("connecting to ILIAS %s." % self.ilias_version)
 
 			# moz:webdriverClick needed for file uploads to work.
-			with Browser(headless=True, capabilities={"moz:webdriverClick": False}) as browser:
+			capabilities = {"moz:webdriverClick": False}
+
+			with Browser(headless=True, capabilities=capabilities, wait_time=self.wait_time) as browser:
 				self.browser = browser
 
 				test_driver = TestDriver(browser, self.test, self.report_master)
@@ -285,7 +289,8 @@ class Batch(threading.Thread):
 							password=user.get_password(),
 							test_id=self.test.get_id(),
 							questions=questions,
-							workarounds=self.workarounds)))
+							workarounds=self.workarounds,
+							wait_time=self.wait_time)))
 
 			pool = ThreadPool(len(users))
 			try:
@@ -293,9 +298,9 @@ class Batch(threading.Thread):
 				pool.close()
 				pool.join()
 			except:
-				self.report_master("one of the machines failed.")
 				traceback.print_exc()
-				raise Exception("aborted due to error in machines.")
+				self.report_master("one of the machines failed: %s." % traceback.format_exc())
+				raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
 			xls, workbook = test_driver.fetch_exported_workbook(self.batch_id, self.workarounds)
 
