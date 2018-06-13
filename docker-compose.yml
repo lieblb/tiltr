@@ -31,7 +31,7 @@ services:
     volumes:
       - ./headless/robot:/robot
     working_dir: /robot
-    entrypoint: python -m pkg master
+    entrypoint: python3 -m pkg master
     environment:
       - PYTHONUNBUFFERED=1
     networks:
@@ -42,7 +42,7 @@ services:
     volumes:
       - ./headless/robot:/robot
     working_dir: /robot
-    entrypoint: python -m pkg machine
+    entrypoint: python3 -m pkg machine
     environment:
       - PYTHONUNBUFFERED=1
     networks:

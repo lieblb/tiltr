@@ -59,6 +59,6 @@ class Workarounds:
 			report("  %s = %s" % (key, getattr(self, key)))
 
 	def strip_whitespace(self, value):
-		if (not self.supports_significant_whitespace) and isinstance(value, basestring):
+		if (not self.supports_significant_whitespace) and isinstance(value, str):
 			value = value.strip()
 		return value

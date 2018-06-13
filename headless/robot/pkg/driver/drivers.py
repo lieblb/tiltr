@@ -9,13 +9,12 @@ import os
 import datetime
 import io
 import requests
-import time
 
 from openpyxl import load_workbook
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 
-from utils import wait_for_page_load, http_get_parameters
+from .utils import wait_for_page_load, http_get_parameters
 
 from ..question import *
 from ..result import *
@@ -321,7 +320,7 @@ class ExamDriver:
 			raise Exception("no question title found.")
 		else:
 			title = self.browser.find_by_css("h1.ilc_page_title_PageTitle").first.text
-			self.report('entering question "' + title.encode('utf-8') + '"')
+			self.report('entering question "' + title + '"')
 
 		answer = None
 		if self.browser.is_element_present_by_css(".ilc_question_SingleChoice"):

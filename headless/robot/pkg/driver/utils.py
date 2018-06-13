@@ -5,7 +5,7 @@
 # GPLv3, see LICENSE
 #
 
-import urlparse
+from urllib.parse import urlparse, parse_qs
 
 from contextlib import contextmanager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -20,8 +20,8 @@ def wait_for_page_load(browser, timeout=30):
 
 
 def http_get_parameters(url):
-	url = urlparse.urlparse(url)
+	url = urlparse(url)
 	parameters = dict()
-	for key, values in urlparse.parse_qs(url.query).items():
+	for key, values in parse_qs(url.query).items():
 		parameters[key] = values[0]
 	return parameters

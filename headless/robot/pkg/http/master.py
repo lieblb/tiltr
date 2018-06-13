@@ -17,7 +17,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 
-from discovery import connect_machines
+from .discovery import connect_machines
 from ..driver.batch import Batch
 from ..driver.drivers import Test
 from ..result import open_results

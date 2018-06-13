@@ -15,12 +15,13 @@ from ..result import Result, Origin
 from ..result import open_results
 from ..result.workbook import workbook_to_result
 
-from commands import TakeExamCommand
-from drivers import Login, TemporaryUser, TestDriver, Test, verify_admin_settings
+from .commands import TakeExamCommand
+from .drivers import Login, TemporaryUser, TestDriver, Test, verify_admin_settings
 
 from ..question import *  # for pickling
 from ..workarounds import Workarounds  # for pickling
 
+import asyncio
 import requests
 import json
 import traceback
@@ -28,20 +29,11 @@ import traceback
 import time
 import datetime
 import uuid
-import StringIO
-
-print_mutex = Lock()
-
-
-def threadsafe_print(x):
-	print_mutex.acquire()
-	try:
-		print(x)
-	finally:
-		print_mutex.release()
 
 
 def take_exam(args):
+	asyncio.set_event_loop(asyncio.new_event_loop())
+
 	command = args["command"]
 	machine = command.machine
 	batch_id = args["batch_id"]
@@ -105,7 +97,7 @@ class Batch(threading.Thread):
 		self.workarounds = workarounds
 		self.wait_time = wait_time
 
-		self.machines_lookup = dict((v, k) for k, v in machines.iteritems())
+		self.machines_lookup = dict((v, k) for k, v in machines.items())
 		self.machines_lookup["master"] = "master"
 	
 		self.test = Test(test_name)
@@ -114,11 +106,14 @@ class Batch(threading.Thread):
 
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())
 		self._is_done = False
+		self.print_mutex = Lock()
 
 	def get_id(self):
 		return self.batch_id
 
 	def run(self):
+		asyncio.set_event_loop(asyncio.new_event_loop())
+
 		try:
 			self.report_master("connecting to ILIAS %s." % self.ilias_version)
 
@@ -144,13 +139,15 @@ class Batch(threading.Thread):
 
 		if message == "!traceback":
 			try:
-				buffer = StringIO.StringIO()
-				traceback.print_exc(file=buffer)
-				message = buffer.getvalue()
+				message = traceback.format_exc()
 			except:
 				message = "something bad happened. cannot produce a traceback."
 
-		threadsafe_print("[%s] %s" % (origin, message))
+		self.print_mutex.acquire()
+		try:
+			print("[%s] %s" % (origin, message))
+		finally:
+			self.print_mutex.release()
 
 		encoded = json.dumps(dict(
 			command="report",
@@ -170,7 +167,8 @@ class Batch(threading.Thread):
 					for buffered in self.buffered:
 						socket.write_message(buffered)
 				except:
-					pass  # web socket failed. whatever.
+					# web socket failed. whatever.
+					traceback.print_exc()
 
 			self.buffered = []
 
@@ -231,7 +229,8 @@ class Batch(threading.Thread):
 			ilias_result.add("gui.score", test_driver.get_score(user.get_username()))
 
 			def report(message):
-				protocol_parts.append(message)
+				if message:
+					protocol_parts.append(message)
 				# self.report_master(message)
 
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
@@ -315,12 +314,10 @@ class Batch(threading.Thread):
 			for recorded_result in all_recorded_results:
 				performance_data.extend(recorded_result.performance)
 
-		except Exception as e:
-			self.report_master("exception received: %s." % str(e))
-
+		except:
 			traceback.print_exc()
-
-			protocol += "error: " + str(e)
+			self.report_master("exception received: %s." % traceback.format_exc())
+			protocol += "error: " + traceback.format_exc()
 
 		finally:
 			protocol += "\ndone with status %s." % success

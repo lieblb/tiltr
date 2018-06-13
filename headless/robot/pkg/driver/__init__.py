@@ -5,4 +5,4 @@
 # GPLv3, see LICENSE
 #
 
-from commands import TakeExamCommand
+from .commands import TakeExamCommand

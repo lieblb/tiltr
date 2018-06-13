@@ -5,5 +5,5 @@
 # GPLv3, see LICENSE
 #
 
-from answers import *
-from questions import *
+from .answers import *
+from .questions import *

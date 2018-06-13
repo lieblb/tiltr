@@ -241,6 +241,8 @@ $(function() {
 				}*/
 
 				connected = false;
+			} else {
+				console.log("invalid message", data);
 			}
 		};
 

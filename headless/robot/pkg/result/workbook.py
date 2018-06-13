@@ -48,7 +48,7 @@ def get_workbook_user_answers(sheet, report=None):
 		question_title = sheet.cell(row=row, column=2).value
 		if question_title is None:
 			break
-		assert isinstance(question_title, basestring)
+		assert isinstance(question_title, str)
 		row += 1
 		if report:
 			report('detected question title "%s".' % question_title)

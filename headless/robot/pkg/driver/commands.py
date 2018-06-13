@@ -9,15 +9,16 @@ import pickle
 import traceback
 import json
 import random
+import base64
 
 from selenium.common.exceptions import WebDriverException
 
-from drivers import Login, TestDriver, Test
+from .drivers import Login, TestDriver, Test
 from ..result import Result, Origin
 
 
 def random_text(n, random_chars):
-	return "".join([random.choice(random_chars) for i in xrange(n)])
+	return "".join([random.choice(random_chars) for i in range(n)])
 
 
 def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
@@ -81,8 +82,8 @@ class TakeExamCommand:
 		if from_json:
 			data = json.loads(from_json)
 			assert data["command"] == "take_exam"
-			self.questions = pickle.loads(data["questions"].decode('base64'))
-			self.workarounds = pickle.loads(data["workarounds"].decode('base64'))
+			self.questions = pickle.loads(base64.b64decode(data["questions"].encode("utf-8")))
+			self.workarounds = pickle.loads(base64.b64decode(data["workarounds"].encode("utf-8")))
 		else:
 			data = kwargs
 			self.questions = kwargs["questions"]
@@ -103,8 +104,8 @@ class TakeExamCommand:
 			username=self.username,
 			password=self.password,
 			test_id=self.test_id,
-			questions=pickle.dumps(self.questions, pickle.HIGHEST_PROTOCOL).encode('base64'),
-			workarounds=pickle.dumps(self.workarounds, pickle.HIGHEST_PROTOCOL).encode('base64'),
+			questions=base64.b64encode(pickle.dumps(self.questions, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
+			workarounds=base64.b64encode(pickle.dumps(self.workarounds, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
 			wait_time=self.wait_time))
 
 	def _pass1(self, driver, report):

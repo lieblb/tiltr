@@ -16,6 +16,11 @@ class ClozeType(Enum):
 	numeric = 2
 
 
+class ClozeComparator(Enum):
+	ignore_case = "ci"
+	case_sensitive = "cs"
+
+
 class ClozeQuestionGap():
 	def __init__(self, index):
 		self.index = index
@@ -25,20 +30,51 @@ class ClozeQuestionGap():
 
 
 class ClozeQuestionTextGap(ClozeQuestionGap):
-	def __init__(self, index, options, size):
+	def __init__(self, index, options, comparator, size):
 		ClozeQuestionGap.__init__(self, index)
 		self.options = options
+		self.comparator = comparator
 		self.size = size
 
 	def get_random_choice(self, context):
-		if random.random() < 0.5 and not context.prefer_text():
+		if random.random() < 0.75 and not context.prefer_text():
 			# pick scored answer.
-			return random.choice(self.options.items())
+			text, score = random.choice(list(self.options.items()))
+
+			mode = random.choices(
+				("unmodified", "randchar", "randcase"), weights=(0.5, 0.25, 0.25))[0]
+
+			if mode == "unmodified":
+				# keep exactly as specified.
+				return text, score
+			else:
+				# modify case or content.
+				chars = []
+				for i in range(len(text)):
+					r = random.random()
+					if mode == "randchar" and r < 0.2:
+						chars.append(random.choice(context.cloze_random_chars))
+					elif mode == "randcase" and r < 0.2:
+						chars.append(text[i].swapcase())
+					else:
+						chars.append(text[i])
+				text = "".join(chars)
+				return text, self._get_score(text)
 		else:
 			# make up something random and probably wrong.
 			text = context.produce_text(self.size, context.cloze_random_chars)
-			return text, self.options.get(text, 0.0)
+			return text, self._get_score(text)
 
+	def _get_score(self, text):
+		if self.comparator == ClozeComparator.case_sensitive:
+			return self.options.get(text, 0.0)
+
+		assert self.comparator == ClozeComparator.ignore_case
+		for option, score in self.options.items():
+			if option.casefold() == text.casefold():
+				return score
+
+		return 0.0
 
 class ClozeQuestionDropDownGap(ClozeQuestionGap):
 	def __init__(self, index, options):
@@ -46,7 +82,7 @@ class ClozeQuestionDropDownGap(ClozeQuestionGap):
 		self.options = options
 
 	def get_random_choice(self, context):
-		return random.choice(self.options.items())
+		return random.choice(list(self.options.items()))
 
 
 class ClozeQuestionNumericGap(ClozeQuestionGap):
@@ -54,13 +90,13 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		ClozeQuestionGap.__init__(self, index)
 
 
-def parse_gap_size(browser, gap_index):
+def parse_gap_size(browser, gap_index, fallback_length):
 	elements = browser.find_by_name("gap_%d_gapsize" % gap_index)
 	assert len(elements) == 1
-	text = elements.first.value
-	assert isinstance(text, basestring)
+	text = elements.first.value.strip()
+	assert isinstance(text, str)
 	if text == '':
-		return 7
+		return fallback_length
 	else:
 		return int(text)
 
@@ -69,6 +105,15 @@ class ClozeQuestion():
 	def __init__(self, browser, title):
 		self.title = title
 		self.gaps = dict()
+
+		fallback_length = browser.find_by_name("fixedTextLength").first.value.strip()
+		if fallback_length == '':
+			fallback_length = 7
+		else:
+			fallback_length = int(fallback_length)
+
+		comparator = ClozeComparator(browser.find_by_css(
+			"#textgap_rating option[selected]").first["value"])
 
 		while True:
 			options = dict()
@@ -88,11 +133,16 @@ class ClozeQuestion():
 			cloze_type = ClozeType(int(browser.find_by_name("clozetype_%d" % gap_index).first.value))
 
 			if cloze_type == ClozeType.text:
-				gap = ClozeQuestionTextGap(gap_index, options, parse_gap_size(browser, gap_index))
+				gap = ClozeQuestionTextGap(
+					gap_index, options, comparator, parse_gap_size(browser, gap_index, fallback_length))
 			elif cloze_type == ClozeType.dropdown:
 				gap = ClozeQuestionDropDownGap(gap_index, options)
-			elif cloze_type == ClozeType.numeric:
-				gap = ClozeQuestionNumericGap(gap_index)
+			#elif cloze_type == ClozeType.numeric:
+			#	gap = ClozeQuestionNumericGap(gap_index, parse_gap_size(browser, gap_index, fallback_length))
+			# gap_0_numeric
+			# gap_0_numeric_lower
+			# gap_0_numeric_upper
+			# gap_0_numeric_points
 			else:
 				raise Exception("unsupported cloze type " + str(cloze_type))				
 
@@ -124,7 +174,7 @@ class SingleChoiceQuestion:
 			self.choices[choice.first.value] = float(points.first.value)
 
 	def get_random_answer(self, context):
-		choice = random.choice(self.choices.keys())
+		choice = random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
 
 
@@ -155,7 +205,7 @@ class MultipleChoiceQuestion:
 			# will not save it (the score in XLS will be None); we need to pick at least 1 checkbox.
 
 			# check 1 item.
-			answers[random.choice(self.choices.keys())] = True
+			answers[random.choice(list(self.choices.keys()))] = True
 
 		# check the remaining items randomly.
 		for label, item in self.choices.items():

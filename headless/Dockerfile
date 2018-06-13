@@ -1,7 +1,9 @@
 FROM ubuntu:latest
 MAINTAINER Bernhard.Liebl@rz.uni-regensburg.de
 
-RUN apt-get update && apt-get install -y python2.7 python-pip firefox wget iputils-ping vim npm && pip install splinter selenium requests openpyxl tornado pytz && npm i -g bulma jquery open-iconic plotly.js bulma-accordion
+RUN apt-get update && apt-get install -y firefox wget iputils-ping vim npm
+RUN apt-get update && apt-get install -y python3-pip && pip3 install splinter selenium requests openpyxl tornado pytz
+RUN npm i -g bulma jquery open-iconic plotly.js bulma-accordion
 
 # taken from: https://github.com/SeleniumHQ/docker-selenium/blob/master/NodeFirefox/Dockerfile
 

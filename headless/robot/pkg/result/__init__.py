@@ -9,11 +9,11 @@ import json
 import time
 from enum import Enum
 
-import database
+from .database import DB
 
 
 def normalize_answer(value):
-	if isinstance(value, basestring):
+	if isinstance(value, str):
 		value = value.replace("\n", "\\n")
 	return value
 
@@ -55,8 +55,8 @@ class Result:
 		else:
 			self.origin = kwargs["origin"]
 			self.properties = dict()
-			self.protocol = None
-			self.performance = None
+			self.protocol = ""
+			self.performance = []
 			self.errors = dict()
 
 	def to_json(self):
@@ -95,7 +95,7 @@ class Result:
 		all_ok = True
 
 		keys = sorted(list(set(
-			self.properties.keys() + other.properties.keys())))
+			list(self.properties.keys()) + list(other.properties.keys()))))
 
 		for k in keys:
 			value_self = "%s" % self.get(k)
@@ -131,4 +131,4 @@ class Result:
 
 
 def open_results():
-	return database.DB()
+	return DB()

@@ -32,7 +32,7 @@ class DB:
 	def put(self, batch_id, success, xls, protocol, num_users):
 		c = self.db.cursor()
 		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers) VALUES (?, ?, ?, ?, ?, ?)",
-			(datetime.datetime.now(), batch_id, success, sqlite3.Binary(xls), protocol, num_users))
+			(datetime.datetime.now(), batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users))
 		self.db.commit()
 		c.close()
 
@@ -51,7 +51,7 @@ class DB:
 			row = c.fetchone()
 			if row is None:
 				break
-			counts[row[0]] = dict(
+			counts[row[0].decode("utf-8")] = dict(
 				runs=row[1],
 				users=row[2])
 
@@ -67,8 +67,8 @@ class DB:
 
 			entries.append(dict(
 				time=timestamp.strftime('%d.%m.%Y %H:%M:%S'),
-				batch=batch,
-				success=success
+				batch=batch.decode("utf-8"),
+				success=success.decode("utf-8")
 			))
 		c.close()
 		return json.dumps(dict(counts=counts, entries=entries))
@@ -94,9 +94,9 @@ class DB:
 
 	def get_zipfile(self, batch_id, file):
 		c = self.db.cursor()
-		c.execute("SELECT xls, protocol FROM results WHERE batch=?", (batch_id,))
+		c.execute("SELECT xls, protocol FROM results WHERE batch=?", (batch_id.encode("utf-8"),))
 		xls, protocol = c.fetchone()
 
 		with zipfile.ZipFile(file, "w") as z:
 			z.writestr("/exported.xls", xls)
-			z.writestr("/protocol.txt", protocol.encode("utf8"))
+			z.writestr("/protocol.txt", protocol)
