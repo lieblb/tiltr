@@ -72,7 +72,8 @@ def goto_administration_page(browser, id):
 	for i in range(5):
 		browser.find_by_css("#mm_adm_tr").click()
 		if browser.is_element_present_by_css("#%s" % id):
-			browser.find_by_css("#%s" % id).click()
+			with wait_for_page_load(browser):
+				browser.find_by_css("#%s" % id).click()
 			return
 		time.sleep(1)
 	raise Exception("goto_administration_page failed.")
@@ -243,15 +244,19 @@ class ExamDriver:
 	def __exit__(self, *args):
 		self.report("finishing test.")
 
+		finish_test_css = 'a[data-nextcmd="finishTest"]'
 		with wait_for_page_load(self.browser):
 			while True:
-				finish_button = self.browser.find_by_css('a[data-nextcmd="finishTest"]')
-				if finish_button:
-					finish_button.click()
-					self.confirm_save()
-					break
-				if not self.goto_next_question():
-					raise Exception("could not properly finish test")
+				if self.browser.is_element_present_by_css(finish_test_css):
+					finish_button = self.browser.find_by_css(finish_test_css)
+					if finish_button:
+						finish_button.click()
+						self.confirm_save()
+						break
+				else:
+					# try to go to next question
+					if not self.goto_next_question():
+						self.browser.reload()
 
 		with wait_for_page_load(self.browser):
 			self.browser.find_by_css('input[name="cmd[confirmFinish]"]').click()
@@ -356,7 +361,7 @@ class ExamDriver:
 			return max(score, 0)  # clamp score to >= 0 (FIXME: check test settings)
 
 		protocol = self.protocol[:]
-		result = Result(name="rec")
+		result = Result(origin=Origin.recorded)
 
 		for sequence_id, answer in self.answers.items():
 			encoded = answer.encode(self.context)
@@ -405,6 +410,15 @@ class Test:
 	def get_title(self):
 		return self.title
 
+	@staticmethod
+	def list():
+		tests = dict()
+		path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests"))
+		for filename in os.listdir(path):
+			if filename.endswith(".zip"):
+				test = Test(os.path.splitext(filename)[0])
+				tests[test.get_title()] = test.get_id()
+		return tests
 
 class TestDriver():
 	def __init__(self, browser, test, report):

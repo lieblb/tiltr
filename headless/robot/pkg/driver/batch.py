@@ -11,7 +11,7 @@ import threading
 
 from splinter import Browser
 
-from ..result import Result
+from ..result import Result, Origin
 from ..result import open_results
 from ..result.workbook import workbook_to_result
 
@@ -85,7 +85,7 @@ def take_exam(args):
 	except:
 		traceback.print_exc()
 		report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
-		return Result.from_error(traceback.format_exc())
+		return Result.from_error(Origin.recorded, "error", traceback.format_exc())
 
 	assert result_json is not None
 	report("master", "received take_exam results from %s." % machine)
@@ -100,6 +100,8 @@ class Batch(threading.Thread):
 		self.buffered = []
 		self.machines = machines
 		self.ilias_version = ilias_version
+
+		self.test_name = test_name
 		self.workarounds = workarounds
 		self.wait_time = wait_time
 

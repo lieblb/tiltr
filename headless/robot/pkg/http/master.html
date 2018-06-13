@@ -43,107 +43,86 @@
 		</section>
 		<section class="section">
 		    <div class="container">
-				<div class="control">
+				<div class="control" style="margin-bottom:2em;">
 					<a class="button is-medium" id="start">Start</a>
 					
 					<a id="run-loop" class="button is-medium">Loop</a>
+
+					<div class="select is-medium">
+						<select id="select-test">
+						</select>
+					</div>
 
 					<span class="is-pulled-right">
 						{{ num_machines }} machines connected.
 					</span>
 				</div>
 
-				<section class="accordions" style="margin-top:2em;">
-					<article id="workarounds-accordion" class="accordion is-active">
-						<div class="accordion-header toggle">
-							<p>Workarounds</p>
-						</div>
-						<div class="accordion-body">
-							<div id="workarounds-accordion-content" class="accordion-content">
-							</div>
-						</div>
-					</article>
-				</section>
-
-				<section class="accordions" style="margin-top:2em;">
-					<article id="status-accordion" class="accordion">
-						<div class="accordion-header toggle">
-							<p>Status</p>
-						</div>
-						<div class="accordion-body">
-							<div class="accordion-content">
-
-								<div class="control" style="padding-top:1em;">
-									<textarea class="textarea" id="log" rows="20" readonly>
-									</textarea>
-								</div>
-
-								<div style="padding-top:1em;"></div>
-
-							    <div id="images" class="container box">
-								</div>
-
-							</div>
-						</div>
-					</article>
-				</section>
-
-				<article id="results-accordions" class="message is-info" style="margin-top:2em;">
+				<article id="workarounds" class="message is-info">
 					<div class="message-header">
-					Results
-					<button class="delete" id="delete-results"></button>
+						<p>Workarounds</p>
 					</div>
-					<div class="message-body">
-
-					<section class="accordions">
-						<article id="results-summary-accordion" class="accordion is-active">
-							<div class="accordion-header toggle">
-								<p>Summary</p>
-							</div>
-							<div class="accordion-body">
-								<table class="table is-fullwidth">
-									<thead>
-										<td></td>
-										<td>Runs</td>
-										<td>Users</td>
-									</thead>
-									<tbody id="results-overview">
-									</tbody>
-								</table>
-							</div>
-						</article>
-
-						<article id="results-accordion" class="accordion" style="margin-top:2em;">
-							<div class="accordion-header toggle">
-								<p>Details</p>
-							</div>
-							<div class="accordion-body">
-								<div id="results-accordion-content" class="accordion-content">
-									<table class="table is-fullwidth">
-										<tbody id="results">
-										</tbody>
-									</table>
-								</div>
-							</div>
-						</article>
-
-						<article class="accordion" style="margin-top:2em;">
-							<div class="accordion-header toggle">
-								<p>Performance</p>
-							</div>
-							<div class="accordion-body">
-								<div id="results-performance-content" class="accordion-content">
-									<div id="performance-plot"></div>
-								</div>
-							</div>
-						</article>
-					</section>
-
-
+					<div id="workarounds-body" class="message-body">
 					</div>
 				</article>
 
+				<article id="status" class="message is-info">
+					<div class="message-header">
+						<p>Status</p>
+					</div>
+					<div class="message-body">
+						<div class="control" style="padding-top:1em;">
+							<textarea class="textarea" id="log" rows="20" readonly>
+							</textarea>
+						</div>
+
+						<div style="padding-top:1em;"></div>
+
+						<div id="images" class="container box">
+						</div>
+					</div>
+				</article>
+
+
+				<article id="message-results-summary" class="message is-info">
+					<div class="message-header">
+						<p>Results</p>
+						<button class="delete" id="delete-results"></button>
+					</div>
+					<div class="message-body">
+						<table class="table is-fullwidth">
+							<thead>
+								<td></td>
+								<td>Runs</td>
+								<td>Users</td>
+							</thead>
+							<tbody id="results-overview">
+							</tbody>
+						</table>
+					</div>
+				</article>
+
+				<article id="message-results" class="message is-info" style="margin-top:2em;">
+					<div class="message-header">
+						<p>Details</p>
+					</div>
+					<div class="message-body">
+						<table class="table is-fullwidth">
+							<tbody id="results">
+							</tbody>
+						</table>
+					</div>
+				</article>
+
+				<article id="message-results-performance" class="message is-info" style="margin-top:2em;">
+					<div class="message-header">
+						<p>Performance</p>
+					</div>
+					<div class="message-body">
+						<div id="performance-plot"></div>
+					</div>
+				</article>
 			</div>
-		</div>
+		</section>
 	</body>
 </html>

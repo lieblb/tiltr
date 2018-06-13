@@ -46,7 +46,7 @@ class DB:
 		c = self.db.cursor()
 
 		c.execute("SELECT success, COUNT(success), SUM(nusers) FROM results GROUP BY success")
-		counts = dict(OK=dict(runs=0, users=0), FAIL=dict(runs=0, users=0))
+		counts = dict()
 		while True:
 			row = c.fetchone()
 			if row is None:

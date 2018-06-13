@@ -5,7 +5,7 @@
 # GPLv3, see LICENSE
 #
 
-from . import Result
+from . import Result, Origin
 
 
 class XlsResultRow():
@@ -133,7 +133,7 @@ def workbook_to_result(wb, username, report):
 
 	user_sheet = wb.worksheets[wb.sheetnames.index("user, %s" % username)]
 
-	result = Result(name="xls")
+	result = Result(origin=Origin.exported)
 
 	for question_title, dimensions in get_workbook_user_answers(user_sheet):
 		for dimension_title, dimension_value in dimensions:

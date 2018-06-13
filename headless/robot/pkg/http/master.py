@@ -19,6 +19,7 @@ import tornado.websocket
 
 from discovery import connect_machines
 from ..driver.batch import Batch
+from ..driver.drivers import Test
 from ..result import open_results
 from ..workarounds import Workarounds
 
@@ -80,7 +81,8 @@ class GlobalState:
 		self.looping = looping
 		print("setting looping to %s." % looping)
 		if self.batch and self.looping and self.looper is None:
-			self.looper = Looper(self, self.batch.workarounds)
+			batch = self.batch
+			self.looper = Looper(self, batch.test_name, batch.workarounds, batch.wait_time)
 			self.looper.start()
 
 	def start_batch(self, test_name, workarounds, wait_time):
@@ -131,14 +133,26 @@ class StatusHandler(tornado.web.RequestHandler):
 		self.flush()
 
 
+class TestsHandler(tornado.web.RequestHandler):
+	def initialize(self, state):
+		self.state = state
+
+	def get(self):
+		self.write(json.dumps(Test.list()))
+		self.flush()
+
+
 class StartBatchHandler(tornado.web.RequestHandler):
 	def initialize(self, state):
 		self.state = state
 
 	def post(self):
-		workarounds = Workarounds(from_json=json.loads(self.request.body))
-		test_name = "1527690895__0__tst_306"  # Astronomie
-		batch_id = self.state.start_batch(test_name, workarounds, 10)
+		data = json.loads(self.request.body)
+
+		workarounds = Workarounds(from_json=data["workarounds"])
+		test_id = data["test"]
+		wait_time = 10
+		batch_id = self.state.start_batch(test_id, workarounds, wait_time)
 
 		if batch_id is None:
 			self.write("error")
@@ -263,6 +277,7 @@ def make_app(machines):
 		(r"/screenshot/(?P<machine>.+)", ScreenshotHandler, dict(state=state)),
 		(r"/workarounds.json", WorkaroundsHandler, dict(state=state)),
 
+		(r"/tests.json", TestsHandler, dict(state=state)),
 		(r"/status.json", StatusHandler, dict(state=state)),
 		(r"/results.json", ResultsJsonHandler),
 		(r"/result/(?P<batch>[^/]+)", ResultsHandler),

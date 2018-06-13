@@ -50,9 +50,8 @@ class ClozeQuestionDropDownGap(ClozeQuestionGap):
 
 
 class ClozeQuestionNumericGap(ClozeQuestionGap):
-	def __init__(self, index, options):
+	def __init__(self, index):
 		ClozeQuestionGap.__init__(self, index)
-		self.options = options
 
 
 def parse_gap_size(browser, gap_index):
@@ -92,6 +91,8 @@ class ClozeQuestion():
 				gap = ClozeQuestionTextGap(gap_index, options, parse_gap_size(browser, gap_index))
 			elif cloze_type == ClozeType.dropdown:
 				gap = ClozeQuestionDropDownGap(gap_index, options)
+			elif cloze_type == ClozeType.numeric:
+				gap = ClozeQuestionNumericGap(gap_index)
 			else:
 				raise Exception("unsupported cloze type " + str(cloze_type))				
 

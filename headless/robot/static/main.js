@@ -14,10 +14,21 @@ $(function() {
 			var key = workarounds[i][0];
 			workaroundKeys.push(key);
 			var help = workarounds[i][1];
-			$("#workarounds-accordion-content").append('<label class="checkbox"><input id="' +
+			$("#workarounds-body").append('<label class="checkbox"><input id="' +
 				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label><p id="' + key + '_help" class="help"></p>');
 			$("#" + key + "_help").text(help);
 		}
+	});
+
+	$.getJSON(host + "/tests.json", function(tests) {
+		$("#select-test").empty();
+		for (var test in tests) {
+			var option = $("<option></option>");
+			option.attr("value", tests[test]);
+			option.text(test);
+			$("#select-test").append(option);
+		}
+
 	});
 
 	function getIcon(name) {
@@ -29,10 +40,11 @@ $(function() {
 			$("#results-overview").empty();
 			$("#results").empty();
 
+			var articles = $('article[id^="message-results"]');
 			if (results.entries.length == 0) {
-				$("#results-accordions").hide();
+				articles.hide();
 			} else {
-				$("#results-accordions").show();
+				articles.show();
 			}
 
 			for (var status in results.counts) {
@@ -191,8 +203,8 @@ $(function() {
 	var connected = false;
 
 	connect = function(batchId) {
-		$("#workarounds-accordion").addClass("disabled");
-		$("#status-accordion").addClass("is-active");
+		$("#workarounds").addClass("disabled");
+		$("#status").addClass("is-active");
 
 		$("#start").attr("disabled", true);
 		$("#start").addClass("is-loading");
@@ -221,8 +233,8 @@ $(function() {
 
 				ws.close();
 
-				$("#status-accordion").removeClass("is-active");
-				$("#workarounds-accordion").removeClass("disabled");
+				$("#status").removeClass("is-active");
+				$("#workarounds").removeClass("disabled");
 
 				/*if ($("#run-loop").hasClass("is-selected")) {
 					setTimeout(restart, 1000);
@@ -278,7 +290,10 @@ $(function() {
 			$.ajax({
 				method: "POST",
 				url: host + "/start",
-				data: JSON.stringify(workarounds)
+				data: JSON.stringify({
+					test: $("#select-test").val(),
+					workarounds: workarounds
+                })
 			}).done(function(batchId) {
 				if (batchId == "error") {
 					alert("ILIAS is not available. Please try again later.")

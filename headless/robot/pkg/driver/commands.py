@@ -10,8 +10,10 @@ import traceback
 import json
 import random
 
+from selenium.common.exceptions import WebDriverException
+
 from drivers import Login, TestDriver, Test
-from ..result import Result
+from ..result import Result, Origin
 
 
 def random_text(n, random_chars):
@@ -153,10 +155,18 @@ class TakeExamCommand:
 						self._pass3(exam_driver, report)
 
 						result = exam_driver.get_expected_result()
+					except WebDriverException:
+						traceback.print_exc()
+						report("test aborted with webdriver error: %s" % traceback.format_exc())
+						return Result.from_error(Origin.recorded, "webdriver", traceback.format_exc())
 					except:
 						traceback.print_exc()
 						report("test aborted with error: %s" % traceback.format_exc())
-						return Result.from_error(traceback.format_exc())
+						return Result.from_error(Origin.recorded, "error", traceback.format_exc())
+		except WebDriverException:
+			traceback.print_exc()
+			report("test aborted with webdriver error: %s" % traceback.format_exc())
+			return Result.from_error(Origin.recorded, "webdriver", traceback.format_exc())
 		except:
 			traceback.print_exc()
 			report("test aborted with error: %s" % traceback.format_exc())

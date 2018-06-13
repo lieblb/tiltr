@@ -7,6 +7,7 @@
 
 import json
 import time
+from enum import Enum
 
 import database
 
@@ -37,38 +38,46 @@ class AnswerProtocol:
 		return self.entries
 
 
+class Origin(Enum):
+	recorded = 0
+	exported = 1
+
+
 class Result:
 	def __init__(self, from_json=None, **kwargs):
 		if from_json:
 			data = json.loads(from_json)
-			self.name = data["name"]
+			self.origin = Origin[data["origin"]]
 			self.properties = data["properties"]
 			self.protocol = data["protocol"]
 			self.performance = data["performance"]
+			self.errors = data["errors"]
 		else:
-			self.name = kwargs["name"]
+			self.origin = kwargs["origin"]
 			self.properties = dict()
 			self.protocol = None
 			self.performance = None
+			self.errors = dict()
 
 	def to_json(self):
 		return json.dumps(dict(
-			name=self.name,
+			origin=self.origin.name,
 			properties=self.properties,
 			protocol=self.protocol,
-			performance=self.performance))
+			performance=self.performance,
+			errors=self.errors))
 
-	def get_name(self):
-		return self.name
+	def get_origin(self):
+		return self.origin
 
 	def add(self, key, value):
 		assert key not in self.properties
 		self.properties[key] = value
 
 	@staticmethod
-	def from_error(err):
-		r = Result("error")
-		r.add("error", err)
+	def from_error(origin, type, err):
+		r = Result(origin=origin)
+		r.errors[type] = err
 		return r
 
 	def get(self, key):
@@ -103,11 +112,20 @@ class Result:
 
 			report("%s %s: %s [%s] %s %s [%s]" % (
 				status, k,
-				value_self.replace("\n", "\\n"), self.get_name(),
+				value_self.replace("\n", "\\n"), self.get_origin(),
 				"==" if status == "OK" else "!=",
-				value_other.replace("\n", "\\n"), other.get_name()))
+				value_other.replace("\n", "\\n"), other.get_origin()))
 
 		report("")
+
+		if self.errors:
+			for type, err in self.errors.items():
+				report("error %s:%s in %s" % (type, err, self.origin))
+			all_ok = False
+		if other.errors:
+			for type, err in other.errors.items():
+				report("error %s:%s in %s" % (type, err, other.origin))
+			all_ok = False
 
 		return all_ok
 
