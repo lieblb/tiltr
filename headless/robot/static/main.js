@@ -187,9 +187,18 @@ $(function() {
 	}, 1000);
 
 	function report(machine, message) {
-		$("#log").append("[" + machine + "] " + message + "\n");
+		var tag = $('<span class="tag is-light"></span>');
+		tag.text(machine);
+
+		var entry = $("<div></div>");
+		entry.append(tag);
+
+		var text = $("<span></span>");
+		text.text(" " + message);
+		entry.append(text);
 
 		var log = $("#log");
+		log.append(entry);
 		log.scrollTop(log[0].scrollHeight - log.height());
 
 		if (!screenshots.dirty[machine]) {
@@ -208,7 +217,7 @@ $(function() {
 
 		$("#start").attr("disabled", true);
 		$("#start").addClass("is-loading");
-		$("#log").text("");
+		$("#log").empty();
 
 		console.log("connecting to batch " + batchId);
 		connected = true;
