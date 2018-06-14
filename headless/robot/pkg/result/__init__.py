@@ -43,6 +43,11 @@ class Origin(Enum):
 	exported = 1
 
 
+class ErrorDomain(Enum):
+	webdriver = 0
+	qa = 1
+
+
 class Result:
 	def __init__(self, from_json=None, **kwargs):
 		if from_json:
@@ -75,10 +80,13 @@ class Result:
 		self.properties[key] = value
 
 	@staticmethod
-	def from_error(origin, type, err):
+	def from_error(origin, domain, err):
 		r = Result(origin=origin)
-		r.errors[type] = err
+		r.errors[domain.name] = err
 		return r
+
+	def has_error(self, domain):
+		return domain.name in self.errors
 
 	def get(self, key):
 		return self.properties.get(key, None)

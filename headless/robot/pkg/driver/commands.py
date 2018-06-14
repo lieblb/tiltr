@@ -14,7 +14,7 @@ import base64
 from selenium.common.exceptions import WebDriverException
 
 from .drivers import Login, TestDriver, Test
-from ..result import Result, Origin
+from ..result import Result, Origin, ErrorDomain
 
 
 def random_text(n, random_chars):
@@ -159,15 +159,15 @@ class TakeExamCommand:
 					except WebDriverException:
 						traceback.print_exc()
 						report("test aborted with webdriver error: %s" % traceback.format_exc())
-						return Result.from_error(Origin.recorded, "webdriver", traceback.format_exc())
+						return Result.from_error(Origin.recorded, ErrorDomain.webdriver, traceback.format_exc())
 					except:
 						traceback.print_exc()
 						report("test aborted with error: %s" % traceback.format_exc())
-						return Result.from_error(Origin.recorded, "error", traceback.format_exc())
+						return Result.from_error(Origin.recorded, ErrorDomain.qa, traceback.format_exc())
 		except WebDriverException:
 			traceback.print_exc()
 			report("test aborted with webdriver error: %s" % traceback.format_exc())
-			return Result.from_error(Origin.recorded, "webdriver", traceback.format_exc())
+			return Result.from_error(Origin.recorded, ErrorDomain.webdriver, traceback.format_exc())
 		except:
 			traceback.print_exc()
 			report("test aborted with error: %s" % traceback.format_exc())

@@ -11,7 +11,7 @@ import threading
 
 from splinter import Browser
 
-from ..result import Result, Origin
+from ..result import Result, Origin, ErrorDomain
 from ..result import open_results
 from ..result.workbook import workbook_to_result
 
@@ -77,7 +77,7 @@ def take_exam(args):
 	except:
 		traceback.print_exc()
 		report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
-		return Result.from_error(Origin.recorded, "error", traceback.format_exc())
+		return Result.from_error(Origin.recorded, ErrorDomain.qa, traceback.format_exc())
 
 	assert result_json is not None
 	report("master", "received take_exam results from %s." % machine)
@@ -205,6 +205,7 @@ class Batch(threading.Thread):
 
 	def _check_results(self, ilias_settings, users, test_driver, workbook, all_expected_results):
 		all_assertions_ok = True
+		had_webdriver_errors = False
 		protocol_parts = ["Tested on ILIAS %s." % self.ilias_version]
 
 		protocol_parts.append("workaround settings:")
@@ -218,6 +219,9 @@ class Batch(threading.Thread):
 			protocol_parts.append("protocol for user %s:" % user.get_username())
 			protocol_parts.append(recorded_result.protocol)
 			protocol_parts.append("")
+
+			if recorded_result.has_error(ErrorDomain.webdriver):
+				had_webdriver_errors = True
 
 			self.report_master("checking results for user %s." % user.get_username())
 
@@ -238,7 +242,7 @@ class Batch(threading.Thread):
 
 		protocol = "\n".join(protocol_parts)
 
-		return all_assertions_ok, protocol
+		return all_assertions_ok, had_webdriver_errors, protocol
 
 	def _run_tests(self, browser, test_driver):
 		success = "FAIL"
@@ -305,11 +309,15 @@ class Batch(threading.Thread):
 
 			xls, workbook = test_driver.fetch_exported_workbook(self.batch_id, self.workarounds)
 
-			all_assertions_ok, protocol = self._check_results(
+			all_assertions_ok, had_webdriver_errors, protocol = self._check_results(
 				ilias_settings, users, test_driver, workbook, all_recorded_results)
 
 			if all_assertions_ok:
 				success = "OK"
+			elif had_webdriver_errors:
+				# there were webdriver problems during the test (e.g. we could not control Firefox
+				# properly), which means this result is not a valid test. do not mark this as a FAIL.
+				success = "CRASH"
 
 			for recorded_result in all_recorded_results:
 				performance_data.extend(recorded_result.performance)

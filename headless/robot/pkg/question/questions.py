@@ -137,8 +137,8 @@ class ClozeQuestion():
 					gap_index, options, comparator, parse_gap_size(browser, gap_index, fallback_length))
 			elif cloze_type == ClozeType.dropdown:
 				gap = ClozeQuestionDropDownGap(gap_index, options)
-			#elif cloze_type == ClozeType.numeric:
-			#	gap = ClozeQuestionNumericGap(gap_index, parse_gap_size(browser, gap_index, fallback_length))
+			elif cloze_type == ClozeType.numeric:
+				gap = ClozeQuestionNumericGap(gap_index, parse_gap_size(browser, gap_index, fallback_length))
 			# gap_0_numeric
 			# gap_0_numeric_lower
 			# gap_0_numeric_upper
