@@ -328,6 +328,8 @@ class ExamDriver:
 			answer = SingleChoiceAnswer(self.browser, self.questions[title])
 		elif self.browser.is_element_present_by_css(".ilc_question_MultipleChoice"):
 			answer = MultipleChoiceAnswer(self.browser, self.questions[title])
+		elif self.browser.is_element_present_by_css(".ilc_question_KprimChoice"):
+			answer = KPrimAnswer(self.browser, self.questions[title])
 		elif self.browser.is_element_present_by_css(".ilc_question_ClozeTest"):
 			answer = ClozeAnswer(self.browser, self.questions[title])
 		elif self.browser.is_element_present_by_css(".ilc_question_TextQuestion"):
@@ -585,6 +587,9 @@ class TestDriver():
 				elif cmd_class == "assmultiplechoicegui":
 					self.report('parsing multiple choice question "%s".' % title)
 					questions[title] = MultipleChoiceQuestion(self.browser, title)
+				elif cmd_class == "asskprimchoicegui":
+					self.report('parsing kprim question "%s".' % title)
+					questions[title] = KPrimQuestion(self.browser, title)
 				elif cmd_class == "asstextquestiongui":
 					self.report('parsing text question "%s".' % title)
 					questions[title] = LongTextQuestion(self.browser, title)

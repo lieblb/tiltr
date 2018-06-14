@@ -233,6 +233,54 @@ class ClozeAnswer(object):
 			protocol=self.protocol.encode())
 
 
+class KPrimAnswer(object):
+	def __init__(self, browser, question):
+		assert question.__class__.__name__ == "KPrimQuestion"
+		self.browser = browser
+		self.question = question
+		self.current_answers = None
+		self.current_score = None
+		self.protocol = AnswerProtocol(self.question.title)
+
+	def randomize(self, context):
+		self._set_answers(*self.question.get_random_answer(context))
+
+	def _set_answers(self, answers, score):
+		ui = self._parse_ui()
+
+		assert len(answers) == 4
+		for radios, answer in zip(ui, answers):
+			radios[answer].check()
+
+		self.current_answers = answers
+		self.current_score = score
+
+	def _parse_ui(self):
+		root = self.browser.find_by_css(".ilc_question_KprimChoice")
+		ui = []
+		for i in range(4):
+			radios = dict()
+			for radio in root.find_by_name("kprim_choice_result_%d" % i):
+				radios[bool(int(radio["value"]))] = radio
+			ui.append(radios)
+		return ui
+
+	def verify(self, context):
+		ui = self._parse_ui()
+
+		for i in range(4):
+			self.protocol.verify(
+				str(i),
+				self.current_answers[i],
+				ui[i][True].checked)
+
+	def encode(self, context):
+		return dict(
+			title=self.question.title,
+			answers=dict(zip(self.question.names, [int(x) for x in self.current_answers])),
+			protocol=self.protocol.encode())
+
+
 class AbstractLongTextAnswer:
 	def __init__(self, browser, question):
 		assert question.__class__.__name__ == "LongTextQuestion"

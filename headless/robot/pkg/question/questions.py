@@ -97,22 +97,25 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		self.numeric_upper = Decimal(browser.find_by_name("gap_%d_numeric_upper" % index).first.value)
 		self.score = Decimal(browser.find_by_name("gap_%d_numeric_points" % index).first.value)
 
+		self.exponent = min(x.as_tuple().exponent for x in (self.numeric_value, self.numeric_lower, self.numeric_upper))
+
 	def get_random_choice(self, context):
 		t = random.randint(1, 4)
 		if t == 1:
-			return self.numeric_lower, self.score
+			return str(self.numeric_lower), self.score
 		elif t == 2:
-			return self.numeric_upper, self.score
+			return str(self.numeric_upper), self.score
 		elif t == 3:
-			d = float(self.numeric_upper - self.numeric_lower)
-			return self.numeric_lower + Decimal(str(random.randrange(0, d))), self.score
+			x = Decimal(random.randrange(float(self.numeric_lower), float(self.numeric_upper)))
+			return str(round(x, -self.exponent)), self.score
 		else:
+			eps = Decimal(10) ** self.exponent
 			d = float(self.numeric_upper - self.numeric_lower)
-			off = Decimal(str(random.randrange(0.00001, 100 * d)))
+			off = Decimal(str(random.randrange(eps, 1000 * d)))
 			if random.random() < 0.5:
-				return self.numeric_lower - off, Decimal(0)
+				return str(round(self.numeric_lower - off, -self.exponent)), Decimal(0)
 			else:
-				return self.numeric_upper + off, Decimal(0)
+				return str(round(self.numeric_upper + off, -self.exponent)), Decimal(0)
 
 
 def parse_gap_size(browser, gap_index, fallback_length):
@@ -145,8 +148,8 @@ class ClozeQuestion():
 		self.title = title
 		self.gaps = dict()
 
-		identical_scoring = int(browser.find_by_name("identical_scoring").first.value)
-		if identical_scoring != 1:
+		identical_scoring = browser.find_by_name("identical_scoring").first.checked
+		if not identical_scoring:
 			raise Exception("cannot test question with non-identical scoring")
 
 		fallback_length = browser.find_by_name("fixedTextLength").first.value.strip()
@@ -261,6 +264,52 @@ class MultipleChoiceQuestion:
 				score += item.unchecked_score
 
 		return answers, score
+
+
+class KPrimQuestion:
+	def __init__(self, browser, title):
+		self.title = title
+
+		self.halfpoints = browser.find_by_name("score_partsol_enabled").first.checked
+		self.score = Decimal(browser.find_by_name("points").first.value)
+		self.solution = []
+		self.names = []
+
+		for i in range(4):
+			is_right = None
+
+			for radio in browser.find_by_name("kprim_answers[correctness][%d]" % i):
+				if int(radio["value"]) == 1:
+					is_right = radio.checked
+
+			assert is_right is not None
+			self.solution.append(is_right)
+
+			self.names.append(browser.find_by_name("kprim_answers[answer][%d]" % i).first["value"])
+
+	def _get_score(self, answers):
+		if not self.halfpoints:
+			s = self.score / Decimal(4)
+			score = Decimal(0)
+			for i in range(4):
+				if answers[i] == self.solution[i]:
+					score += s
+			return score
+		else:
+			n_correct = 0
+			for i in range(4):
+				if answers[i] == self.solution[i]:
+					n_correct += 1
+			if n_correct == 4:
+				return self.score
+			elif n_correct == 3:
+				return self.score / Decimal(2)
+			else:
+				return Decimal(0)
+
+	def get_random_answer(self, context):
+		answers = [random.random() < 0.5 for _ in range(4)]
+		return answers, self._get_score(answers)
 
 
 class LongTextQuestion:
