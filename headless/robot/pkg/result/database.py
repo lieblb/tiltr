@@ -10,6 +10,7 @@ import sqlite3
 import json
 import datetime
 import zipfile
+import pytz
 
 
 class DB:
@@ -58,6 +59,7 @@ class DB:
 		c.execute("SELECT created, batch, success FROM results ORDER BY created")
 
 		entries = []
+		tz = pytz.timezone('Europe/Berlin')
 		while True:
 			r = c.fetchone()
 			if r is None:
@@ -65,6 +67,7 @@ class DB:
 
 			timestamp, batch, success = r
 
+			timestamp = timestamp.replace(tzinfo=pytz.utc).astimezone(tz)
 			entries.append(dict(
 				time=timestamp.strftime('%d.%m.%Y %H:%M:%S'),
 				batch=batch.decode("utf-8"),
