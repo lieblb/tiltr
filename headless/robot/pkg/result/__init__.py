@@ -8,6 +8,7 @@
 import json
 import time
 from enum import Enum
+from decimal import *
 
 from .database import DB
 
@@ -77,6 +78,8 @@ class Result:
 
 	def add(self, key, value):
 		assert key not in self.properties
+		if isinstance(value, Decimal):
+			value = str(value)  # make it safe for JSON
 		self.properties[key] = value
 
 	@staticmethod

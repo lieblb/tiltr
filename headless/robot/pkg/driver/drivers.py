@@ -13,6 +13,7 @@ import requests
 from openpyxl import load_workbook
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
+from decimal import *
 
 from .utils import wait_for_page_load, http_get_parameters
 
@@ -544,7 +545,7 @@ class TestDriver():
 			tds = list(tr.find_by_css("td"))
 			if tds[login].text.strip() == ("[%s]" % username):
 				score = re.split("\s+", tds[reached].text)
-				return float(score[0])
+				return Decimal(score[0])
 
 		return None
 

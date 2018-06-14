@@ -8,6 +8,7 @@
 from collections import namedtuple
 import random
 from enum import Enum
+from decimal import *
 
 
 class ClozeType(Enum):
@@ -67,14 +68,15 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 	def _get_score(self, text):
 		if self.comparator == ClozeComparator.case_sensitive:
-			return self.options.get(text, 0.0)
+			return self.options.get(text, Decimal(0))
 
 		assert self.comparator == ClozeComparator.ignore_case
 		for option, score in self.options.items():
 			if option.casefold() == text.casefold():
 				return score
 
-		return 0.0
+		return Decimal(0)
+
 
 class ClozeQuestionDropDownGap(ClozeQuestionGap):
 	def __init__(self, index, options):
@@ -86,8 +88,31 @@ class ClozeQuestionDropDownGap(ClozeQuestionGap):
 
 
 class ClozeQuestionNumericGap(ClozeQuestionGap):
-	def __init__(self, index):
+	def __init__(self, browser, index, size):
 		ClozeQuestionGap.__init__(self, index)
+		self.size = size
+
+		self.numeric_value = Decimal(browser.find_by_name("gap_%d_numeric" % index).first.value)
+		self.numeric_lower = Decimal(browser.find_by_name("gap_%d_numeric_lower" % index).first.value)
+		self.numeric_upper = Decimal(browser.find_by_name("gap_%d_numeric_upper" % index).first.value)
+		self.score = Decimal(browser.find_by_name("gap_%d_numeric_points" % index).first.value)
+
+	def get_random_choice(self, context):
+		t = random.randint(1, 4)
+		if t == 1:
+			return self.numeric_lower, self.score
+		elif t == 2:
+			return self.numeric_upper, self.score
+		elif t == 3:
+			d = float(self.numeric_upper - self.numeric_lower)
+			return self.numeric_lower + Decimal(str(random.randrange(0, d))), self.score
+		else:
+			d = float(self.numeric_upper - self.numeric_lower)
+			off = Decimal(str(random.randrange(0.00001, 100 * d)))
+			if random.random() < 0.5:
+				return self.numeric_lower - off, Decimal(0)
+			else:
+				return self.numeric_upper + off, Decimal(0)
 
 
 def parse_gap_size(browser, gap_index, fallback_length):
@@ -101,10 +126,28 @@ def parse_gap_size(browser, gap_index, fallback_length):
 		return int(text)
 
 
+def parse_gap_options(browser, gap_index):
+	options = dict()
+
+	while True:
+		answer = browser.find_by_name("gap_%d[answer][%d]" % (gap_index, len(options)))
+		if not answer:
+			break
+		points = browser.find_by_name("gap_%d[points][%d]" % (gap_index, len(options)))
+
+		options[answer.first.value] = Decimal(points.first.value)
+
+	return options
+
+
 class ClozeQuestion():
 	def __init__(self, browser, title):
 		self.title = title
 		self.gaps = dict()
+
+		identical_scoring = int(browser.find_by_name("identical_scoring").first.value)
+		if identical_scoring != 1:
+			raise Exception("cannot test question with non-identical scoring")
 
 		fallback_length = browser.find_by_name("fixedTextLength").first.value.strip()
 		if fallback_length == '':
@@ -116,33 +159,29 @@ class ClozeQuestion():
 			"#textgap_rating option[selected]").first["value"])
 
 		while True:
-			options = dict()
 			gap_index = len(self.gaps)
 
-			while True:
-				answer = browser.find_by_name("gap_%d[answer][%d]" % (gap_index, len(options)))
-				if not answer:
-					break
-				points = browser.find_by_name("gap_%d[points][%d]" % (gap_index, len(options)))
-
-				options[answer.first.value] = float(points.first.value)
-
-			if not options:
+			if not browser.find_by_name("clozetype_%d" % gap_index):
 				break
 
 			cloze_type = ClozeType(int(browser.find_by_name("clozetype_%d" % gap_index).first.value))
 
-			if cloze_type == ClozeType.text:
-				gap = ClozeQuestionTextGap(
-					gap_index, options, comparator, parse_gap_size(browser, gap_index, fallback_length))
-			elif cloze_type == ClozeType.dropdown:
-				gap = ClozeQuestionDropDownGap(gap_index, options)
+			if cloze_type == ClozeType.text or cloze_type == ClozeType.dropdown:
+				options = parse_gap_options(browser, gap_index)
+
+				if not options:
+					break
+
+				if cloze_type == ClozeType.text:
+					gap = ClozeQuestionTextGap(
+						gap_index, options, comparator, parse_gap_size(browser, gap_index, fallback_length))
+				elif cloze_type == ClozeType.dropdown:
+					gap = ClozeQuestionDropDownGap(gap_index, options)
+
 			elif cloze_type == ClozeType.numeric:
-				gap = ClozeQuestionNumericGap(gap_index, parse_gap_size(browser, gap_index, fallback_length))
-			# gap_0_numeric
-			# gap_0_numeric_lower
-			# gap_0_numeric_upper
-			# gap_0_numeric_points
+				gap = ClozeQuestionNumericGap(
+					browser, gap_index, parse_gap_size(browser, gap_index, fallback_length))
+
 			else:
 				raise Exception("unsupported cloze type " + str(cloze_type))				
 
@@ -150,7 +189,7 @@ class ClozeQuestion():
 
 	def get_random_answer(self, context):
 		answers = dict()
-		score = 0.0
+		score = Decimal(0)
 
 		for gap in self.gaps.values():
 			choice, choice_score = gap.get_random_choice(context)
@@ -171,7 +210,7 @@ class SingleChoiceQuestion:
 				break
 			points = browser.find_by_name("choice[points][%d]" % len(self.choices))
 
-			self.choices[choice.first.value] = float(points.first.value)
+			self.choices[choice.first.value] = Decimal(points.first.value)
 
 	def get_random_answer(self, context):
 		choice = random.choice(list(self.choices.keys()))
@@ -194,8 +233,8 @@ class MultipleChoiceQuestion:
 			points_unchecked = browser.find_by_name("choice[points_unchecked][%d]" % len(self.choices))
 
 			self.choices[choice.first.value] = MultipleChoiceItem(
-				checked_score=float(points.first.value),
-				unchecked_score=float(points_unchecked.first.value))
+				checked_score=Decimal(points.first.value),
+				unchecked_score=Decimal(points_unchecked.first.value))
 
 	def get_random_answer(self, context):
 		answers = dict()
@@ -213,7 +252,7 @@ class MultipleChoiceQuestion:
 				answers[label] = random.random() < 0.5
 
 		# compute the score.
-		score = 0.0
+		score = Decimal(0)
 		for label, value in answers.items():
 			item = self.choices[label]
 			if value:
@@ -239,4 +278,4 @@ class LongTextQuestion:
 			# a None score in the XLS
 			if len(text.strip()) >= 1:
 				break
-		return text, 0.0
+		return text, Decimal(0)

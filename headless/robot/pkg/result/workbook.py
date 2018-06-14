@@ -6,6 +6,7 @@
 #
 
 from . import Result, Origin
+from decimal import *
 
 
 class XlsResultRow():
@@ -22,7 +23,7 @@ class XlsResultRow():
 		return self.get(2)
 
 	def get_total_score(self):
-		return float(self.get(3))
+		return Decimal(self.get(3))
 
 	def get_question_scores(self):
 		scores = dict()
@@ -35,7 +36,7 @@ class XlsResultRow():
 			if score is None:
 				scores[title] = "illegal_empty_score"
 			else:
-				scores[title] = float(score)
+				scores[title] = Decimal(score)
 			column += 1
 		return scores
 
