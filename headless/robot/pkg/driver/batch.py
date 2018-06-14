@@ -107,6 +107,7 @@ class Batch(threading.Thread):
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())
 		self._is_done = False
 		self.print_mutex = Lock()
+		self.protocols = dict(header=[], prolog=[], epilog=[], result=[])
 
 	def get_id(self):
 		return self.batch_id
@@ -203,26 +204,34 @@ class Batch(threading.Thread):
 			except:
 				pass
 
-	def _check_results(self, ilias_settings, users, test_driver, workbook, all_expected_results):
+	def _make_protocol(self, users):
+		parts = list()
+
+		parts.extend(self.protocols.get("header", []))
+		parts.extend(self.protocols.get("result", []))
+		parts.append("")
+		parts.extend(self.protocols.get("prolog", []))
+		parts.append("")
+
+		for user in users:
+			parts.append("-" * 80)
+			parts.append("protocol for user %s:" % user.get_username())
+			parts.extend(self.protocols.get(user.get_username(), []))
+			parts.append("-" * 80)
+			parts.append("")
+
+		return "\n".join(parts)
+
+	def _had_webdriver_errors(self, all_expected_results):
+		for recorded_result in all_expected_results:
+			if recorded_result.has_error(ErrorDomain.webdriver):
+				return True
+		return False
+
+	def _check_results(self, users, test_driver, workbook, all_expected_results):
 		all_assertions_ok = True
-		had_webdriver_errors = False
-		protocol_parts = ["Tested on ILIAS %s." % self.ilias_version]
-
-		protocol_parts.append("workaround settings:")
-		self.workarounds.print_status(protocol_parts.append)
-
-		protocol_parts.append("overview of settings:")
-		protocol_parts.extend(ilias_settings)
 
 		for user, recorded_result in zip(users, all_expected_results):
-			protocol_parts.append("-" * 80)
-			protocol_parts.append("protocol for user %s:" % user.get_username())
-			protocol_parts.append(recorded_result.protocol)
-			protocol_parts.append("")
-
-			if recorded_result.has_error(ErrorDomain.webdriver):
-				had_webdriver_errors = True
-
 			self.report_master("checking results for user %s." % user.get_username())
 
 			# fetch and check results.
@@ -234,15 +243,13 @@ class Batch(threading.Thread):
 
 			def report(message):
 				if message:
-					protocol_parts.append(message)
-				# self.report_master(message)
+					self.protocols[user.get_username()].append(message)
 
+			self.protocols[user.get_username()].extend(["", "results:"])
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				all_assertions_ok = False
 
-		protocol = "\n".join(protocol_parts)
-
-		return all_assertions_ok, had_webdriver_errors, protocol
+		return all_assertions_ok
 
 	def _run_tests(self, browser, test_driver):
 		success = "FAIL"
@@ -258,7 +265,20 @@ class Batch(threading.Thread):
 			self.workarounds.print_status(self.report_master)
 
 			self.report_master("verifying admin settings.")
-			ilias_settings = verify_admin_settings(browser, self.workarounds)
+
+			header = self.protocols["header"]
+			header.append("Tested on ILIAS %s." % self.ilias_version)
+			header.append('Using test "%s".' % self.test.get_title())
+			header.append("")
+
+			prolog = self.protocols["header"]
+			prolog.append("-" * 80)
+			prolog.append("Workarounds:")
+			self.workarounds.print_status(prolog.append)
+
+			prolog.append("-" * 80)
+			prolog.append("ILIAS Settings:")
+			prolog.extend(verify_admin_settings(browser, self.workarounds))
 
 			self.report_master("creating users.")
 			# create users for test.
@@ -307,17 +327,22 @@ class Batch(threading.Thread):
 				self.report_master("one of the machines failed: %s." % traceback.format_exc())
 				raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
-			xls, workbook = test_driver.fetch_exported_workbook(self.batch_id, self.workarounds)
+			for user, recorded_result in zip(users, all_recorded_results):
+				self.protocols[user.get_username()] = recorded_result.protocol
 
-			all_assertions_ok, had_webdriver_errors, protocol = self._check_results(
-				ilias_settings, users, test_driver, workbook, all_recorded_results)
-
-			if all_assertions_ok:
-				success = "OK"
-			elif had_webdriver_errors:
+			if self._had_webdriver_errors(all_recorded_results):
 				# there were webdriver problems during the test (e.g. we could not control Firefox
 				# properly), which means this result is not a valid test. do not mark this as a FAIL.
 				success = "CRASH"
+				raise Exception("aborted due to webdriver errors")
+
+			xls, workbook = test_driver.fetch_exported_workbook(self.batch_id, self.workarounds)
+
+			all_assertions_ok = self._check_results(
+				users, test_driver, workbook, all_recorded_results)
+
+			if all_assertions_ok:
+				success = "OK"
 
 			for recorded_result in all_recorded_results:
 				performance_data.extend(recorded_result.performance)
@@ -325,15 +350,15 @@ class Batch(threading.Thread):
 		except:
 			traceback.print_exc()
 			self.report_master("exception received: %s." % traceback.format_exc())
-			protocol += "error: " + traceback.format_exc()
+			self.protocols["result"].append("error: %s" % traceback.format_exc())
 
 		finally:
-			protocol += "\ndone with status %s." % success
+			self.protocols["result"].append("done with status %s." % success)
 
 			try:
 				with open_results() as db:
 					db.put(batch_id=self.batch_id, success=success, xls=xls,
-						protocol=protocol, num_users=len(users))
+						protocol=self._make_protocol(users), num_users=len(users))
 					db.put_performance_data(performance_data)
 			finally:
 				self.report_master("finished with status %s." % success)

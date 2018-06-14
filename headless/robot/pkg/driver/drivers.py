@@ -382,13 +382,13 @@ class ExamDriver:
 		result.add("gui.score", expected_total_score)
 
 		protocol.sort(key=lambda x: x[0]) # by time
-		protocol_text = "\n".join([
+		protocol_lines = [
 			"%s [%s] %s" % (
 				datetime.datetime.fromtimestamp(t).strftime('%H:%M:%S'),
 				title,
-				what) for t, title, what in protocol])
+				what) for t, title, what in protocol]
 
-		result.set_protocol(protocol_text)
+		result.set_protocol(protocol_lines)
 		result.set_performance_measurements(self.dts)
 		return result
 

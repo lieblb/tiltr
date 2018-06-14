@@ -29,11 +29,13 @@ class AnswerProtocol:
 
 	def verify(self, key, expected, actual):
 		if expected == actual:
-			self.entries.append((time.time(), "OK verified that '%s' is still '%s'" % (key, normalize_answer(expected))))
+			self.entries.append(
+				(time.time(), "OK verified that '%s' is still '%s'" % (key, normalize_answer(expected))))
 		else:
-			self.entries.append((time.time(), "FAIL answer on '%s' was stored incorrectly: answer was '%s', but ILIAS stored '%s'" % (
-				key, normalize_answer(expected), normalize_answer(actual))))
-			raise Exception("answer mismatch during verification")
+			err = "FAIL answer on '%s' was stored incorrectly: answer was '%s', but ILIAS stored '%s'" % (
+				key, normalize_answer(expected), normalize_answer(actual))
+			self.entries.append((time.time(), err))
+			raise Exception("answer mismatch during verification: " + err)
 
 	def encode(self):
 		return self.entries
@@ -61,7 +63,7 @@ class Result:
 		else:
 			self.origin = kwargs["origin"]
 			self.properties = dict()
-			self.protocol = ""
+			self.protocol = []
 			self.performance = []
 			self.errors = dict()
 
