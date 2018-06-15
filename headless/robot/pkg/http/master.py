@@ -208,7 +208,11 @@ class WorkaroundsHandler(tornado.web.RequestHandler):
 		self.state = state
 
 	def get(self):
-		workarounds = Workarounds()  # default settings
+		if self.state.batch:
+			workarounds = self.state.batch.workarounds
+		else:
+			workarounds = Workarounds()  # default settings
+
 		self.write(workarounds.to_json())
 		self.finish()
 

@@ -11,13 +11,13 @@ $(function() {
 
 	$.getJSON(host + "/workarounds.json", function(workarounds) {
 		for (var i = 0; i < workarounds.length; i++) {
-			var key = workarounds[i][0];
+			var key = workarounds[i].key;
 			workaroundKeys.push(key);
-			var help = workarounds[i][1];
+			var help = workarounds[i].description;
 			$("#workarounds-body").append('<label class="checkbox"><input id="' +
 				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label><p id="' + key + '_help" class="help"></p>');
 			$("#" + key + "_help").text(help);
-			$("#" + key).prop("checked", true);
+			$("#" + key).prop("checked", workarounds[i].value);
 		}
 	});
 

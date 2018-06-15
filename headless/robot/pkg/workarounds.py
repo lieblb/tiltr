@@ -41,6 +41,7 @@ class Workarounds:
 				"does ILIAS support running tests correctly in non-TinyMCE mode?"
 			),
 			(
+				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1094
 				"fix_longtext_escaping",
 				"does ILIAS handle escaping in essay questions correctly?"
 			)
@@ -53,16 +54,16 @@ class Workarounds:
 				setattr(self, key, from_json[key])
 		else:
 			for key in self.keys:
-				setattr(self, key, False)
+				setattr(self, key, True)
 
 	def to_json(self):
-		return json.dumps(self.options)
+		return json.dumps([dict(key=o[0], description=o[1], value=getattr(self, o[0])) for o in self.options])
 
 	def print_status(self, report):
 		for key in self.keys:
 			report("  %s = %s" % (key, getattr(self, key)))
 
 	def strip_whitespace(self, value):
-		if (self.sloppy_whitespace) and isinstance(value, str):
+		if self.sloppy_whitespace and isinstance(value, str):
 			value = value.strip()
 		return value
