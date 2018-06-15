@@ -106,12 +106,13 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		elif t == 2:
 			return str(self.numeric_upper), self.score
 		elif t == 3:
-			x = Decimal(random.randrange(float(self.numeric_lower), float(self.numeric_upper)))
+			x = Decimal(random.uniform(float(self.numeric_lower), float(self.numeric_upper)))
 			return str(round(x, -self.exponent)), self.score
 		else:
-			eps = Decimal(10) ** self.exponent
+			eps_exp = self.exponent - random.randint(0, 2)  # e.g. enter 5.32 for a numeric range defined as [3, 7]
+			eps = 10.0 ** eps_exp
 			d = float(self.numeric_upper - self.numeric_lower)
-			off = Decimal(str(random.randrange(eps, 1000 * d)))
+			off = Decimal(str(random.uniform(eps, 1000 * d)))
 			if random.random() < 0.5:
 				return str(round(self.numeric_lower - off, -self.exponent)), Decimal(0)
 			else:
