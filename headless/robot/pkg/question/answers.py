@@ -382,5 +382,8 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 			for line in self.current_answer.split("\n"):
 				if len(s) > 0:
 					s += "\n"
-				s += "<p>%s</p>" % cgi.escape(context.strip_whitespace(line))
+				line = context.strip_whitespace(line)
+				if not context.workarounds.supports_correct_longtext_escaping:
+					line = cgi.escape(line)
+				s += "<p>%s</p>" % line
 			return s

@@ -39,6 +39,10 @@ class Workarounds:
 				# see https://www.ilias.de/mantis/view.php?id=18720
 				"supports_non_tinymce",
 				"does ILIAS support running tests correctly in non-TinyMCE mode?"
+			),
+			(
+				"supports_correct_longtext_escaping",
+				"does ILIAS handle escaping in essay questions correctly?"
 			)
 		]
 
