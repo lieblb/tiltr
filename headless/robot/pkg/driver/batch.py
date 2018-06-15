@@ -147,6 +147,9 @@ class Batch(threading.Thread):
 		self.print_mutex.acquire()
 		try:
 			print("[%s] %s" % (origin, message))
+		except UnicodeEncodeError:
+			# this should not happen, as our docker-compose file sets PYTHONIOENCODING
+			traceback.print_exc()
 		finally:
 			self.print_mutex.release()
 

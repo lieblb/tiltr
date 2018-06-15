@@ -34,6 +34,7 @@ services:
     entrypoint: python3 -m pkg master
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING='utf8'
     networks:
       - net
   
@@ -45,6 +46,7 @@ services:
     entrypoint: python3 -m pkg machine
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING='utf8'
     networks:
       - net
 
