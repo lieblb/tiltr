@@ -96,7 +96,7 @@ def check_workbook_consistency(wb, report, workarounds):
 
 	answers = get_workbook_user_answers(wb.worksheets[1], report)
 
-	if workarounds.supports_normalized_xls_participant_sheet:
+	if not workarounds.random_xls_participant_sheet_orders:
 		for user_index in range(2, num_users + 1):
 			user_sheet = wb.worksheets[user_index]
 			other_answers = get_workbook_user_answers(user_sheet)

@@ -158,7 +158,7 @@ def verify_admin_settings(browser, workarounds):
 	goto_editor_administration(browser)
 	browser.find_by_css("#tab_adve_rte_settings a").click()
 
-	if not workarounds.supports_non_tinymce:
+	if workarounds.force_tinymce:
 		verify_admin_setting(
 			"TinyMCE",
 			browser.find_by_css("#use_tiny").first.checked,

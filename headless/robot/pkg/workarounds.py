@@ -12,36 +12,36 @@ class Workarounds:
 	def __init__(self, from_json=None):
 		self.options = [
 			(
-				"supports_significant_whitespace",
+				"sloppy_whitespace",
 				"ILIAS currently strips various whitespaces when saving answers."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1082.
-				"supports_clamps_in_cloze",
+				"disallow_clamps_in_cloze",
 				"<, > cause problems in cloze questions, e.g. \"3<Q>2<i\" becomes \"32\"."
 			),
 			(
 				# see https://www.ilias.de/mantis/view.php?id=23143.
-				"supports_dollar_in_cloze",
+				"disallow_dollar_in_cloze",
 				"$ cause problems in cloze questions, e.g. \"cv$1a\" becomes \"cva\"."
 			),
 			(
-				"supports_empty_answers",
+				"disallow_empty_answers",
 				"ILIAS currently does not deal correctly with empty questions (scores in Excel are just blank instead "
 				"of stating a number like 0 or the computed score, which might be != 0)."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1052/
-				"supports_normalized_xls_participant_sheet",
+				"random_xls_participant_sheet_orders",
 				"order of ILIAS participant sheet answers in XLS export normalized, i.e. same for each participant."
 			),
 			(
 				# see https://www.ilias.de/mantis/view.php?id=18720
-				"supports_non_tinymce",
+				"force_tinymce",
 				"does ILIAS support running tests correctly in non-TinyMCE mode?"
 			),
 			(
-				"supports_correct_longtext_escaping",
+				"fix_longtext_escaping",
 				"does ILIAS handle escaping in essay questions correctly?"
 			)
 		]
@@ -63,6 +63,6 @@ class Workarounds:
 			report("  %s = %s" % (key, getattr(self, key)))
 
 	def strip_whitespace(self, value):
-		if (not self.supports_significant_whitespace) and isinstance(value, str):
+		if (self.sloppy_whitespace) and isinstance(value, str):
 			value = value.strip()
 		return value

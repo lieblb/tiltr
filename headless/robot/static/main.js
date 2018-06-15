@@ -17,6 +17,7 @@ $(function() {
 			$("#workarounds-body").append('<label class="checkbox"><input id="' +
 				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label><p id="' + key + '_help" class="help"></p>');
 			$("#" + key + "_help").text(help);
+			$("#" + key).prop("checked", true);
 		}
 	});
 

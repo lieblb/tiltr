@@ -8,6 +8,7 @@
 from collections import namedtuple
 import re
 import cgi
+import html
 
 from ..result import AnswerProtocol
 
@@ -383,7 +384,7 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 				if len(s) > 0:
 					s += "\n"
 				line = context.strip_whitespace(line)
-				if not context.workarounds.supports_correct_longtext_escaping:
+				if context.workarounds.fix_longtext_escaping:
 					line = cgi.escape(line)
 				s += "<p>%s</p>" % line
 			return s

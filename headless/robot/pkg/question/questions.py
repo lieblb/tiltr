@@ -243,7 +243,7 @@ class MultipleChoiceQuestion:
 	def get_random_answer(self, context):
 		answers = dict()
 
-		if not context.workarounds.supports_empty_answers:
+		if context.workarounds.disallow_empty_answers:
 			# special case here : ILIAS 5 does not recognize an "all false" MC as valid answer and
 			# will not save it (the score in XLS will be None); we need to pick at least 1 checkbox.
 
@@ -321,7 +321,7 @@ class LongTextQuestion:
 		while True:
 			text = context.produce_text(20, context.long_text_random_chars)
 
-			if context.workarounds.supports_empty_answers:
+			if not context.workarounds.disallow_empty_answers:
 				break
 
 			# ASSUMPTION: ILIAS does not support empty answers, since they will end up with
