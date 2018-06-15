@@ -18,7 +18,14 @@ from ..result import Result, Origin, ErrorDomain
 
 
 def random_text(n, random_chars):
-	return "".join([random.choice(random_chars) for i in range(n)])
+	components = list()
+	n_chars = 0
+	while n_chars < n:
+		p = random.choice(random_chars)
+		if n_chars + len(p) <= n:
+			components.append(p)
+			n_chars += len(p)
+	return "".join(components)
 
 
 def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
@@ -29,6 +36,10 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 		random_chars += "<>"
 	if allow_dollar:
 		random_chars += "$"
+
+	random_chars = [c for c in random_chars]
+	random_chars.extend(["&lt;", "&gt;", "&amp;"])
+
 	return random_chars
 
 
@@ -37,8 +48,8 @@ class TestContext:
 		self.workarounds = workarounds
 		self.cloze_random_chars = get_random_chars(
 			allow_newlines=False,
-			allow_dollar=workarounds.supports_dollar_in_cloze,
-			allow_clamps=workarounds.supports_clamps_in_cloze)
+			allow_dollar=not workarounds.disallow_dollar_in_cloze,
+			allow_clamps=not workarounds.disallow_clamps_in_cloze)
 		self.long_text_random_chars = get_random_chars(
 			allow_newlines=True,
 			allow_dollar=True,
