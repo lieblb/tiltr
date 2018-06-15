@@ -295,7 +295,7 @@ $(function() {
 			var workarounds = {};
 			for (var i = 0; i < workaroundKeys.length; i++) {
 				var key = workaroundKeys[i];
-				workarounds[key] = $("#" + key).checked;
+				workarounds[key] = $("#" + key).prop("checked");
 			}
 
 			$.ajax({
