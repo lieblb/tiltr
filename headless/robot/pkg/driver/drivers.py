@@ -360,7 +360,15 @@ class ExamDriver:
 
 	def get_expected_result(self):
 		def clip_score(score):
-			return max(score, 0)  # clamp score to >= 0 (FIXME: check test settings)
+			return max(score, Decimal(0))  # clamp score to >= 0 (FIXME: check test settings)
+
+		def format_score(score):
+			s = str(score)
+			if '.' in s:
+				s = s.rstrip('0')
+				if s.endswith('.'):
+					s = s.rstrip('.')
+			return s
 
 		protocol = self.protocol[:]
 		result = Result(origin=Origin.recorded)
@@ -372,16 +380,16 @@ class ExamDriver:
 			for dimension_title, dimension_value in encoded["answers"].items():
 				result.add("question.%s.%s" % (question_title, dimension_title), dimension_value)
 
-			result.add("score.%s" % question_title, clip_score(answer.current_score))
+			result.add("score.%s" % question_title, format_score(clip_score(answer.current_score)))
 
 			for t, what in encoded["protocol"]:
 				protocol.append((t, question_title, what))
 
-		expected_total_score = 0
+		expected_total_score = Decimal(0)
 		for answer in self.answers.values():
 			expected_total_score += clip_score(answer.current_score)
-		result.add("score", expected_total_score)
-		result.add("gui.score", expected_total_score)
+		result.add("score", format_score(expected_total_score))
+		result.add("gui.score", format_score(expected_total_score))
 
 		protocol.sort(key=lambda x: x[0]) # by time
 		protocol_lines = [

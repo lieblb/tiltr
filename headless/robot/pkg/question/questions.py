@@ -9,11 +9,12 @@ from collections import namedtuple
 import random
 from enum import Enum
 from decimal import *
+from collections import defaultdict
 
 
 class ClozeType(Enum):
 	text = 0
-	dropdown = 1
+	select = 1
 	numeric = 2
 
 
@@ -60,13 +61,13 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 					else:
 						chars.append(text[i])
 				text = "".join(chars)
-				return text, self._get_score(text)
+				return text, self.get_score(text)
 		else:
 			# make up something random and probably wrong.
 			text = context.produce_text(self.size, context.cloze_random_chars)
-			return text, self._get_score(text)
+			return text, self.get_score(text)
 
-	def _get_score(self, text):
+	def get_score(self, text):
 		if self.comparator == ClozeComparator.case_sensitive:
 			return self.options.get(text, Decimal(0))
 
@@ -77,14 +78,23 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 		return Decimal(0)
 
+	def get_type(self):
+		return ClozeType.text
 
-class ClozeQuestionDropDownGap(ClozeQuestionGap):
+
+class ClozeQuestionSelectGap(ClozeQuestionGap):
 	def __init__(self, index, options):
 		ClozeQuestionGap.__init__(self, index)
 		self.options = options
 
 	def get_random_choice(self, context):
 		return random.choice(list(self.options.items()))
+
+	def get_score(self, text):
+		return self.options.get(text, Decimal(0))
+
+	def get_type(self):
+		return ClozeType.select
 
 
 class ClozeQuestionNumericGap(ClozeQuestionGap):
@@ -118,6 +128,16 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 			else:
 				return str(round(self.numeric_upper + off, -self.exponent)), Decimal(0)
 
+	def get_score(self, text):
+		value = Decimal(text)
+		if value >= self.numeric_lower and value <= self.numeric_upper:
+			return self.score
+		else:
+			return Decimal(0)
+
+	def get_type(self):
+		return ClozeType.numeric
+
 
 def parse_gap_size(browser, gap_index, fallback_length):
 	elements = browser.find_by_name("gap_%d_gapsize" % gap_index)
@@ -149,9 +169,7 @@ class ClozeQuestion():
 		self.title = title
 		self.gaps = dict()
 
-		identical_scoring = browser.find_by_name("identical_scoring").first.checked
-		if not identical_scoring:
-			raise Exception("cannot test question with non-identical scoring")
+		self.identical_scoring = browser.find_by_name("identical_scoring").first.checked
 
 		fallback_length = browser.find_by_name("fixedTextLength").first.value.strip()
 		if fallback_length == '':
@@ -170,7 +188,7 @@ class ClozeQuestion():
 
 			cloze_type = ClozeType(int(browser.find_by_name("clozetype_%d" % gap_index).first.value))
 
-			if cloze_type == ClozeType.text or cloze_type == ClozeType.dropdown:
+			if cloze_type == ClozeType.text or cloze_type == ClozeType.select:
 				options = parse_gap_options(browser, gap_index)
 
 				if not options:
@@ -179,8 +197,8 @@ class ClozeQuestion():
 				if cloze_type == ClozeType.text:
 					gap = ClozeQuestionTextGap(
 						gap_index, options, comparator, parse_gap_size(browser, gap_index, fallback_length))
-				elif cloze_type == ClozeType.dropdown:
-					gap = ClozeQuestionDropDownGap(gap_index, options)
+				elif cloze_type == ClozeType.select:
+					gap = ClozeQuestionSelectGap(gap_index, options)
 
 			elif cloze_type == ClozeType.numeric:
 				gap = ClozeQuestionNumericGap(
@@ -195,8 +213,21 @@ class ClozeQuestion():
 		answers = dict()
 		score = Decimal(0)
 
+		previous_answers = defaultdict(list)
+		previous_answers_prob = 0.1 if self.identical_scoring else 0.25
+
 		for gap in self.gaps.values():
-			choice, choice_score = gap.get_random_choice(context)
+			previous = previous_answers[gap.get_type()]
+			if len(previous) > 0 and random.random() < previous_answers_prob:
+				# use some previous answer to test identical_scoring option
+				choice = random.choice(previous)
+				if self.identical_scoring:
+					choice_score = gap.get_score(choice)
+				else:
+					choice_score = Decimal(0)
+			else:
+				choice, choice_score = gap.get_random_choice(context)
+			previous.append(choice)
 			score += choice_score
 			answers[gap.index] = choice
 
