@@ -15,7 +15,8 @@ TestILIAS works by importing and analyzing a given test (i.e. the test contents 
 
 * Single Choice
 * Multiple Choice
-* Cloze Question
+* KPrim
+* Cloze Question (select, text, and numeric gaps)
 * Long Text ("Essay") Question
 
 TestILIAS allows to work around a number of known problems in order to perform test without already known fails. It also supports running tests in a loop mode so you can keep running randomized tests for a longer time.
