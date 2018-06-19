@@ -9,6 +9,7 @@ from collections import namedtuple
 import re
 import cgi
 import html
+from .questions import ClozeType
 
 from ..result import AnswerProtocol
 
@@ -144,7 +145,7 @@ class TextAnswerGap(ClozeAnswerGap):
 		self._value = new_value
 
 
-class DropDownAnswerGap(ClozeAnswerGap):
+class SelectAnswerGap(ClozeAnswerGap):
 	@property
 	def value(self):
 		matches = self.browser.find_by_name(self.name)
@@ -171,6 +172,18 @@ class DropDownAnswerGap(ClozeAnswerGap):
 			raise Exception('option "%s" not found.' % new_value)
 
 		self._value = new_value
+
+
+def implicit_text_to_number(context, value):
+	if not context.workarounds.implicit_text_number_conversions:
+		return value
+	if len(value) >= 2 and value.endswith(".") and value[:-1].isdigit():
+		# e.g. 13. -> 13
+		value = value[:-1]
+	elif len(value) >= 2 and value.startswith(".") and value[1:].isdigit():
+		# e.g. .17 -> 0.17
+		value = "0" + value
+	return value
 
 
 class ClozeAnswer(object):
@@ -207,7 +220,7 @@ class ClozeAnswer(object):
 			gaps.append(TextAnswerGap(self.browser, element))
 
 		for element in root.find_by_css("select.ilc_qinput_ClozeGapSelect"):
-			gaps.append(DropDownAnswerGap(self.browser, element))
+			gaps.append(SelectAnswerGap(self.browser, element))
 
 		indexed = dict((gap.index, gap) for gap in gaps)
 		assert len(gaps) == len(indexed)  # all unique?
@@ -227,7 +240,10 @@ class ClozeAnswer(object):
 	def encode(self, context):
 		answers = dict()
 		for gap in self.question.gaps.values():
-			answers[gap.get_export_name()] = self.current_answers[gap.index]
+			value = self.current_answers[gap.index]
+			if gap.get_type() == ClozeType.text:
+				value = implicit_text_to_number(context, value)
+			answers[gap.get_export_name()] = value
 		return dict(
 			title=self.question.title,
 			answers=answers,
@@ -307,10 +323,17 @@ class AbstractLongTextAnswer:
 		# strip_whitespace, since sometimes ILIAS sometimes adds additional newlines, e.g.:
 		# answer was ')GBUUD§/0A:1', but ILIAS stored '\n)GBUUD§/0A:1'
 
+		def collapse_whitespace(value):
+			if context.workarounds.sloppy_whitespace:
+				if isinstance(value, str):
+					value = re.sub(r'\s+', r' ', value)
+			return value
+
 		self.protocol.verify(
 			"Ergebnis",
-			context.strip_whitespace("\n".join(context.strip_whitespace(s) for s in self.current_answer.split("\n"))),
-			context.strip_whitespace(text))
+			collapse_whitespace(context.strip_whitespace(
+				"\n".join(context.strip_whitespace(s) for s in self.current_answer.split("\n")))),
+			collapse_whitespace(context.strip_whitespace(text)))
 
 	def encode(self, context):
 		return dict(
@@ -384,7 +407,7 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 				if len(s) > 0:
 					s += "\n"
 				line = context.strip_whitespace(line)
-				if context.workarounds.fix_longtext_escaping:
+				if context.workarounds.duplicate_longtext_escaping:
 					line = cgi.escape(line)
 				s += "<p>%s</p>" % line
 			return s

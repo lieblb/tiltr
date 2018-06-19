@@ -35,7 +35,7 @@ class AnswerProtocol:
 			err = "FAIL answer on '%s' was stored incorrectly: answer was '%s', but ILIAS stored '%s'" % (
 				key, normalize_answer(expected), normalize_answer(actual))
 			self.entries.append((time.time(), err))
-			raise Exception("answer mismatch during verification: " + err)
+			raise Exception("answer mismatch during in-test verification: " + err)
 
 	def encode(self):
 		return self.entries

@@ -29,7 +29,8 @@ def random_text(n, random_chars):
 
 
 def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
-	random_chars = u" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789éáèêäöüÄÖÜß?!.-_:;#§\{\}[]()@+-*/~'\""
+	random_chars =\
+		u" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789éáèêäöüÄÖÜß?!.-_:;#§%&=^|\{\}[]()@+-*/~'\"\t"
 	if allow_newlines:
 		random_chars += "\n"
 	if allow_clamps:
@@ -170,11 +171,15 @@ class TakeExamCommand:
 					except WebDriverException:
 						traceback.print_exc()
 						report("test aborted with webdriver error: %s" % traceback.format_exc())
-						return Result.from_error(Origin.recorded, ErrorDomain.webdriver, traceback.format_exc())
+						r = Result.from_error(Origin.recorded, ErrorDomain.webdriver, traceback.format_exc())
+						exam_driver.copy_protocol(r)
+						return r
 					except:
 						traceback.print_exc()
 						report("test aborted with error: %s" % traceback.format_exc())
-						return Result.from_error(Origin.recorded, ErrorDomain.qa, traceback.format_exc())
+						r = Result.from_error(Origin.recorded, ErrorDomain.qa, traceback.format_exc())
+						exam_driver.copy_protocol(r)
+						return r
 		except WebDriverException:
 			traceback.print_exc()
 			report("test aborted with webdriver error: %s" % traceback.format_exc())

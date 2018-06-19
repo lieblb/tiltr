@@ -257,7 +257,6 @@ class Batch(threading.Thread):
 	def _run_tests(self, browser, test_driver):
 		success = "FAIL"
 		xls = ""
-		protocol = ""
 		performance_data = []
 
 		users = []

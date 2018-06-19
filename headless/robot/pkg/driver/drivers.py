@@ -358,6 +358,25 @@ class ExamDriver:
 		self.report("verifying question " + str(sequence_id) + ".")
 		self.answers[sequence_id].verify(self.context)
 
+	def copy_protocol(self, result):
+		protocol = self.protocol[:]
+
+		for sequence_id, answer in self.answers.items():
+			encoded = answer.encode(self.context)
+			question_title = encoded["title"]
+
+			for t, what in encoded["protocol"]:
+				protocol.append((t, question_title, what))
+
+		protocol.sort(key=lambda x: x[0])  # by time
+		protocol_lines = [
+			"%s [%s] %s" % (
+				datetime.datetime.fromtimestamp(t).strftime('%H:%M:%S'),
+				title,
+				what) for t, title, what in protocol]
+
+		result.set_protocol(protocol_lines)
+
 	def get_expected_result(self):
 		def clip_score(score):
 			return max(score, Decimal(0))  # clamp score to >= 0 (FIXME: check test settings)
@@ -370,7 +389,6 @@ class ExamDriver:
 					s = s.rstrip('.')
 			return s
 
-		protocol = self.protocol[:]
 		result = Result(origin=Origin.recorded)
 
 		for sequence_id, answer in self.answers.items():
@@ -382,23 +400,13 @@ class ExamDriver:
 
 			result.add("score.%s" % question_title, format_score(clip_score(answer.current_score)))
 
-			for t, what in encoded["protocol"]:
-				protocol.append((t, question_title, what))
-
 		expected_total_score = Decimal(0)
 		for answer in self.answers.values():
 			expected_total_score += clip_score(answer.current_score)
 		result.add("score", format_score(expected_total_score))
 		result.add("gui.score", format_score(expected_total_score))
 
-		protocol.sort(key=lambda x: x[0]) # by time
-		protocol_lines = [
-			"%s [%s] %s" % (
-				datetime.datetime.fromtimestamp(t).strftime('%H:%M:%S'),
-				title,
-				what) for t, title, what in protocol]
-
-		result.set_protocol(protocol_lines)
+		self.copy_protocol(result)
 		result.set_performance_measurements(self.dts)
 		return result
 

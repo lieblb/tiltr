@@ -6,6 +6,7 @@
 #
 
 import json
+import re
 
 
 class Workarounds:
@@ -13,7 +14,11 @@ class Workarounds:
 		self.options = [
 			(
 				"sloppy_whitespace",
-				"ILIAS currently strips various whitespaces when saving answers."
+				"whitespace is not always correctly preserved when saving answers."
+			),
+			(
+				"implicit_text_number_conversions",
+				"cloze texts in xls are in numeric forms, e.g. \".17\" becomes \"0,17\"."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1082.
@@ -27,23 +32,23 @@ class Workarounds:
 			),
 			(
 				"disallow_empty_answers",
-				"ILIAS currently does not deal correctly with empty questions (scores in Excel are just blank instead "
-				"of stating a number like 0 or the computed score, which might be != 0)."
+				"empty questions' scores in Excel are blank instead "
+				"of stating a number like 0 or the computed score (which might be > 0)."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1052/
 				"random_xls_participant_sheet_orders",
-				"order of ILIAS participant sheet answers in XLS export normalized, i.e. same for each participant."
+				"answer order for each xls participant sheet is random (and not normalized)."
 			),
 			(
 				# see https://www.ilias.de/mantis/view.php?id=18720
 				"force_tinymce",
-				"does ILIAS support running tests correctly in non-TinyMCE mode?"
+				"various encoding and decoding problems in non-TinyMCE mode"
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1094
-				"fix_longtext_escaping",
-				"does ILIAS handle escaping in essay questions correctly?"
+				"duplicate_longtext_escaping",
+				"text in XLS export contains doubly escaped HTML entities."
 			)
 		]
 
@@ -64,6 +69,7 @@ class Workarounds:
 			report("  %s = %s" % (key, getattr(self, key)))
 
 	def strip_whitespace(self, value):
-		if self.sloppy_whitespace and isinstance(value, str):
-			value = value.strip()
+		if isinstance(value, str):
+			if self.sloppy_whitespace:
+				value = value.strip()
 		return value
