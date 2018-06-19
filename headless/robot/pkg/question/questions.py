@@ -213,23 +213,31 @@ class ClozeQuestion():
 		answers = dict()
 		score = Decimal(0)
 
-		previous_answers = defaultdict(list)
-		previous_answers_prob = 0.1 if self.identical_scoring else 0.25
+		while True:
+			previous_answers = defaultdict(list)
+			previous_answers_prob = 0.1 if self.identical_scoring else 0.25
+			all_empty = True
 
-		for gap in self.gaps.values():
-			previous = previous_answers[gap.get_type()]
-			if len(previous) > 0 and random.random() < previous_answers_prob:
-				# use some previous answer to test identical_scoring option
-				choice = random.choice(previous)
-				if self.identical_scoring:
-					choice_score = gap.get_score(choice)
+			for gap in self.gaps.values():
+				previous = previous_answers[gap.get_type()]
+				if len(previous) > 0 and random.random() < previous_answers_prob:
+					# use some previous answer to test identical_scoring option
+					choice = random.choice(previous)
+					if self.identical_scoring:
+						choice_score = gap.get_score(choice)
+					else:
+						choice_score = Decimal(0)
 				else:
-					choice_score = Decimal(0)
+					choice, choice_score = gap.get_random_choice(context)
+				previous.append(choice)
+				score += choice_score
+				answers[gap.index] = choice
+				all_empty = all_empty and len(choice) == 0
+
+			if all_empty and context.workarounds.disallow_empty_answers:
+				pass  # retry
 			else:
-				choice, choice_score = gap.get_random_choice(context)
-			previous.append(choice)
-			score += choice_score
-			answers[gap.index] = choice
+				break
 
 		return answers, score
 
