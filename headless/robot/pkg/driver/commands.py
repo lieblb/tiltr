@@ -164,8 +164,8 @@ class TakeExamCommand:
 				with test_driver.start(context, self.questions) as exam_driver:
 					try:
 						self._pass1(exam_driver, report)
-						self._pass2(exam_driver, report)
-						self._pass3(exam_driver, report)
+						#self._pass2(exam_driver, report)
+						#self._pass3(exam_driver, report)
 
 						result = exam_driver.get_expected_result()
 					except WebDriverException:

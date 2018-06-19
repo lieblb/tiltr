@@ -17,6 +17,7 @@ from ..result.workbook import workbook_to_result
 
 from .commands import TakeExamCommand
 from .drivers import Login, TemporaryUser, TestDriver, Test, verify_admin_settings
+from .utils import wait_for_page_load
 
 from ..question import *  # for pickling
 from ..workarounds import Workarounds  # for pickling
@@ -107,7 +108,7 @@ class Batch(threading.Thread):
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())
 		self._is_done = False
 		self.print_mutex = Lock()
-		self.protocols = dict(header=[], prolog=[], epilog=[], result=[])
+		self.protocols = dict(header=[], prolog=[], epilog=[], result=[], readjustment=[])
 
 	def get_id(self):
 		return self.batch_id
@@ -223,6 +224,9 @@ class Batch(threading.Thread):
 			parts.append("-" * 80)
 			parts.append("")
 
+		parts.append("")
+		parts.extend(self.protocols.get("readjustment", []))
+
 		return "\n".join(parts)
 
 	def _had_webdriver_errors(self, all_expected_results):
@@ -231,10 +235,10 @@ class Batch(threading.Thread):
 				return True
 		return False
 
-	def _check_results(self, users, test_driver, workbook, all_expected_results):
+	def _check_results(self, users, test_driver, workbook, all_recorded_results):
 		all_assertions_ok = True
 
-		for user, recorded_result in zip(users, all_expected_results):
+		for user, recorded_result in zip(users, all_recorded_results):
 			self.report_master("checking results for user %s." % user.get_username())
 
 			# fetch and check results.
@@ -242,7 +246,7 @@ class Batch(threading.Thread):
 				workbook, user.get_username(), self.report_master)
 
 			# check score via gui participants tab as well.
-			ilias_result.add("gui.score", test_driver.get_score(user.get_username()))
+			ilias_result.add(("exam", "score", "gui"), test_driver.get_score(user.get_username()))
 
 			def report(message):
 				if message:
@@ -253,6 +257,48 @@ class Batch(threading.Thread):
 				all_assertions_ok = False
 
 		return all_assertions_ok
+
+	def _check_readjustment(self, browser, test_driver, questions, all_recorded_results):
+		protocol = self.protocols["readjustment"]
+
+		def report(s):
+			protocol.append(s)
+
+		index = 0
+
+		while True:
+			test_driver.goto_scoring_adjustment()
+
+			links = []
+			for a in browser.find_by_name("questionbrowser").first.find_by_css("table a"):
+				question_title = a.text.strip()
+				if question_title in questions:
+					links.append((a, questions[question_title]))
+
+			if index >= len(links):
+				break
+
+			link, question = links[index]
+			with wait_for_page_load(browser):
+				link.click()
+
+			# close stats window.
+			browser.find_by_css("#adjustment_stats_container_aggr_usr_answ a").first.click()
+
+			question.readjust_scores(browser, report)
+
+			index += 1
+
+		for question_title, question in questions.items():
+			for result in all_recorded_results:
+				for key, value in result.properties.items():
+					if key[0] == "question" and key[1] == question_title:
+						pass
+						# question.compute_score()
+
+		#	for dimension_title, dimension_value in encoded["answers"].items():
+		#		result.add("question.%s.%s" % (question_title, dimension_title), dimension_value)
+
 
 	def _run_tests(self, browser, test_driver):
 		success = "FAIL"
@@ -345,6 +391,8 @@ class Batch(threading.Thread):
 
 			if all_assertions_ok:
 				success = "OK"
+
+			#self._check_readjustment(browser, test_driver, questions, all_recorded_results)
 
 			for recorded_result in all_recorded_results:
 				performance_data.extend(recorded_result.performance)

@@ -56,7 +56,7 @@ class Result:
 		if from_json:
 			data = json.loads(from_json)
 			self.origin = Origin[data["origin"]]
-			self.properties = data["properties"]
+			self.properties = dict((tuple(key), value) for key, value in data["properties"])
 			self.protocol = data["protocol"]
 			self.performance = data["performance"]
 			self.errors = data["errors"]
@@ -70,7 +70,7 @@ class Result:
 	def to_json(self):
 		return json.dumps(dict(
 			origin=self.origin.name,
-			properties=self.properties,
+			properties=list(self.properties.items()),
 			protocol=self.protocol,
 			performance=self.performance,
 			errors=self.errors))
@@ -102,17 +102,25 @@ class Result:
 	def set_performance_measurements(self, performance):
 		self.performance = performance
 
+	def get_normalized_properties(self):
+		return dict((tuple(str(k) for k in key), value) for key, value in self.properties.items())
+
 	def check_against(self, other, report, workarounds):
 		report("assertions:")
 
 		all_ok = True
 
+		self_properties = self.get_normalized_properties()
+		other_properties = other.get_normalized_properties()
+
+		print(self_properties, other_properties)
+
 		keys = sorted(list(set(
-			list(self.properties.keys()) + list(other.properties.keys()))))
+			list(self_properties.keys()) + list(other_properties.keys()))))
 
 		for k in keys:
-			value_self = "%s" % self.get(k)
-			value_other = "%s" % other.get(k)
+			value_self = "%s" % self_properties.get(k, None)
+			value_other = "%s" % other_properties.get(k, None)
 
 			value_self = workarounds.strip_whitespace(value_self)
 			value_other = workarounds.strip_whitespace(value_other)
@@ -124,7 +132,7 @@ class Result:
 				all_ok = False
 
 			report("%s %s: %s [%s] %s %s [%s]" % (
-				status, k,
+				status, " / ".join(k),
 				value_self.replace("\n", "\\n"), self.get_origin(),
 				"==" if status == "OK" else "!=",
 				value_other.replace("\n", "\\n"), other.get_origin()))

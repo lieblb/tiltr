@@ -396,15 +396,15 @@ class ExamDriver:
 			question_title = encoded["title"]
 			
 			for dimension_title, dimension_value in encoded["answers"].items():
-				result.add("question.%s.%s" % (question_title, dimension_title), dimension_value)
+				result.add(("question", question_title, "answer", dimension_title), dimension_value)
 
-			result.add("score.%s" % question_title, format_score(clip_score(answer.current_score)))
+			result.add(("question", question_title, "score"), format_score(clip_score(answer.current_score)))
 
 		expected_total_score = Decimal(0)
 		for answer in self.answers.values():
 			expected_total_score += clip_score(answer.current_score)
-		result.add("score", format_score(expected_total_score))
-		result.add("gui.score", format_score(expected_total_score))
+		result.add(("exam", "score", "total"), format_score(expected_total_score))
+		result.add(("exam", "score", "gui"), format_score(expected_total_score))
 
 		self.copy_protocol(result)
 		result.set_performance_measurements(self.dts)
@@ -437,6 +437,7 @@ class Test:
 				test = Test(os.path.splitext(filename)[0])
 				tests[test.get_title()] = test.get_id()
 		return tests
+
 
 class TestDriver():
 	def __init__(self, browser, test, report):
@@ -511,6 +512,10 @@ class TestDriver():
 	def goto_export(self):
 		assert self.goto()
 		self.browser.find_by_css("#tab_export a").click()
+
+	def goto_scoring_adjustment(self):
+		assert self.goto()
+		self.browser.find_by_css("#tab_scoringadjust a").click()
 
 	def fetch_exported_workbook(self, batch_id, workarounds):
 		self.goto_export()

@@ -407,7 +407,7 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 				if len(s) > 0:
 					s += "\n"
 				line = context.strip_whitespace(line)
-				if context.workarounds.duplicate_longtext_escaping:
+				if context.workarounds.no_plaintext_longtext:
 					line = cgi.escape(line)
 				if context.workarounds.sloppy_whitespace:
 					line = line.replace("\t", " ")

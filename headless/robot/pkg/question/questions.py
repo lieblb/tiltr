@@ -10,6 +10,14 @@ import random
 from enum import Enum
 from decimal import *
 from collections import defaultdict
+from ..driver.utils import wait_for_page_load
+
+
+def readjust_score(score):
+	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
+	score += delta
+	score = max(score, Decimal(0))
+	return score
 
 
 class ClozeType(Enum):
@@ -214,22 +222,27 @@ class ClozeQuestion():
 			answers = dict()
 			score = Decimal(0)
 
-			previous_answers = defaultdict(list)
+			previous_answers = defaultdict(set)
 			previous_answers_prob = 0.1 if self.identical_scoring else 0.25
 			all_empty = True
 
 			for gap in self.gaps.values():
 				previous = previous_answers[gap.get_type()]
+
 				if len(previous) > 0 and random.random() < previous_answers_prob:
 					# use some previous answer to test identical_scoring option
-					choice = random.choice(previous)
+					choice = random.choice(list(previous))
 					if self.identical_scoring:
 						choice_score = gap.get_score(choice)
 					else:
 						choice_score = Decimal(0)
 				else:
 					choice, choice_score = gap.get_random_choice(context)
-				previous.append(choice)
+					if (not self.identical_scoring) and choice in previous:
+						choice_score = Decimal(0)
+
+				previous.add(choice)
+
 				score += choice_score
 				answers[gap.index] = choice
 				all_empty = all_empty and len(choice) == 0
@@ -239,23 +252,69 @@ class ClozeQuestion():
 			else:
 				return answers, score
 
+	def readjust_scores(self, browser, report):
+		pass
+
 
 class SingleChoiceQuestion:
-	def __init__(self, browser, title):
-		self.title = title
-		self.choices = dict()
+	@staticmethod
+	def _get_ui(browser):
+		choices = dict()
 
 		while True:
-			choice = browser.find_by_name("choice[answer][%d]" % len(self.choices))
+			choice = browser.find_by_name("choice[answer][%d]" % len(choices))
 			if not choice:
 				break
-			points = browser.find_by_name("choice[points][%d]" % len(self.choices))
+			points = browser.find_by_name("choice[points][%d]" % len(choices))
 
-			self.choices[choice.first.value] = Decimal(points.first.value)
+			choices[choice.first.value] = Decimal(points.first.value)
+
+		return choices
+
+	@staticmethod
+	def _set_ui(browser, choices):
+		i = 0
+		while True:
+			choice = browser.find_by_name("choice[answer][%d]" % i)
+			if not choice:
+				break
+			points = browser.find_by_name("choice[points][%d]" % i)
+
+			points.first.value = str(choices[choice.first.value])
+			i += 1
+
+	def __init__(self, browser, title):
+		self.title = title
+		self.choices = self._get_ui(browser)
 
 	def get_random_answer(self, context):
 		choice = random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
+
+	def readjust_scores(self, browser, report):
+		report("checking readjustment for %s." % self.title)
+		choices = self._get_ui(browser)
+
+		if len(choices) != len(self.choices):
+			raise Exception("wrong number of choices in readjustment.")
+		for key, score in self.choices.items():
+			if choices[key] != score:
+				raise Exception("wrong choice score in readjustment.")
+
+		for key, score in list(choices.items()):
+			choices[key] = readjust_score(score)
+		self._set_ui(browser, choices)
+
+		with wait_for_page_load(browser):
+			browser.find_by_name("cmd[savescoringfortest]").click()
+
+	def compute_score(self, answers):
+		score = Decimal(0)
+		for key, checked in answers.items():
+			if checked:
+				score += self.choices[key]
+		return score
+
 
 
 MultipleChoiceItem = namedtuple('MultipleChoiceItem', ['checked_score', 'unchecked_score'])
@@ -303,6 +362,9 @@ class MultipleChoiceQuestion:
 
 		return answers, score
 
+	def readjust_scores(self, browser, report):
+		pass
+
 
 class KPrimQuestion:
 	def __init__(self, browser, title):
@@ -349,10 +411,16 @@ class KPrimQuestion:
 		answers = [random.random() < 0.5 for _ in range(4)]
 		return answers, self._get_score(answers)
 
+	def readjust_scores(self, browser, report):
+		pass
+
 
 class LongTextQuestion:
 	def __init__(self, browser, title):
 		self.title = title
+
+		if not browser.find_by_css("#scoring_mode_non").first.checked:
+			raise Exception("only manual scoring is supported for tests with LongTextQuestion")
 
 	def get_random_answer(self, context):
 		while True:
@@ -366,3 +434,6 @@ class LongTextQuestion:
 			if len(text.strip()) >= 1:
 				break
 		return text, Decimal(0)
+
+	def readjust_scores(self, browser, report):
+		pass

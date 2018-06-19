@@ -138,11 +138,11 @@ def workbook_to_result(wb, username, report):
 
 	for question_title, dimensions in get_workbook_user_answers(user_sheet):
 		for dimension_title, dimension_value in dimensions:
-			result.add("question.%s.%s" % (question_title, dimension_title), dimension_value)
+			result.add(("question", question_title, "answer", dimension_title), dimension_value)
 
 	for title, score in result_row.get_question_scores().items():
-		result.add("score.%s" % title, score)
+		result.add(("question", title, "score"), score)
 
-	result.add("score", result_row.get_total_score())
+	result.add(("exam", "score", "total"), result_row.get_total_score())
 
 	return result

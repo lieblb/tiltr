@@ -18,7 +18,7 @@ class Workarounds:
 			),
 			(
 				"implicit_text_number_conversions",
-				"cloze texts in xls are in numeric forms, e.g. \".17\" becomes \"0,17\"."
+				"cloze texts in xls are converted into numbers, e.g. \".17\" becomes \"0,17\"."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1082.
@@ -47,8 +47,8 @@ class Workarounds:
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1094
-				"duplicate_longtext_escaping",
-				"text in XLS export contains doubly escaped HTML entities."
+				"no_plaintext_longtext",
+				"text in XLS export won't be plaintext due to TinyMCE escaping."
 			)
 		]
 
