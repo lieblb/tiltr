@@ -210,10 +210,10 @@ class ClozeQuestion():
 			self.gaps[gap_index] = gap
 
 	def get_random_answer(self, context):
-		answers = dict()
-		score = Decimal(0)
-
 		while True:
+			answers = dict()
+			score = Decimal(0)
+
 			previous_answers = defaultdict(list)
 			previous_answers_prob = 0.1 if self.identical_scoring else 0.25
 			all_empty = True
@@ -237,9 +237,7 @@ class ClozeQuestion():
 			if all_empty and context.workarounds.disallow_empty_answers:
 				pass  # retry
 			else:
-				break
-
-		return answers, score
+				return answers, score
 
 
 class SingleChoiceQuestion:

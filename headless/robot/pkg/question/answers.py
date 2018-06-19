@@ -409,5 +409,7 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 				line = context.strip_whitespace(line)
 				if context.workarounds.duplicate_longtext_escaping:
 					line = cgi.escape(line)
+				if context.workarounds.sloppy_whitespace:
+					line = line.replace("\t", " ")
 				s += "<p>%s</p>" % line
 			return s
