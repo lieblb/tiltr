@@ -120,7 +120,7 @@ $(function() {
 	function setScreenshot(machine, src) {
 		var img = $("#screen_" + machine);
 		if (img.length == 0) {
-			var tile = document.createElement("div");
+			var tile = $("<div></div>");
 			$(tile).attr("class", "tile is-4 machine");
 			$(tile).attr("style", "padding:1em;");
 			$(tile).attr("data-machine-index", machineIndex(machine));
@@ -137,7 +137,6 @@ $(function() {
 			}
 			$(imagerow).append(tile);
 
-
 			var article = $('<article class="message"></article>');
 			var header = $('<div class="message-header">' + machine + '</div>');
 			var body = $('<div class="message-body"></div>');
@@ -147,15 +146,39 @@ $(function() {
 
 			$(tile).append(article);
 
-			img = document.createElement("img");
-			$(img).attr("id", "screen_" + machine);
+            var link = $("<a><img></a>");
+
+			//img = document.createElement("img");
+			img = $(link).find("img");
+            $(img).attr("id", "screen_" + machine);
 			$(img).attr("style", "width: 85%; padding-bottom: 0.5em;");
 
-			$(body).append(img);
+            $(link).append(img);
+			$(body).append(link);
+
+            var hiddenImage = document.createElement("img");
+            $(hiddenImage).css({
+                "display": "none"
+            });
+            $(hiddenImage).attr("id","popup_screen_" + machine);
+            $(article).append(hiddenImage);
+
+            $(link).attr("data-fancybox", "machines");
+            $(link).attr("data-caption", machine);
+            $(link).attr("href", "javascript:;");
+            $(link).attr("data-src", "#popup_screen_" + machine);
 		}
 
 		$(img).attr("src", src);
+		$("#popup_screen_" + machine).attr("src", src);
 	}
+
+	$().fancybox({
+        selector: '[data-fancybox="machines"]',
+        loop: false,
+        arrows: false,
+        keyboard: false
+    });
 
 	var screenshots = {
 		updating: false,

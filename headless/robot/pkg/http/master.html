@@ -2,16 +2,19 @@
 	<head>
 		<link rel="stylesheet" type="text/css" href="/static/bulma/css/bulma.min.css">
 		<link rel="stylesheet" href="/static/open-iconic/font/css/open-iconic.min.css">
-		<link rel="stylesheet" href="/static/bulma-accordion/dist/bulma-accordion.min.css">
 
 		<script src="/static/jquery/dist/jquery.min.js"></script>
 		<script src="/static/plotly.js/dist/plotly.min.js"></script>
-		<script src="/static/bulma-accordion/dist/bulma-accordion.min.js"></script>
+
+		<link  href="/static/default/fancybox/jquery.fancybox.min.css" rel="stylesheet">
+		<script src="/static/default/fancybox/jquery.fancybox.min.js"></script>
 
 		<script>
 			var NUM_MACHINES = {{ num_machines }};
 		</script>
-		<script src="static/default/main.js"></script>
+
+		<link rel="stylesheet" type="text/css" href="/static/default/main.css">
+		<script src="/static/default/main.js"></script>
 
 		<script id="icon_status_OK" type="text/plain">
 			<span id="result-ok" class="icon has-text-success">
