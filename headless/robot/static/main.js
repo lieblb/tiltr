@@ -186,7 +186,9 @@ $(function() {
 		machines: []
 	};
 
-	setInterval(function() {
+    var connected = false;
+
+    function updateScreenshots() {
 		if (screenshots.updating) {
 			return;
 		}
@@ -203,12 +205,17 @@ $(function() {
 			url: host + "/screenshot/" + machine,
 		}).done(function(data) {
 			if (data) {
-				setScreenshot(machine, "data:image/png;base64," + data);						
+				setScreenshot(machine, "data:image/png;base64," + data);
 			}
 		}).always(function() {
 			screenshots.updating = false;
+			if (!connected) {
+                updateScreenshots();
+            }
 		});
-	}, 1000);
+    }
+
+	setInterval(updateScreenshots, 1000);
 
 	function report(machine, message) {
 		var tag = $('<span class="tag is-light"></span>');
@@ -233,7 +240,6 @@ $(function() {
 
 	var restart;
 	var connect;
-	var connected = false;
 
 	connect = function(batchId) {
 		$("#workarounds").addClass("disabled");

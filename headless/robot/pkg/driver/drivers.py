@@ -9,6 +9,7 @@ import os
 import datetime
 import io
 import requests
+import time
 
 from openpyxl import load_workbook
 from zipfile import ZipFile
@@ -32,9 +33,9 @@ class Login:
 	def __enter__(self):
 		with wait_for_page_load(self.browser):
 			self.browser.visit("http://web:80/ILIAS/")
-	
+
 		assert not self.browser.find_by_css("#userlog") # assert not logged in.
-		if not self.browser.is_element_present_by_css("form[name='formlogin']"):
+		if not self.browser.find_by_css("form[name='formlogin']"):
 			raise Exception("login failed (error 1). aborting.")		
 
 		with wait_for_page_load(self.browser):
@@ -43,10 +44,10 @@ class Login:
 			self.report("logging in as " + self.username + "/" + self.password + ".")
 			self.browser.find_by_css("input[name='cmd[doStandardAuthentication]']").click()
 
-		if self.browser.is_element_present_by_css("form[name='formlogin']"):
+		if self.browser.find_by_css("form[name='formlogin']"):
 			raise Exception("login failed (error 2). aborting.")
 
-		if self.browser.is_element_present_by_css("#il_prop_cont_current_password"):
+		if self.browser.find_by_css("#il_prop_cont_current_password"):
 			self.report("changing password.")
 			self.browser.find_by_css("input[name='current_password']").fill(self.password)
 			self.browser.find_by_css("input[name='new_password']").fill(self.password + "_")

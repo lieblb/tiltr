@@ -39,7 +39,7 @@ class Runner(threading.Thread):
 
 		self.screenshot = None
 		self.screenshot_valid_time = time.time()
-		self.screenshot_keep = 5
+		self.screenshot_keep = 10
 
 		self.messages = []
 

@@ -151,7 +151,7 @@ class StartBatchHandler(tornado.web.RequestHandler):
 
 		workarounds = Workarounds(from_json=data["workarounds"])
 		test_id = data["test"]
-		wait_time = 10
+		wait_time = 1
 		batch_id = self.state.start_batch(test_id, workarounds, wait_time)
 
 		if batch_id is None:

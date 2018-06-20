@@ -84,6 +84,12 @@ class Result:
 			value = str(value)  # make it safe for JSON
 		self.properties[key] = value
 
+	def update(self, key, value):
+		assert key in self.properties
+		if isinstance(value, Decimal):
+			value = str(value)  # make it safe for JSON
+		self.properties[key] = value
+
 	@staticmethod
 	def from_error(origin, domain, err):
 		r = Result(origin=origin)
@@ -112,8 +118,6 @@ class Result:
 
 		self_properties = self.get_normalized_properties()
 		other_properties = other.get_normalized_properties()
-
-		print(self_properties, other_properties)
 
 		keys = sorted(list(set(
 			list(self_properties.keys()) + list(other_properties.keys()))))

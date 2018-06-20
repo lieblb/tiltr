@@ -10,6 +10,7 @@ import traceback
 import json
 import random
 import base64
+import re
 
 from selenium.common.exceptions import WebDriverException
 
@@ -58,6 +59,12 @@ class TestContext:
 
 	def strip_whitespace(self, value):
 		return self.workarounds.strip_whitespace(value)
+
+	def collapse_whitespace(self, value):
+		if self.workarounds.sloppy_whitespace:
+			if isinstance(value, str):
+				value = re.sub(r'\s+', r' ', value)
+		return value
 
 
 class RegressionContext(TestContext):

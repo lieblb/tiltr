@@ -162,10 +162,10 @@ def parse_gap_options(browser, gap_index):
 	options = dict()
 
 	while True:
-		answer = browser.find_by_name("gap_%d[answer][%d]" % (gap_index, len(options)))
+		answer = browser.find_by_id("gap_%d[answer][%d]" % (gap_index, len(options)))
 		if not answer:
 			break
-		points = browser.find_by_name("gap_%d[points][%d]" % (gap_index, len(options)))
+		points = browser.find_by_id("gap_%d[points][%d]" % (gap_index, len(options)))
 
 		options[answer.first.value] = Decimal(points.first.value)
 
@@ -302,17 +302,16 @@ class SingleChoiceQuestion:
 				raise Exception("wrong choice score in readjustment.")
 
 		for key, score in list(choices.items()):
-			choices[key] = readjust_score(score)
+			new_score = readjust_score(score)
+			choices[key] = new_score
+			report('readjusted score for "%s" from %s to %s.' % (self.title, score, new_score))
 		self._set_ui(browser, choices)
-
-		with wait_for_page_load(browser):
-			browser.find_by_name("cmd[savescoringfortest]").click()
 
 	def compute_score(self, answers):
 		score = Decimal(0)
-		for key, checked in answers.items():
+		for label, checked in answers.items():
 			if checked:
-				score += self.choices[key]
+				score += self.choices[label]
 		return score
 
 
@@ -351,19 +350,20 @@ class MultipleChoiceQuestion:
 			if label not in answers:
 				answers[label] = random.random() < 0.5
 
-		# compute the score.
-		score = Decimal(0)
-		for label, value in answers.items():
-			item = self.choices[label]
-			if value:
-				score += item.checked_score
-			else:
-				score += item.unchecked_score
-
-		return answers, score
+		return answers, self.compute_score(answers)
 
 	def readjust_scores(self, browser, report):
 		pass
+
+	def compute_score(self, answers):
+		score = Decimal(0)
+		for label, checked in answers.items():
+			item = self.choices[label]
+			if checked:
+				score += item.checked_score
+			else:
+				score += item.unchecked_score
+		return score
 
 
 class KPrimQuestion:
@@ -387,7 +387,7 @@ class KPrimQuestion:
 
 			self.names.append(browser.find_by_name("kprim_answers[answer][%d]" % i).first["value"])
 
-	def _get_score(self, answers):
+	def compute_score(self, answers):
 		if not self.halfpoints:
 			s = self.score / Decimal(4)
 			score = Decimal(0)
@@ -409,7 +409,7 @@ class KPrimQuestion:
 
 	def get_random_answer(self, context):
 		answers = [random.random() < 0.5 for _ in range(4)]
-		return answers, self._get_score(answers)
+		return answers, self.compute_score(answers)
 
 	def readjust_scores(self, browser, report):
 		pass
@@ -433,7 +433,10 @@ class LongTextQuestion:
 			# a None score in the XLS
 			if len(text.strip()) >= 1:
 				break
-		return text, Decimal(0)
+		return text, self.compute_score(text)
 
 	def readjust_scores(self, browser, report):
 		pass
+
+	def compute_score(self, text):
+		return Decimal(0)

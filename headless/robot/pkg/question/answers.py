@@ -323,17 +323,11 @@ class AbstractLongTextAnswer:
 		# strip_whitespace, since sometimes ILIAS sometimes adds additional newlines, e.g.:
 		# answer was ')GBUUD§/0A:1', but ILIAS stored '\n)GBUUD§/0A:1'
 
-		def collapse_whitespace(value):
-			if context.workarounds.sloppy_whitespace:
-				if isinstance(value, str):
-					value = re.sub(r'\s+', r' ', value)
-			return value
-
 		self.protocol.verify(
 			"Ergebnis",
-			collapse_whitespace(context.strip_whitespace(
+			context.collapse_whitespace(context.strip_whitespace(
 				"\n".join(context.strip_whitespace(s) for s in self.current_answer.split("\n")))),
-			collapse_whitespace(context.strip_whitespace(text)))
+			context.collapse_whitespace(context.strip_whitespace(text)))
 
 	def encode(self, context):
 		return dict(
@@ -362,13 +356,13 @@ class LongTextAnswerPlainHTML(AbstractLongTextAnswer):
 class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 	def _get_ui(self, context):
 		iframe_css = ".ilc_question_TextQuestion iframe"
-		if not self.browser.is_element_present_by_css(iframe_css):
+		if not self.browser.find_by_css(iframe_css):
 			raise Exception("could not find ilc_question_TextQuestion iframe")
 		iframe_id = self.browser.find_by_css(iframe_css).first["id"]
 
 		with self.browser.get_iframe(iframe_id) as iframe:
 			selector = "#tinymce"
-			if not iframe.is_element_present_by_css(selector):
+			if not iframe.find_by_css(selector):
 				raise Exception("could not find TinyMCE element.")
 			elements = iframe.find_by_css(selector)
 			assert len(elements) == 1
@@ -380,13 +374,13 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 
 	def _set_ui(self, value, context):
 		iframe_css = ".ilc_question_TextQuestion iframe"
-		if not self.browser.is_element_present_by_css(iframe_css):
+		if not self.browser.find_by_css(iframe_css):
 			raise Exception("could not find ilc_question_TextQuestion iframe")
 		iframe_id = self.browser.find_by_css(iframe_css).first["id"]
 
 		with self.browser.get_iframe(iframe_id) as iframe:
 			selector = "#tinymce"
-			if not iframe.is_element_present_by_css(selector):
+			if not iframe.find_by_css(selector):
 				raise Exception("could not find TinyMCE element.")
 			elements = iframe.find_by_css(selector)
 			assert len(elements) == 1
@@ -411,5 +405,5 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 					line = cgi.escape(line)
 				if context.workarounds.sloppy_whitespace:
 					line = line.replace("\t", " ")
-				s += "<p>%s</p>" % line
+				s += "<p>%s</p>" % context.collapse_whitespace(line)
 			return s
