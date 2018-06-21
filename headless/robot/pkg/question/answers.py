@@ -183,6 +183,9 @@ def implicit_text_to_number(context, value):
 	elif len(value) >= 2 and value.startswith(".") and value[1:].isdigit():
 		# e.g. .17 -> 0.17
 		value = "0" + value
+	elif value.endswith(".0"):
+		# e.g. 5.0 -> 5
+		value = value[:-2]
 	return value
 
 
