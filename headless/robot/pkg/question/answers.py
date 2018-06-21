@@ -9,17 +9,20 @@ from collections import namedtuple
 import re
 import cgi
 import html
+from selenium.common.exceptions import NoSuchElementException
+
 from .questions import ClozeType
 
 from ..result import AnswerProtocol
+from ..driver.utils import set_element_value
 
 Choice = namedtuple('Choice', ['selector', 'label', 'checked'])
 
 
 class SingleChoiceAnswer:
-	def __init__(self, browser, question):
+	def __init__(self, driver, question):
 		assert question.__class__.__name__ == "SingleChoiceQuestion"
-		self.browser = browser
+		self.driver = driver
 		self.question = question
 		self.current_answer = None
 		self.current_score = None
@@ -32,16 +35,19 @@ class SingleChoiceAnswer:
 		for choice in self._parse_ui():
 			self.protocol.choose(choice.label, choice.label == answer)
 			if choice.label == answer:
-				self.browser.find_by_css(choice.selector).first.click()
+				self.driver.find_element_by_css_selector(choice.selector).click()
 		self.current_answer = answer
 		self.current_score = score
 
 	def _parse_ui(self):
 		choices = []
-		for answer in self.browser.find_by_css('.ilc_question_SingleChoice .ilc_qanswer_Answer'):
-			radio = answer.find_by_css('input[type="radio"]')
-			label = answer.find_by_css('label[for="' + radio["id"] + '"]')
-			c = Choice(selector="#" + radio["id"], label=label.text.strip(), checked=radio.checked)
+		for answer in self.driver.find_elements_by_css_selector('.ilc_question_SingleChoice .ilc_qanswer_Answer'):
+			radio = answer.find_element_by_css_selector('input[type="radio"]')
+			label = answer.find_element_by_css_selector('label[for="%s"]' % radio.get_attribute("id"))
+			c = Choice(
+				selector="#" + radio.get_attribute("id"),
+				label=label.text.strip(),
+				checked=radio.is_selected())
 			choices.append(c)
 		return choices
 
@@ -67,9 +73,9 @@ class SingleChoiceAnswer:
 
 
 class MultipleChoiceAnswer:
-	def __init__(self, browser, question):
+	def __init__(self, driver, question):
 		assert question.__class__.__name__ == "MultipleChoiceQuestion"
-		self.browser = browser
+		self.driver = driver
 		self.question = question
 		self.current_answers = None
 		self.current_score = None
@@ -80,22 +86,23 @@ class MultipleChoiceAnswer:
 
 	def _set_answers(self, answers, score):
 		for choice in self._parse_ui():
-			elements = self.browser.find_by_css(choice.selector)
-			assert len(elements) == 1
-			checkbox = elements.first
+			checkbox = self.driver.find_element_by_css_selector(choice.selector)
 			self.protocol.choose(choice.label, answers[choice.label])
-			if answers[choice.label] != checkbox.checked:
+			if answers[choice.label] != checkbox.is_selected():
 				checkbox.click()
-			assert checkbox.checked == answers[choice.label]
+			assert checkbox.is_selected() == answers[choice.label]
 		self.current_answers = answers
 		self.current_score = score
 
 	def _parse_ui(self):
 		choices = []
-		for answer in self.browser.find_by_css('.ilc_question_MultipleChoice .ilc_qanswer_Answer'):
-			checkbox = answer.find_by_css('input[type="checkbox"]')
-			label = answer.find_by_css('label[for="' + checkbox["id"] + '"]')
-			choices.append(Choice(selector="#" + checkbox["id"], label=label.text.strip(), checked=checkbox.checked))
+		for answer in self.driver.find_elements_by_css_selector('.ilc_question_MultipleChoice .ilc_qanswer_Answer'):
+			checkbox = answer.find_element_by_css_selector('input[type="checkbox"]')
+			label = answer.find_element_by_css_selector('label[for="%s"]' % checkbox.get_attribute("id"))
+			choices.append(Choice(
+				selector="#" + checkbox.get_attribute("id"),
+				label=label.text.strip(),
+				checked=checkbox.is_selected()))
 		return choices
 
 	def verify(self, context):
@@ -120,11 +127,11 @@ gap_name_pattern = re.compile("^gap_([0-9]+)$")
 
 
 class ClozeAnswerGap(object):
-	def __init__(self, browser, element):
-		self.browser = browser
+	def __init__(self, driver, element):
+		self.driver = driver
 
-		self.name = element["name"]
-		self._value = element.value
+		self.name = element.get_attribute("name")
+		self._value = element.get_attribute("value")
 
 		match = gap_name_pattern.match(self.name)
 		if not match:
@@ -139,38 +146,32 @@ class TextAnswerGap(ClozeAnswerGap):
 
 	@value.setter
 	def value(self, new_value):
-		matches = self.browser.find_by_name(self.name)
-		assert len(matches) == 1
-		matches.first.value = new_value
+		match = self.driver.find_element_by_name(self.name)
+		set_element_value(self.driver, match, new_value)
 		self._value = new_value
 
 
 class SelectAnswerGap(ClozeAnswerGap):
 	@property
 	def value(self):
-		matches = self.browser.find_by_name(self.name)
-		assert len(matches) == 1
-
-		for option in matches.first.find_by_tag('option'):
-			if int(option["value"]) == int(self._value):
+		match = self.driver.find_element_by_name(self.name)
+		for option in match.find_elements_by_tag_name('option'):
+			if int(option.get_attribute("value")) == int(self._value):
 				return option.text.strip()
 
 		return None
 
 	@value.setter
 	def value(self, new_value):
-		matches = self.browser.find_by_name(self.name)
-		assert len(matches) == 1
-
+		match = self.driver.find_element_by_name(self.name)
 		found = False
-		for option in matches.first.find_by_tag('option'):
+		for option in match.find_elements_by_tag_name('option'):
 			if option.text.strip() == new_value:
 				option.click()
 				found = True
 				break
 		if not found:
 			raise Exception('option "%s" not found.' % new_value)
-
 		self._value = new_value
 
 
@@ -190,9 +191,9 @@ def implicit_text_to_number(context, value):
 
 
 class ClozeAnswer(object):
-	def __init__(self, browser, question):
+	def __init__(self, driver, question):
 		assert question.__class__.__name__ == "ClozeQuestion"
-		self.browser = browser
+		self.driver = driver
 		self.question = question
 		self.current_answers = None
 		self.current_score = None
@@ -216,14 +217,14 @@ class ClozeAnswer(object):
 		self.current_score = score
 
 	def _parse_ui(self):
-		root = self.browser.find_by_css(".ilc_question_ClozeTest")
+		root = self.driver.find_element_by_css_selector(".ilc_question_ClozeTest")
 		gaps = []
 
-		for element in root.find_by_css('input[type="text"].ilc_qinput_TextInput'):
-			gaps.append(TextAnswerGap(self.browser, element))
+		for element in root.find_elements_by_css_selector('input[type="text"].ilc_qinput_TextInput'):
+			gaps.append(TextAnswerGap(self.driver, element))
 
-		for element in root.find_by_css("select.ilc_qinput_ClozeGapSelect"):
-			gaps.append(SelectAnswerGap(self.browser, element))
+		for element in root.find_elements_by_css_selector("select.ilc_qinput_ClozeGapSelect"):
+			gaps.append(SelectAnswerGap(self.driver, element))
 
 		indexed = dict((gap.index, gap) for gap in gaps)
 		assert len(gaps) == len(indexed)  # all unique?
@@ -254,9 +255,9 @@ class ClozeAnswer(object):
 
 
 class KPrimAnswer(object):
-	def __init__(self, browser, question):
+	def __init__(self, driver, question):
 		assert question.__class__.__name__ == "KPrimQuestion"
-		self.browser = browser
+		self.driver = driver
 		self.question = question
 		self.current_answers = None
 		self.current_score = None
@@ -270,18 +271,18 @@ class KPrimAnswer(object):
 
 		assert len(answers) == 4
 		for radios, answer in zip(ui, answers):
-			radios[answer].check()
+			radios[answer].click()
 
 		self.current_answers = answers
 		self.current_score = score
 
 	def _parse_ui(self):
-		root = self.browser.find_by_css(".ilc_question_KprimChoice")
+		root = self.driver.find_element_by_css_selector(".ilc_question_KprimChoice")
 		ui = []
 		for i in range(4):
 			radios = dict()
-			for radio in root.find_by_name("kprim_choice_result_%d" % i):
-				radios[bool(int(radio["value"]))] = radio
+			for radio in root.find_elements_by_name("kprim_choice_result_%d" % i):
+				radios[bool(int(radio.get_attribute("value")))] = radio
 			ui.append(radios)
 		return ui
 
@@ -292,7 +293,7 @@ class KPrimAnswer(object):
 			self.protocol.verify(
 				str(i),
 				self.current_answers[i],
-				ui[i][True].checked)
+				ui[i][True].is_selected())
 
 	def encode(self, context):
 		return dict(
@@ -302,9 +303,9 @@ class KPrimAnswer(object):
 
 
 class AbstractLongTextAnswer:
-	def __init__(self, browser, question):
+	def __init__(self, driver, question):
 		assert question.__class__.__name__ == "LongTextQuestion"
-		self.browser = browser
+		self.driver = driver
 		self.question = question
 		self.current_answer = None
 		self.current_score = None
@@ -342,58 +343,55 @@ class AbstractLongTextAnswer:
 class LongTextAnswerPlainHTML(AbstractLongTextAnswer):
 	def _get_ui(self, context):
 		selector = '.ilc_question_TextQuestion textarea.ilc_qlinput_LongTextInput'
-		elements = self.browser.find_by_css(selector)
-		assert len(elements) == 1
-		return elements.first.value
+		element = self.driver.find_element_by_css_selector(selector)
+		return element.get_attribute("value")
 
 	def _set_ui(self, value, context):
 		selector = '.ilc_question_TextQuestion textarea.ilc_qlinput_LongTextInput'
-		elements = self.browser.find_by_css(selector)
-		assert len(elements) == 1
-		elements.first.value = value
+		element = self.driver.find_element_by_css_selector(selector)
+		set_element_value(self.driver, element, value)
 
 	def _encoded_current_answer(self, context):
 		return self.current_answer
 
 
 class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
-	def _get_ui(self, context):
+	def _tinymce(self, f):
 		iframe_css = ".ilc_question_TextQuestion iframe"
-		if not self.browser.find_by_css(iframe_css):
+		try:
+			iframe = self.driver.find_element_by_css_selector(iframe_css)
+		except NoSuchElementException:
 			raise Exception("could not find ilc_question_TextQuestion iframe")
-		iframe_id = self.browser.find_by_css(iframe_css).first["id"]
+		self.driver.switch_to_frame(iframe)
 
-		with self.browser.get_iframe(iframe_id) as iframe:
-			selector = "#tinymce"
-			if not iframe.find_by_css(selector):
+		try:
+			try:
+				tinymce = self.driver.find_element_by_css_selector("#tinymce")
+			except NoSuchElementException:
 				raise Exception("could not find TinyMCE element.")
-			elements = iframe.find_by_css(selector)
-			assert len(elements) == 1
 
+			return f(tinymce)
+		finally:
+			self.driver.switch_to_default_content()
+
+	def _get_ui(self, context):
+		def f(tinymce):
 			paragraphs = []
-			for p in elements.first.find_by_tag("p"):
-				paragraphs.append(context.strip_whitespace(p["textContent"]))
+			for p in tinymce.find_elements_by_tag_name("p"):
+				paragraphs.append(context.strip_whitespace(p.get_attribute("textContent")))
 			return "\n".join(paragraphs)
 
+		return self._tinymce(f)
+
 	def _set_ui(self, value, context):
-		iframe_css = ".ilc_question_TextQuestion iframe"
-		if not self.browser.find_by_css(iframe_css):
-			raise Exception("could not find ilc_question_TextQuestion iframe")
-		iframe_id = self.browser.find_by_css(iframe_css).first["id"]
-
-		with self.browser.get_iframe(iframe_id) as iframe:
-			selector = "#tinymce"
-			if not iframe.find_by_css(selector):
-				raise Exception("could not find TinyMCE element.")
-			elements = iframe.find_by_css(selector)
-			assert len(elements) == 1
-
+		def f(tinymce):
 			paragraphs = []
 			for line in value.split("\n"):
 				paragraphs.append("<p>%s</p>" % cgi.escape(context.strip_whitespace(line)))
 
-			tinymce = self.browser.driver.find_element_by_css_selector(selector)
-			self.browser.driver.execute_script('arguments[0].innerHTML = arguments[1]', tinymce, "".join(paragraphs))
+			self.driver.execute_script('arguments[0].innerHTML = arguments[1]', tinymce, "".join(paragraphs))
+
+		self._tinymce(f)
 
 	def _encoded_current_answer(self, context):
 		if len(self.current_answer) == 0:

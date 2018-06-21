@@ -156,7 +156,7 @@ class TakeExamCommand:
 
 		try:
 			with Login(browser, report, self.username, self.password):
-				test_driver = TestDriver(browser, Test(self.test_id), report)
+				test_driver = TestDriver(browser.driver, Test(self.test_id), report)
 				test_driver.goto()
 
 				do_regression_tests = True

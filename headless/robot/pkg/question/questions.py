@@ -10,8 +10,9 @@ import random
 from enum import Enum
 from decimal import *
 from collections import defaultdict
-from ..driver.utils import wait_for_page_load
+from selenium.common.exceptions import NoSuchElementException
 
+from ..driver.utils import wait_for_page_load, set_element_value
 
 def readjust_score(score):
 	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
@@ -118,14 +119,14 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 
 
 class ClozeQuestionNumericGap(ClozeQuestionGap):
-	def __init__(self, browser, index, size):
+	def __init__(self, driver, index, size):
 		ClozeQuestionGap.__init__(self, index)
 		self.size = size
 
-		self.numeric_value = Decimal(browser.find_by_name("gap_%d_numeric" % index).first.value)
-		self.numeric_lower = Decimal(browser.find_by_name("gap_%d_numeric_lower" % index).first.value)
-		self.numeric_upper = Decimal(browser.find_by_name("gap_%d_numeric_upper" % index).first.value)
-		self.score = Decimal(browser.find_by_name("gap_%d_numeric_points" % index).first.value)
+		self.numeric_value = Decimal(driver.find_element_by_name("gap_%d_numeric" % index).get_attribute("value"))
+		self.numeric_lower = Decimal(driver.find_element_by_name("gap_%d_numeric_lower" % index).get_attribute("value"))
+		self.numeric_upper = Decimal(driver.find_element_by_name("gap_%d_numeric_upper" % index).get_attribute("value"))
+		self.score = Decimal(driver.find_element_by_name("gap_%d_numeric_points" % index).get_attribute("value"))
 
 		self.exponent = min(x.as_tuple().exponent for x in (self.numeric_value, self.numeric_lower, self.numeric_upper))
 
@@ -159,10 +160,9 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		return ClozeType.numeric
 
 
-def parse_gap_size(browser, gap_index, fallback_length):
-	elements = browser.find_by_name("gap_%d_gapsize" % gap_index)
-	assert len(elements) == 1
-	text = elements.first.value.strip()
+def parse_gap_size(driver, gap_index, fallback_length):
+	element = driver.find_element_by_name("gap_%d_gapsize" % gap_index)
+	text = element.get_attribute("value").strip()
 	assert isinstance(text, str)
 	if text == '':
 		return fallback_length
@@ -170,59 +170,61 @@ def parse_gap_size(browser, gap_index, fallback_length):
 		return int(text)
 
 
-def parse_gap_options(browser, gap_index):
+def parse_gap_options(driver, gap_index):
 	options = dict()
 
 	while True:
-		answer = browser.find_by_id("gap_%d[answer][%d]" % (gap_index, len(options)))
-		if not answer:
+		try:
+			answer = driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, len(options)))
+		except NoSuchElementException:
 			break
-		points = browser.find_by_id("gap_%d[points][%d]" % (gap_index, len(options)))
-
-		options[answer.first.value] = Decimal(points.first.value)
+		points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, len(options)))
+		options[answer.get_attribute("value")] = Decimal(points.get_attribute("value"))
 
 	return options
 
 
 class ClozeQuestion():
-	def __init__(self, browser, title):
+	def __init__(self, driver, title):
 		self.title = title
 		self.gaps = dict()
 
-		self.identical_scoring = browser.find_by_name("identical_scoring").first.checked
+		self.identical_scoring = driver.find_element_by_name("identical_scoring").is_selected()
 
-		fallback_length = browser.find_by_name("fixedTextLength").first.value.strip()
+		fallback_length = driver.find_element_by_name("fixedTextLength").get_attribute("value").strip()
 		if fallback_length == '':
 			fallback_length = 7
 		else:
 			fallback_length = int(fallback_length)
 
-		comparator = ClozeComparator(browser.find_by_css(
-			"#textgap_rating option[selected]").first["value"])
+		comparator = ClozeComparator(driver.find_element_by_css_selector(
+			"#textgap_rating option[selected]").get_attribute("value"))
 
 		while True:
 			gap_index = len(self.gaps)
 
-			if not browser.find_by_name("clozetype_%d" % gap_index):
+			try:
+				cloze = driver.find_element_by_name("clozetype_%d" % gap_index)
+			except NoSuchElementException:
 				break
 
-			cloze_type = ClozeType(int(browser.find_by_name("clozetype_%d" % gap_index).first.value))
+			cloze_type = ClozeType(int(cloze.get_attribute("value")))
 
 			if cloze_type == ClozeType.text or cloze_type == ClozeType.select:
-				options = parse_gap_options(browser, gap_index)
+				options = parse_gap_options(driver, gap_index)
 
 				if not options:
 					break
 
 				if cloze_type == ClozeType.text:
 					gap = ClozeQuestionTextGap(
-						gap_index, options, comparator, parse_gap_size(browser, gap_index, fallback_length))
+						gap_index, options, comparator, parse_gap_size(driver, gap_index, fallback_length))
 				elif cloze_type == ClozeType.select:
 					gap = ClozeQuestionSelectGap(gap_index, options)
 
 			elif cloze_type == ClozeType.numeric:
 				gap = ClozeQuestionNumericGap(
-					browser, gap_index, parse_gap_size(browser, gap_index, fallback_length))
+					driver, gap_index, parse_gap_size(driver, gap_index, fallback_length))
 
 			else:
 				raise Exception("unsupported cloze type " + str(cloze_type))				
@@ -264,48 +266,48 @@ class ClozeQuestion():
 			else:
 				return answers, score
 
-	def readjust_scores(self, browser, report):
+	def readjust_scores(self, driver, report):
 		pass
 
 
 class SingleChoiceQuestion:
 	@staticmethod
-	def _get_ui(browser):
+	def _get_ui(driver):
 		choices = dict()
 
 		while True:
-			choice = browser.find_by_name("choice[answer][%d]" % len(choices))
-			if not choice:
+			try:
+				choice = driver.find_element_by_name("choice[answer][%d]" % len(choices))
+			except NoSuchElementException:
 				break
-			points = browser.find_by_name("choice[points][%d]" % len(choices))
-
-			choices[choice.first.value] = Decimal(points.first.value)
+			points = driver.find_element_by_name("choice[points][%d]" % len(choices))
+			choices[choice.get_attribute("value")] = Decimal(points.get_attribute("value"))
 
 		return choices
 
 	@staticmethod
-	def _set_ui(browser, choices):
+	def _set_ui(driver, choices):
 		i = 0
 		while True:
-			choice = browser.find_by_name("choice[answer][%d]" % i)
-			if not choice:
+			try:
+				choice = driver.find_element_by_name("choice[answer][%d]" % i)
+			except NoSuchElementException:
 				break
-			points = browser.find_by_name("choice[points][%d]" % i)
-
-			points.first.value = str(choices[choice.first.value])
+			points = driver.find_element_by_name("choice[points][%d]" % i)
+			set_element_value(points, "value", str(choices[choice.get_attribute("value")]))
 			i += 1
 
-	def __init__(self, browser, title):
+	def __init__(self, driver, title):
 		self.title = title
-		self.choices = self._get_ui(browser)
+		self.choices = self._get_ui(driver)
 
 	def get_random_answer(self, context):
 		choice = random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
 
-	def readjust_scores(self, browser, report):
+	def readjust_scores(self, driver, report):
 		report("checking readjustment for %s." % self.title)
-		choices = self._get_ui(browser)
+		choices = self._get_ui(driver)
 
 		if len(choices) != len(self.choices):
 			raise Exception("wrong number of choices in readjustment.")
@@ -317,7 +319,7 @@ class SingleChoiceQuestion:
 			new_score = readjust_score(score)
 			choices[key] = new_score
 			report('readjusted score for "%s" from %s to %s.' % (self.title, score, new_score))
-		self._set_ui(browser, choices)
+		self._set_ui(driver, choices)
 
 	def compute_score(self, answers):
 		score = Decimal(0)
@@ -332,20 +334,22 @@ MultipleChoiceItem = namedtuple('MultipleChoiceItem', ['checked_score', 'uncheck
 
 
 class MultipleChoiceQuestion:
-	def __init__(self, browser, title):
+	def __init__(self, driver, title):
 		self.title = title
 		self.choices = dict()
 
 		while True:
-			choice = browser.find_by_name("choice[answer][%d]" % len(self.choices))
-			if not choice:
+			try:
+				choice = driver.find_element_by_name("choice[answer][%d]" % len(self.choices))
+			except NoSuchElementException:
 				break
-			points = browser.find_by_name("choice[points][%d]" % len(self.choices))
-			points_unchecked = browser.find_by_name("choice[points_unchecked][%d]" % len(self.choices))
 
-			self.choices[choice.first.value] = MultipleChoiceItem(
-				checked_score=Decimal(points.first.value),
-				unchecked_score=Decimal(points_unchecked.first.value))
+			points = driver.find_element_by_name("choice[points][%d]" % len(self.choices))
+			points_unchecked = driver.find_element_by_name("choice[points_unchecked][%d]" % len(self.choices))
+
+			self.choices[choice.get_attribute("value")] = MultipleChoiceItem(
+				checked_score=Decimal(points.get_attribute("value")),
+				unchecked_score=Decimal(points_unchecked.get_attribute("value")))
 
 	def get_random_answer(self, context):
 		answers = dict()
@@ -364,7 +368,7 @@ class MultipleChoiceQuestion:
 
 		return answers, self.compute_score(answers)
 
-	def readjust_scores(self, browser, report):
+	def readjust_scores(self, driver, report):
 		pass
 
 	def compute_score(self, answers):
@@ -379,25 +383,26 @@ class MultipleChoiceQuestion:
 
 
 class KPrimQuestion:
-	def __init__(self, browser, title):
+	def __init__(self, driver, title):
 		self.title = title
 
-		self.halfpoints = browser.find_by_name("score_partsol_enabled").first.checked
-		self.score = Decimal(browser.find_by_name("points").first.value)
+		self.halfpoints = driver.find_element_by_name("score_partsol_enabled").is_selected()
+		self.score = Decimal(driver.find_element_by_name("points").get_attribute("value"))
 		self.solution = []
 		self.names = []
 
 		for i in range(4):
 			is_right = None
 
-			for radio in browser.find_by_name("kprim_answers[correctness][%d]" % i):
-				if int(radio["value"]) == 1:
-					is_right = radio.checked
+			for radio in driver.find_elements_by_name("kprim_answers[correctness][%d]" % i):
+				if int(radio.get_attribute("value")) == 1:
+					is_right = radio.is_selected()
 
 			assert is_right is not None
 			self.solution.append(is_right)
 
-			self.names.append(browser.find_by_name("kprim_answers[answer][%d]" % i).first["value"])
+			self.names.append(driver.find_element_by_name(
+				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
 	def compute_score(self, answers):
 		if not self.halfpoints:
@@ -423,15 +428,15 @@ class KPrimQuestion:
 		answers = [random.random() < 0.5 for _ in range(4)]
 		return answers, self.compute_score(answers)
 
-	def readjust_scores(self, browser, report):
+	def readjust_scores(self, driver, report):
 		pass
 
 
 class LongTextQuestion:
-	def __init__(self, browser, title):
+	def __init__(self, driver, title):
 		self.title = title
 
-		if not browser.find_by_css("#scoring_mode_non").first.checked:
+		if not driver.find_element_by_id("scoring_mode_non").is_selected():
 			raise Exception("only manual scoring is supported for tests with LongTextQuestion")
 
 	def get_random_answer(self, context):
@@ -447,7 +452,7 @@ class LongTextQuestion:
 				break
 		return text, self.compute_score(text)
 
-	def readjust_scores(self, browser, report):
+	def readjust_scores(self, driver, report):
 		pass
 
 	def compute_score(self, text):

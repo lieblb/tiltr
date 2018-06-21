@@ -15,12 +15,16 @@ from openpyxl import load_workbook
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 from decimal import *
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.webdriver.support.ui import Select
 
-from .utils import wait_for_page_load, http_get_parameters
+from .utils import wait_for_page_load, http_get_parameters, wait_for_css, set_element_value_by_css, set_element_value
 
 from ..question import *
 from ..result import *
 from ..result.workbook import check_workbook_consistency
+
+
 
 
 class Login:
@@ -31,36 +35,54 @@ class Login:
 		self.password = password
 
 	def __enter__(self):
+		self.report("opening login page.")
+
 		with wait_for_page_load(self.browser):
 			self.browser.visit("http://web:80/ILIAS/")
 
-		assert not self.browser.find_by_css("#userlog") # assert not logged in.
-		if not self.browser.find_by_css("form[name='formlogin']"):
-			raise Exception("login failed (error 1). aborting.")		
+		driver = self.browser.driver
+
+		wait_for_css(driver, "form[name='formlogin']")
 
 		with wait_for_page_load(self.browser):
-			self.browser.find_by_css("input[name='username']").fill(self.username)
-			self.browser.find_by_css("input[name='password']").fill(self.password)
+			set_element_value_by_css(driver, "input[name='username']", self.username)
+			set_element_value_by_css(driver, "input[name='password']", self.password)
 			self.report("logging in as " + self.username + "/" + self.password + ".")
-			self.browser.find_by_css("input[name='cmd[doStandardAuthentication]']").click()
+			driver.find_element_by_css_selector("input[name='cmd[doStandardAuthentication]']").click()
 
-		if self.browser.find_by_css("form[name='formlogin']"):
+		try:
+			driver.find_element_by_css_selector("form[name='formlogin']")
 			raise Exception("login failed (error 2). aborting.")
+		except NoSuchElementException:
+			pass  # expected
 
-		if self.browser.find_by_css("#il_prop_cont_current_password"):
+		change_password = False
+		try:
+			driver.find_element_by_css_selector("#il_prop_cont_current_password")
+			change_password = True
+		except NoSuchElementException:
+			pass
+
+		if change_password:
 			self.report("changing password.")
-			self.browser.find_by_css("input[name='current_password']").fill(self.password)
-			self.browser.find_by_css("input[name='new_password']").fill(self.password + "_")
-			self.browser.find_by_css("input[name='new_password_retype']").fill(self.password + "_")
-			self.browser.find_by_css("input[name='cmd[savePassword]']").click()
+			with wait_for_page_load(self.browser):
+				set_element_value_by_css(driver, "input[name='current_password']", self.password)
+				set_element_value_by_css(driver, "input[name='new_password']", self.password + "_")
+				set_element_value_by_css(driver, "input[name='new_password_retype']", self.password + "_")
+				driver.find_element_by_css_selector("input[name='cmd[savePassword]']").click()
 
 	def __exit__(self, *args):
 		try:
-			if not self.browser.find_by_css("#userlog"):
+			driver = self.browser.driver
+
+			try:
+				driver.find_element_by_css_selector("#userlog")
+			except NoSuchElementException:
 				return  # already logged out
 
-			self.browser.find_by_css("#userlog a.dropdown-toggle").click()
-			self.browser.find_by_xpath("//a[contains(@href, 'logout.php')]").click()
+			with wait_for_page_load(self.browser):
+				driver.find_element_by_css_selector("#userlog a.dropdown-toggle").click()
+				driver.find_element_by_xpath("//a[contains(@href, 'logout.php')]").click()
 			self.report("logged out.")
 		except Exception as e:
 			self.report("logout failed.")
@@ -68,16 +90,21 @@ class Login:
 
 
 def goto_administration_page(browser, id):
-	if not browser.is_element_present_by_css("#mm_adm_tr"):
-		browser.visit("http://web:80/ILIAS")
-	for i in range(5):
-		browser.find_by_css("#mm_adm_tr").click()
-		if browser.is_element_present_by_css("#%s" % id):
+	for i in range(2):
+		try:
+			wait_for_css(browser.driver, "#mm_adm_tr", 1)
+			browser.driver.find_element_by_css_selector("#mm_adm_tr").click()
+
+			wait_for_css(browser.driver, "#%s" % id)
 			with wait_for_page_load(browser):
-				browser.find_by_css("#%s" % id).click()
+				browser.driver.find_element_by_css_selector("#%s" % id).click()
+
 			return
-		time.sleep(1)
-	raise Exception("goto_administration_page failed.")
+		except:
+			with wait_for_page_load(browser):
+				browser.visit("http://web:80/ILIAS")
+
+	raise Exception("going to admin page %s failed." % id)
 
 
 def goto_test_administration(browser):
@@ -93,38 +120,42 @@ def goto_editor_administration(browser):
 
 
 def add_user(browser, username, password):
-	#browser.find_by_css(".navbar-toggle").click()
-	with wait_for_page_load(browser):
-		browser.find_by_xpath("//a[contains(@href, 'cmd=addUser')]").click()
-	browser.find_by_css("input[id='gender_m']").click()
+	driver = browser.driver
 
-	browser.find_by_css("input[name='login']").fill(username)
-	browser.find_by_css("input[name='passwd']").fill(password)
-	browser.find_by_css("input[name='passwd_retype']").fill(password)
-	browser.find_by_css("input[name='firstname']").fill(username)
-	browser.find_by_css("input[name='lastname']").fill("user")
-	browser.find_by_css("input[name='email']").fill("ilias@localhost")
-
-	#report("adding user " + username + "/" + password + ".")
 	with wait_for_page_load(browser):
-		browser.find_by_css("input[name='cmd[save]']").click()
+		driver.find_element_by_xpath("//a[contains(@href, 'cmd=addUser')]").click()
+
+	driver.find_element_by_css_selector("input[id='gender_m']").click()
+
+	set_element_value_by_css(driver, "input[name='login']", username)
+	set_element_value_by_css(driver, "input[name='passwd']", password)
+	set_element_value_by_css(driver, "input[name='passwd_retype']", password)
+
+	set_element_value_by_css(driver, "input[name='firstname']", username)
+	set_element_value_by_css(driver, "input[name='lastname']", "user")
+	set_element_value_by_css(driver, "input[name='email']", "ilias@localhost")
+
+	with wait_for_page_load(browser):
+		driver.find_element_by_css_selector("input[name='cmd[save]']").click()
 
 
 def delete_user(browser, username):
-	#browser.find_by_css(".navbar-toggle").click()
-	browser.find_by_css("input[name='query']").fill(username)
-	browser.find_by_css("input[name='cmd[applyFilter]']").click()
+	driver = browser.driver
 
-	for tr in browser.find_by_css("table tr"):
-		for a in tr.find_by_css("td a"):
+	set_element_value_by_css(driver, "input[name='query']", username)
+
+	browser.find_element_by_css_selector("input[name='cmd[applyFilter]']").click()
+
+	for tr in driver.find_elements_by_css_selector("table tr"):
+		for a in tr.find_elements_by_css_selector("td a"):
 			if a.text.strip() == username:
-				for checkbox in tr.find_by_css("input[type='checkbox']"):
+				for checkbox in tr.find_element_by_css_selector("input[type='checkbox']"):
 					checkbox.click()
 
-	browser.find_by_css('select[name="selected_cmd"]').first.select("deleteUsers")
-	browser.find_by_css('input[name="select_cmd"]').click()
+	Select(browser.find_elements_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
+	browser.find_elements_by_css_selector('input[name="select_cmd"]').click()
 
-	browser.find_by_name('cmd[confirmdelete]').click()
+	browser.find_element_by_name('cmd[confirmdelete]').click()
 
 
 def verify_admin_setting(name, value, expected, log):
@@ -133,51 +164,56 @@ def verify_admin_setting(name, value, expected, log):
 	log.append("%s is %s." % (name, expected))
 
 
-def verify_admin_settings(browser, workarounds):
+def verify_admin_settings(browser, workarounds, report):
 	log = []
 
 	goto_test_administration(browser)
+	report("verifying test admin settings.")
+
+	driver = browser.driver
 
 	verify_admin_setting(
 		"locking for tests",
-		browser.find_by_css("#ass_process_lock").first.checked,
+		driver.find_element_by_id("ass_process_lock").is_selected(),
 		True,
 		log)
 
 	verify_admin_setting(
 		"locking for tests using db tables",
-		browser.find_by_css("#ass_process_lock_mode_db").first.checked,
+		driver.find_element_by_id("ass_process_lock_mode_db").is_selected(),
 		True,
 		log)
 
 	verify_admin_setting(
 		"html export for essay questions",
-		browser.find_by_css("#export_essay_qst_with_html").first.checked,
+		driver.find_element_by_id("export_essay_qst_with_html").is_selected(),
 		True,
 		log)
 
 	goto_editor_administration(browser)
-	browser.find_by_css("#tab_adve_rte_settings a").click()
+	report("verifying editor admin settings.")
+
+	driver.find_element_by_css_selector("#tab_adve_rte_settings a").click()
 
 	if workarounds.force_tinymce:
 		verify_admin_setting(
 			"TinyMCE",
-			browser.find_by_css("#use_tiny").first.checked,
+			driver.find_element_by_id("use_tiny").is_selected(),
 			True,
 			log)
 
-	browser.find_by_css("#subtab_adve_assessment_settings a").click()
+	driver.find_element_by_css_selector("#subtab_adve_assessment_settings a").click()
 
-	for checkbox in browser.find_by_css('input[name="html_tags[]"]'):
-		if checkbox["id"] == "html_tags_all__toggle":
+	for checkbox in driver.find_elements_by_css_selector('input[name="html_tags[]"]'):
+		if checkbox.get_attribute("id") == "html_tags_all__toggle":
 			continue  # ignore
-		if checkbox.value == "p":
+		if checkbox.get_attribute("value") == "p":
 			allow = True  # we must allow <p>, otherwise no new lines
 		else:
 			allow = False
 		verify_admin_setting(
-			"TinyMCE setting for <%s>" % checkbox.value,
-			checkbox.checked,
+			"TinyMCE setting for <%s>" % checkbox.get_attribute("value"),
+			checkbox.is_selected(),
 			allow,
 			log)
 
@@ -192,8 +228,8 @@ class TemporaryUser:
 	def create(self, browser, report, unique_id):
 		self.username = datetime.datetime.today().strftime('testuser_%Y%m%d%H%M%S') + ("_%s" % unique_id)
 		self.password = "dev1234"
-		report("creating user %s." % self.username)
 		goto_user_administration(browser)
+		report("creating user %s." % self.username)
 		add_user(browser, self.username, self.password)
 
 	def destroy(self, browser, report):
@@ -229,8 +265,8 @@ def measure_time(dts):
 
 
 class ExamDriver:
-	def __init__(self, browser, report, context, questions):
-		self.browser = browser
+	def __init__(self, driver, report, context, questions):
+		self.driver = driver
 		self.report = report
 		self.context = context
 		self.questions = questions
@@ -246,97 +282,125 @@ class ExamDriver:
 		self.report("finishing test.")
 
 		finish_test_css = 'a[data-nextcmd="finishTest"]'
-		with wait_for_page_load(self.browser):
+		with wait_for_page_load(self.driver):
 			while True:
-				if self.browser.is_element_present_by_css(finish_test_css):
-					finish_button = self.browser.find_by_css(finish_test_css)
-					if finish_button:
-						finish_button.click()
-						self.confirm_save()
-						break
-				else:
+				try:
+					finish_button = self.driver.find_element_by_css_selector(finish_test_css)
+					finish_button.click()
+					self.confirm_save()
+					break
+				except NoSuchElementException:
 					# try to go to next question
 					if not self.goto_next_question():
-						self.browser.reload()
+						self.driver.refresh()
 
-		with wait_for_page_load(self.browser):
-			self.browser.find_by_css('input[name="cmd[confirmFinish]"]').click()
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
 
 		self.protocol.append((time.time(), "test", "finished test."))
 
 	def goto_first_question(self):
-		while self.browser.is_element_present_by_css('a[data-nextcmd="previousQuestion"]'):
+		while True:
+			try:
+				button = self.driver.find_element_by_css_selector(
+					'a[data-nextcmd="previousQuestion"]')
+			except NoSuchElementException:
+				return  # done
 			self.report("goto previous question.")
 			with measure_time(self.dts):
-				with wait_for_page_load(self.browser):
-					self.browser.find_by_css('a[data-nextcmd="previousQuestion"]').click()
-					self.confirm_save();
+				with wait_for_page_load(self.driver):
+					button.click()
+					self.confirm_save()
 
 	def goto_next_question(self):
-		if not self.has_next_question():
+		try:
+			button = self.driver.find_element_by_css_selector(
+				'a[data-nextcmd="nextQuestion"]')
+		except NoSuchElementException:
 			return False
+
 		self.report("goto next question.")
 		with measure_time(self.dts):
-			with wait_for_page_load(self.browser):
-				self.browser.find_by_css('a[data-nextcmd="nextQuestion"]').click()
+			with wait_for_page_load(self.driver):
+				button.click()
 				self.confirm_save()
+
 		return True
 
 	def goto_next_or_previous_question(self):
-		with measure_time(self.dts):
-			with wait_for_page_load(self.browser):
-				if self.has_next_question():
-					self.report("goto next question.")
-					self.browser.find_by_css('a[data-nextcmd="nextQuestion"]').click()
+		for what in ("next", "previous"):
+			try:
+				button = self.driver.find_element_by_css_selector(
+					'a[data-nextcmd="%sQuestion"]' % what)
+			except NoSuchElementException:
+				continue
+
+			self.report("goto %s question." % what)
+			with measure_time(self.dts):
+				with wait_for_page_load(self.driver):
+					button.click()
 					self.confirm_save()
-					return True
-				else:
-					self.report("goto previous question.")
-					self.browser.find_by_css('a[data-nextcmd="previousQuestion"]').click()
-					self.confirm_save()
-					return False
+			return True
+
+		return False
 
 	def has_next_question(self):
-		return self.browser.is_element_present_by_css('a[data-nextcmd="nextQuestion"]')
+		try:
+			self.driver.find_element_by_css_selector(
+				'a[data-nextcmd="nextQuestion"]')
+			return True
+		except NoSuchElementException:
+			return False
 
 	def has_previous_question(self):
-		return self.browser.is_element_present_by_css('a[data-nextcmd="previousQuestion"]')
+		try:
+			self.driver.find_element_by_css_selector(
+				'a[data-nextcmd="previousQuestion"]')
+			return True
+		except NoSuchElementException:
+			return False
 
 	def confirm_save(self):
-		if self.browser.is_element_present_by_css("#tst_save_on_navigation_button"):
-			for i in range(2):
-				try:
-					nav = self.browser.find_by_css("#tst_save_on_navigation_button")
-					if nav and nav.first.visible:
-						with wait_for_page_load(self.browser):
-							nav.first.click()
-				except:
-					# guard against StaleElementReferenceException
-					pass
+		for i in range(2):
+			try:
+				button = self.driver.find_element_by_id("tst_save_on_navigation_button")
+			except NoSuchElementException:
+				return
+
+			try:
+				if button.is_displayed():
+					with wait_for_page_load(self.driver):
+						button.click()
+			except:
+				# guard against StaleElementReferenceException
+				pass
 
 	def get_sequence_id(self):
-		return int(http_get_parameters(self.browser.url)["sequence"])
+		return int(http_get_parameters(self.driver.current_url)["sequence"])
 
 	def create_answer(self):
-		if not self.browser.is_element_present_by_css(".ilc_page_title_PageTitle"):
+		try:
+			page_title = self.driver.find_element_by_css_selector(".ilc_page_title_PageTitle")
+		except NoSuchElementException:
 			raise Exception("no question title found.")
-		else:
-			title = self.browser.find_by_css("h1.ilc_page_title_PageTitle").first.text
-			self.report('entering question "' + title + '"')
 
-		answer = None
-		if self.browser.is_element_present_by_css(".ilc_question_SingleChoice"):
-			answer = SingleChoiceAnswer(self.browser, self.questions[title])
-		elif self.browser.is_element_present_by_css(".ilc_question_MultipleChoice"):
-			answer = MultipleChoiceAnswer(self.browser, self.questions[title])
-		elif self.browser.is_element_present_by_css(".ilc_question_KprimChoice"):
-			answer = KPrimAnswer(self.browser, self.questions[title])
-		elif self.browser.is_element_present_by_css(".ilc_question_ClozeTest"):
-			answer = ClozeAnswer(self.browser, self.questions[title])
-		elif self.browser.is_element_present_by_css(".ilc_question_TextQuestion"):
-			answer = LongTextAnswerTinyMCE(self.browser, self.questions[title])
-		else:
-			raise Exception("unsupported question type encountered. aborting.");
+		title = page_title.text
+		self.report('entering question "' + title + '"')
+
+		for css, answer_class in [
+			(".ilc_question_SingleChoice", SingleChoiceAnswer),
+			(".ilc_question_MultipleChoice", MultipleChoiceAnswer),
+			(".ilc_question_KprimChoice", KPrimAnswer),
+			(".ilc_question_ClozeTest", ClozeAnswer),
+			(".ilc_question_TextQuestion", LongTextAnswerTinyMCE)
+		]:
+			try:
+				self.driver.find_element_by_css_selector(css)
+			except NoSuchElementException:
+				continue
+
+			answer = answer_class(self.driver, self.questions[title])
+			break
 
 		sequence_id = self.get_sequence_id()
 		assert sequence_id not in self.answers
@@ -441,37 +505,39 @@ class Test:
 
 
 class TestDriver():
-	def __init__(self, browser, test, report):
-		self.browser = browser
+	def __init__(self, driver, test, report):
+		self.driver = driver
 		self.test = test
 		self.report = report
 		self.cached_link = None
 
 	def import_test(self):
+		driver = self.driver
+
 		self.report("importing test.")
 
 		# goto Magazin.
-		self.browser.visit("http://web:80/ILIAS/goto.php?target=root_1&client_id=ilias")
+		driver.get("http://web:80/ILIAS/goto.php?target=root_1&client_id=ilias")
 
 		# add new item: Test.
-		self.browser.find_by_css(".ilNewObjectSelector button").click()
-		self.browser.find_by_css(".ilNewObjectSelector #tst").click()
+		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
+		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
 
 		# click on import to get dedicated import mask.
-		for accordion in self.browser.find_by_css(".il_VAccordionInnerContainer"):
-			if accordion.find_by_name("cmd[importFile]"):
-				accordion.find_by_css(".il_VAccordionToggleDef").click()
-				accordion.find_by_name("cmd[importFile]").click()
+		for accordion in driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"):
+			if accordion.find_element_by_name("cmd[importFile]"):
+				accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
+				accordion.find_element_by_name("cmd[importFile]").click()
 				break
 
 		# now import.
-		with wait_for_page_load(self.browser):
-			self.browser.find_by_css(".ilCreationFormSection #xmldoc")
-			self.browser.find_by_css("#xmldoc").fill(self.test.get_path())
-			self.browser.find_by_name("cmd[importFile]").click()
+		with wait_for_page_load(driver):
+			driver.find_element_by_css_selector(".ilCreationFormSection #xmldoc")
+			set_element_value_by_css(driver, "#xmldoc", self.test.get_path())
+			driver.find_element_by_name("cmd[importFile]").click()
 
-		with wait_for_page_load(self.browser):
-			self.browser.find_by_name("cmd[importVerifiedFile]").click()
+		with wait_for_page_load(driver):
+			driver.find_element_by_name("cmd[importVerifiedFile]").click()
 
 		self.make_online()
 
@@ -481,71 +547,79 @@ class TestDriver():
 		# now activate the Test by setting it online.
 		self.goto_settings()
 
-		if not self.browser.find_by_css("#online").checked:
-			# for some reason, neither self.browser.find_by_css("#online").click()
-			# nor self.browser.check("online") works here. this does though:
-			self.browser.execute_script('document.getElementById("online").click()')
+		if not self.driver.find_element_by_id("online").is_selected():
+			self.driver.execute_script('document.getElementById("online").click()')
 
-		self.browser.find_by_name("cmd[saveForm]").click()
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_name("cmd[saveForm]").click()
 
 		self.report("setting test online.")
 
 	def goto_participants(self):
 		assert self.goto()
-		self.browser.find_by_css("#tab_participants a").click()
+		self.driver.find_element_by_css_selector("#tab_participants a").click()
 
 	def goto_settings(self):
 		assert self.goto()
-		self.browser.find_by_css("#tab_settings a").click()
+		self.driver.find_element_by_css_selector("#tab_settings a").click()
 
 	def goto_scoring(self):
 		self.goto_settings()
-		self.browser.find_by_css("#subtab_scoring").click()
+		self.driver.find_element_by_css_selector("#subtab_scoring").click()
 
 	def goto_questions(self):
 		assert self.goto()
-		self.browser.find_by_css("#tab_assQuestions a").click()
+		self.driver.find_element_by_css_selector("#tab_assQuestions a").click()
 
 	def goto_statistics(self):
 		assert self.goto()
-		self.browser.find_by_css("#tab_statistics a").click()
+		self.driver.find_element_by_css_selector("#tab_statistics a").click()
 
 	def goto_export(self):
 		assert self.goto()
-		self.browser.find_by_css("#tab_export a").click()
+		self.driver.find_element_by_css_selector("#tab_export a").click()
 
 	def goto_scoring_adjustment(self):
 		assert self.goto()
-		self.browser.find_by_css("#tab_scoringadjust a").click()
+		self.driver.find_element_by_css_selector("#tab_scoringadjust a").click()
 
 	def fetch_exported_workbook(self, batch_id, workarounds):
 		self.goto_export()
 
+		driver = self.driver
+
 		self.report("cleaning current exports.")
-		select_all = self.browser.find_by_css('.ilTableSelectAll')
+		select_all = None
+		try:
+			select_all = self.driver.find_element_by_css_selector('.ilTableSelectAll')
+		except NoSuchElementException:
+			pass
 		if select_all:
-			with wait_for_page_load(self.browser):
-				select_all_id = select_all.find_by_css("input").first["id"]
-				self.browser.execute_script('document.getElementById("%s").click()' % select_all_id)
-				self.browser.find_by_name("cmd[confirmDeletion]").click()
-				self.browser.find_by_name("cmd[delete]").click()
-		assert not self.browser.find_by_css('.ilTableSelectAll')
+			with wait_for_page_load(driver):
+				select_all_id = select_all.find_element_by_css_selector("input").get_attribute("id")
+				driver.execute_script('document.getElementById("%s").click()' % select_all_id)
+				driver.find_element_by_name("cmd[confirmDeletion]").click()
+			with wait_for_page_load(driver):
+				driver.find_element_by_name("cmd[delete]").click()
 
 		self.report("exporting as XLS.")
-		self.browser.select("format", "csv")
-		self.browser.find_by_name("cmd[createExportFile]").click()
+		with wait_for_page_load(driver):
+			Select(driver.find_element_by_name("format")).select_by_value("csv")
+			driver.find_element_by_name("cmd[createExportFile]").click()
 			
 		url = None
-		for a in self.browser.find_by_css("table a"):
-			params = http_get_parameters(a["href"])
+		for a in driver.find_elements_by_css_selector("table a"):
+			params = http_get_parameters(a.get_attribute("href"))
 			if params.get('cmd', '') == "download" and params.get('file', '').endswith(".xlsx"):
-				url = a["href"]
+				url = a.get_attribute("href")
 				break
 
 		assert url is not None
 
 		self.report("downloading XLS.")
-		result = requests.get(url, cookies=self.browser.cookies.all())
+
+		cookies = dict((cookie['name'], cookie['value']) for cookie in driver.get_cookies())
+		result = requests.get(url, cookies=cookies)
 		xls = result.content
 
 		wb = load_workbook(filename=io.BytesIO(xls))
@@ -557,16 +631,16 @@ class TestDriver():
 
 		reached = None
 		login = None
-		for index, a in enumerate(self.browser.find_by_css("#tst_eval_all thead th a")):
-			nav = http_get_parameters(a["href"])["tst_eval_all_table_nav"].split(":")
+		for index, a in enumerate(self.driver.find_elements_by_css_selector("#tst_eval_all thead th a")):
+			nav = http_get_parameters(a.get_attribute("href"))["tst_eval_all_table_nav"].split(":")
 			if nav[0] == "reached":
 				reached = index
 			elif nav[0] == "login":
 				login = index
 
 		assert reached is not None
-		for tr in self.browser.find_by_css("#tst_eval_all tbody tr"):
-			tds = list(tr.find_by_css("td"))
+		for tr in self.driver.find_elements_by_css_selector("#tst_eval_all tbody tr"):
+			tds = list(tr.find_elements_by_css_selector("td"))
 			if tds[login].text.strip() == ("[%s]" % username):
 				score = re.split("\s+", tds[reached].text)
 				return Decimal(score[0])
@@ -574,17 +648,19 @@ class TestDriver():
 		return None
 
 	def get_question_definitions(self):
+		driver = self.driver
+
 		self.goto_questions()
 
-		with wait_for_page_load(self.browser):
-			self.browser.find_by_css("#subtab_edit_test_questions").click()
+		with wait_for_page_load(self.driver):
+			driver.find_element_by_css_selector("#subtab_edit_test_questions").click()
 
 		hrefs = []
-		for questionbrowser in self.browser.find_by_css('#questionbrowser'):
-			for a in questionbrowser.find_by_css('a[href]'):
+		for questionbrowser in driver.find_elements_by_css_selector('#questionbrowser'):
+			for a in questionbrowser.find_elements_by_css_selector('a[href]'):
 				# self.report(a, a["href"])
-				if "cmd=questions" in a["href"]:
-					hrefs.append(a["href"])
+				if "cmd=questions" in a.get_attribute("href"):
+					hrefs.append(a.get_attribute("href"))
 
 		self.report("parsing questions.")
 
@@ -592,29 +668,30 @@ class TestDriver():
 		for href in hrefs:
 			parameters = http_get_parameters(href)
 			if "eqid" in parameters:
-				self.browser.visit(href)
+				with wait_for_page_load(self.driver):
+					self.driver.get(href)
 
-				title = self.browser.find_by_css("#title").first.value
+				title = driver.find_element_by_css_selector("#title").get_attribute("value")
 				if title in questions:
 					raise Exception('duplicate question titled "%s"' % title)
 
-				cmd_class = http_get_parameters(self.browser.url)["cmdClass"]
+				cmd_class = http_get_parameters(self.driver.current_url)["cmdClass"]
 
 				if cmd_class == "assclozetestgui":
 					self.report('parsing cloze question "%s".' % title)
-					questions[title] = ClozeQuestion(self.browser, title)
+					questions[title] = ClozeQuestion(driver, title)
 				elif cmd_class == "asssinglechoicegui":
 					self.report('parsing single choice question "%s".' % title)
-					questions[title] = SingleChoiceQuestion(self.browser, title)
+					questions[title] = SingleChoiceQuestion(driver, title)
 				elif cmd_class == "assmultiplechoicegui":
 					self.report('parsing multiple choice question "%s".' % title)
-					questions[title] = MultipleChoiceQuestion(self.browser, title)
+					questions[title] = MultipleChoiceQuestion(driver, title)
 				elif cmd_class == "asskprimchoicegui":
 					self.report('parsing kprim question "%s".' % title)
-					questions[title] = KPrimQuestion(self.browser, title)
+					questions[title] = KPrimQuestion(driver, title)
 				elif cmd_class == "asstextquestiongui":
 					self.report('parsing text question "%s".' % title)
-					questions[title] = LongTextQuestion(self.browser, title)
+					questions[title] = LongTextQuestion(driver, title)
 				else:
 					raise Exception("unsupported question gui cmd_class " + cmd_class)
 
@@ -625,8 +702,8 @@ class TestDriver():
 		self.report("deleting all test participants.")
 
 		found = False
-		for a in self.browser.find_by_css("a.btn"):
-			if "cmd=deleteAllUserResults" in a["href"]:
+		for a in self.driver.find_elements_by_css_selector("a.btn"):
+			if "cmd=deleteAllUserResults" in a.get_attribute("href"):
 				a.click()
 				found = True
 				break
@@ -634,61 +711,80 @@ class TestDriver():
 		if not found: # no participants in test
 			return
 
-		self.browser.find_by_css('input[name="cmd[confirmDeleteAllUserResults]"]').click()		
+		self.driver.find_element_by_css_selector('input[name="cmd[confirmDeleteAllUserResults]"]').click()
 
 	def goto(self):
 		if self.cached_link is not None:
-			self.browser.visit(self.cached_link)
+			with wait_for_page_load(self.driver):
+				self.driver.get(self.cached_link)
 			return True
 
+		driver = self.driver
+
 		for i in range(5):
-			self.browser.visit("http://web:80/ILIAS/")
-			self.browser.find_by_css(".glyphicon-search").click()
-			self.browser.find_by_css('#mm_search_form input[type="submit"]').click()
+			with wait_for_page_load(driver):
+				driver.get("http://web:80/ILIAS/")
+
+			driver.find_element_by_css_selector(".glyphicon-search").click()
+			with wait_for_page_load(driver):
+				driver.find_element_by_css_selector('#mm_search_form input[type="submit"]').click()
 
 			#self.browser.visit("http://web:80/ILIAS/ilias.php?baseClass=ilSearchController")
 			self.report('searching for test "%s".' % self.test.get_title())
 
-			search_input = self.browser.find_by_css(".ilTabsContentOuter div form input[name='term']")
-			if not search_input:
+			try:
+				wait_for_css(driver, ".ilTabsContentOuter div form input[name='term']")
+
+				search_input = driver.find_element_by_css_selector(
+					".ilTabsContentOuter div form input[name='term']")
+			except TimeoutException:
 				# sporadically, a "there is no data set with id" comes along; just retry
-				if i > 3:
-					raise Exception("could not perform search")
-				self.browser.visit("http://web:80/ILIAS/")
-				continue
-			search_input.fill(self.test.get_title())
-			break
+				pass
+
+			if search_input:
+				set_element_value(driver, search_input, self.test.get_title())
+				break
 
 		# note: one reason this might fail is that the test we search for is still "offline."
 
 		self.report("performing search.")
-		with wait_for_page_load(self.browser):
-			self.browser.find_by_css("input[name='cmd[performSearch]']").click()
+		with wait_for_page_load(driver):
+			driver.find_element_by_css_selector("input[name='cmd[performSearch]']").click()
 		for i in range(5):
-			for link in self.browser.find_link_by_partial_text(self.test.get_title()):
-				if link.visible:
-					with wait_for_page_load(self.browser):
+			for link in driver.find_elements_by_partial_link_text(self.test.get_title()):
+				if link.is_displayed():
+					with wait_for_page_load(driver):
 						link.click()
-					self.cached_link = self.browser.url
+					self.cached_link = driver.current_url
 					return True
 			time.sleep(1)
 
 		return False
 
 	def start(self, context, questions, allow_resume=False):
+		driver = self.driver
+
 		self.report("starting test.")
-		if self.browser.is_element_present_by_css("input[name='cmd[resumePlayer]']"):
+
+		resume_player = None
+		try:
+			resume_player = driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
+		except NoSuchElementException:
+			pass
+
+		if resume_player:
 			if not allow_resume:
 				raise Exception("test has already been started by this user. aborting.")
-			with wait_for_page_load(self.browser):
-				self.browser.find_by_css("input[name='cmd[resumePlayer]']").click()
+			with wait_for_page_load(self.driver):
+				resume_player.click()
 		else:
-			startButton = self.browser.find_by_css("input[name='cmd[startPlayer]']")
-			if startButton:
-				with wait_for_page_load(self.browser):
-					startButton.click()
-			else:
+			start_button = driver.find_element_by_css_selector(
+				"input[name='cmd[startPlayer]']")
+			try:
+				with wait_for_page_load(self.driver):
+					start_button.click()
+			except NoSuchElementException:
 				raise Exception("user does not have rights to start this test. aborting.")
 
-		return ExamDriver(self.browser, self.report, context, questions)
+		return ExamDriver(driver, self.report, context, questions)
 

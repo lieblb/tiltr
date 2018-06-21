@@ -11,18 +11,31 @@ from contextlib import contextmanager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
 from selenium.common.exceptions import WebDriverException, TimeoutException
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+
+from splinter.driver.webdriver import BaseWebDriver
 
 import time
 
+
+def is_loaded(driver):
+	return driver.execute_script("return document.readyState") == "complete"
+
 @contextmanager
-def wait_for_page_load(browser, timeout=30):
+def wait_for_page_load(driver, timeout=30):
+	if isinstance(driver, BaseWebDriver):
+		driver = driver.driver
+
 	# http://splinter.readthedocs.io/en/latest/api/driver-and-element-api.html
-	old_page = browser.driver.find_element_by_tag_name('html')
+	old_page = driver.find_element_by_tag_name('html')
 
 	yield
 
 	try:
-		WebDriverWait(browser.driver, timeout).until(staleness_of(old_page))
+		WebDriverWait(driver, timeout).until(staleness_of(old_page))
+
+		WebDriverWait(driver, timeout).until(is_loaded)
 	except TimeoutException:
 		raise
 	except WebDriverException:
@@ -46,6 +59,20 @@ def wait_for_page_load(browser, timeout=30):
 		#
 		# if this happens, just wait some more and hope for the best (i.e. that the page did reload).
 		time.sleep(3)
+
+
+def wait_for_css(driver, css, timeout=30):
+	WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, css)))
+
+
+def set_element_value(driver, field, value):
+	driver.execute_script("arguments[0].setAttribute('value', arguments[1])", field, value)
+
+
+def set_element_value_by_css(driver, css, value):
+	field = driver.find_element_by_css_selector(css)
+	set_element_value(driver, field, value)
+
 
 def http_get_parameters(url):
 	url = urlparse(url)

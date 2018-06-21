@@ -231,8 +231,6 @@ class Run:
 		self.report_master("running with workaround settings:")
 		self.workarounds.print_status(self.report_master)
 
-		self.report_master("verifying admin settings.")
-
 		header = self.protocols["header"]
 		header.append("Tested on ILIAS %s." % self.ilias_version)
 		header.append('Using test "%s".' % self.test.get_title())
@@ -245,7 +243,7 @@ class Run:
 
 		prolog.append("-" * 80)
 		prolog.append("ILIAS Settings:")
-		prolog.extend(verify_admin_settings(browser, self.workarounds))
+		prolog.extend(verify_admin_settings(browser, self.workarounds, self.report_master))
 
 		self.report_master("creating users.")
 		# create users for test.
@@ -382,10 +380,11 @@ class Batch(threading.Thread):
 			capabilities = {"moz:webdriverClick": False}
 
 			def run_in_master(f):
+				self.report_master("connecting to client browser...")
 				with Browser(headless=True, capabilities=capabilities, wait_time=self.wait_time) as browser:
 					self.browser = browser
 
-					test_driver = TestDriver(browser, self.test, self.report_master)
+					test_driver = TestDriver(browser.driver, self.test, self.report_master)
 
 					with Login(browser, self.report_master, "root", "odysseus"):
 						f(browser, test_driver)
@@ -453,7 +452,8 @@ class Batch(threading.Thread):
 			self.report_done()
 
 	def remove_socket(self, socket):
-		self.sockets.remove(socket)
+		if socket in self.sockets:
+			self.sockets.remove(socket)
 
 	def report_master(self, message):
 		if self.browser:
