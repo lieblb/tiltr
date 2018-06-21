@@ -14,8 +14,6 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
-from splinter.driver.webdriver import BaseWebDriver
-
 import time
 
 
@@ -24,10 +22,6 @@ def is_loaded(driver):
 
 @contextmanager
 def wait_for_page_load(driver, timeout=30):
-	if isinstance(driver, BaseWebDriver):
-		driver = driver.driver
-
-	# http://splinter.readthedocs.io/en/latest/api/driver-and-element-api.html
 	old_page = driver.find_element_by_tag_name('html')
 
 	yield

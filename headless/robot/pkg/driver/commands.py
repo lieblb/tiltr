@@ -127,36 +127,36 @@ class TakeExamCommand:
 			workarounds=base64.b64encode(pickle.dumps(self.workarounds, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
 			wait_time=self.wait_time))
 
-	def _pass1(self, driver, report):
-		driver.goto_first_question()
+	def _pass1(self, exam_driver, report):
+		exam_driver.goto_first_question()
 
 		while True:
-			driver.randomize_answer()
-			if not driver.goto_next_question():
+			exam_driver.randomize_answer()
+			if not exam_driver.goto_next_question():
 				break
 
-	def _pass2(self, driver, report):
-		driver.goto_first_question()
+	def _pass2(self, exam_driver, report):
+		exam_driver.goto_first_question()
 
 		while True:
 			report("verifying answer.")
-			driver.verify_answer()
-			if not driver.goto_next_question():
+			exam_driver.verify_answer()
+			if not exam_driver.goto_next_question():
 				break
 
-	def _pass3(self, driver, report):
+	def _pass3(self, exam_driver, report):
 		for i in range(len(self.questions)):
-			driver.verify_answer()
+			exam_driver.verify_answer()
 			if random.random() < 0.5:
-				driver.randomize_answer()
-			driver.goto_next_or_previous_question()
+				exam_driver.randomize_answer()
+			exam_driver.goto_next_or_previous_question()
 
-	def run(self, browser, report):
+	def run(self, driver, report):
 		report("running test on machine #%s (%s)." % (self.machine_index, self.machine))
 
 		try:
-			with Login(browser, report, self.username, self.password):
-				test_driver = TestDriver(browser.driver, Test(self.test_id), report)
+			with Login(driver, report, self.username, self.password):
+				test_driver = TestDriver(driver, Test(self.test_id), report)
 				test_driver.goto()
 
 				do_regression_tests = True
@@ -171,8 +171,8 @@ class TakeExamCommand:
 				with test_driver.start(context, self.questions) as exam_driver:
 					try:
 						self._pass1(exam_driver, report)
-						#self._pass2(exam_driver, report)
-						#self._pass3(exam_driver, report)
+						self._pass2(exam_driver, report)
+						self._pass3(exam_driver, report)
 
 						result = exam_driver.get_expected_result()
 					except WebDriverException:

@@ -28,8 +28,8 @@ from ..result.workbook import check_workbook_consistency
 
 
 class Login:
-	def __init__(self, browser, report, username, password):
-		self.browser = browser
+	def __init__(self, driver, report, username, password):
+		self.driver = driver
 		self.report = report
 		self.username = username
 		self.password = password
@@ -37,14 +37,14 @@ class Login:
 	def __enter__(self):
 		self.report("opening login page.")
 
-		with wait_for_page_load(self.browser):
-			self.browser.visit("http://web:80/ILIAS/")
+		with wait_for_page_load(self.driver):
+			self.driver.get("http://web:80/ILIAS/")
 
-		driver = self.browser.driver
+		driver = self.driver
 
 		wait_for_css(driver, "form[name='formlogin']")
 
-		with wait_for_page_load(self.browser):
+		with wait_for_page_load(self.driver):
 			set_element_value_by_css(driver, "input[name='username']", self.username)
 			set_element_value_by_css(driver, "input[name='password']", self.password)
 			self.report("logging in as " + self.username + "/" + self.password + ".")
@@ -65,7 +65,7 @@ class Login:
 
 		if change_password:
 			self.report("changing password.")
-			with wait_for_page_load(self.browser):
+			with wait_for_page_load(self.driver):
 				set_element_value_by_css(driver, "input[name='current_password']", self.password)
 				set_element_value_by_css(driver, "input[name='new_password']", self.password + "_")
 				set_element_value_by_css(driver, "input[name='new_password_retype']", self.password + "_")
@@ -73,14 +73,14 @@ class Login:
 
 	def __exit__(self, *args):
 		try:
-			driver = self.browser.driver
+			driver = self.driver
 
 			try:
 				driver.find_element_by_css_selector("#userlog")
 			except NoSuchElementException:
 				return  # already logged out
 
-			with wait_for_page_load(self.browser):
+			with wait_for_page_load(self.driver):
 				driver.find_element_by_css_selector("#userlog a.dropdown-toggle").click()
 				driver.find_element_by_xpath("//a[contains(@href, 'logout.php')]").click()
 			self.report("logged out.")
@@ -89,40 +89,38 @@ class Login:
 			self.report(e)
 
 
-def goto_administration_page(browser, id):
+def goto_administration_page(driver, id):
 	for i in range(2):
 		try:
-			wait_for_css(browser.driver, "#mm_adm_tr", 1)
-			browser.driver.find_element_by_css_selector("#mm_adm_tr").click()
+			wait_for_css(driver, "#mm_adm_tr", 1)
+			driver.find_element_by_css_selector("#mm_adm_tr").click()
 
-			wait_for_css(browser.driver, "#%s" % id)
-			with wait_for_page_load(browser):
-				browser.driver.find_element_by_css_selector("#%s" % id).click()
+			wait_for_css(driver, "#%s" % id)
+			with wait_for_page_load(driver):
+				driver.find_element_by_css_selector("#%s" % id).click()
 
 			return
 		except:
-			with wait_for_page_load(browser):
-				browser.visit("http://web:80/ILIAS")
+			with wait_for_page_load(driver):
+				driver.get("http://web:80/ILIAS")
 
 	raise Exception("going to admin page %s failed." % id)
 
 
-def goto_test_administration(browser):
-	goto_administration_page(browser, "mm_adm_assf")
+def goto_test_administration(driver):
+	goto_administration_page(driver, "mm_adm_assf")
 
 
-def goto_user_administration(browser):
-	goto_administration_page(browser, "mm_adm_usrf")
+def goto_user_administration(driver):
+	goto_administration_page(driver, "mm_adm_usrf")
 
 
-def goto_editor_administration(browser):
-	goto_administration_page(browser, "mm_adm_adve")
+def goto_editor_administration(driver):
+	goto_administration_page(driver, "mm_adm_adve")
 
 
-def add_user(browser, username, password):
-	driver = browser.driver
-
-	with wait_for_page_load(browser):
+def add_user(driver, username, password):
+	with wait_for_page_load(driver):
 		driver.find_element_by_xpath("//a[contains(@href, 'cmd=addUser')]").click()
 
 	driver.find_element_by_css_selector("input[id='gender_m']").click()
@@ -135,16 +133,14 @@ def add_user(browser, username, password):
 	set_element_value_by_css(driver, "input[name='lastname']", "user")
 	set_element_value_by_css(driver, "input[name='email']", "ilias@localhost")
 
-	with wait_for_page_load(browser):
+	with wait_for_page_load(driver):
 		driver.find_element_by_css_selector("input[name='cmd[save]']").click()
 
 
-def delete_user(browser, username):
-	driver = browser.driver
-
+def delete_user(driver, username):
 	set_element_value_by_css(driver, "input[name='query']", username)
 
-	browser.find_element_by_css_selector("input[name='cmd[applyFilter]']").click()
+	driver.find_element_by_css_selector("input[name='cmd[applyFilter]']").click()
 
 	for tr in driver.find_elements_by_css_selector("table tr"):
 		for a in tr.find_elements_by_css_selector("td a"):
@@ -152,10 +148,10 @@ def delete_user(browser, username):
 				for checkbox in tr.find_element_by_css_selector("input[type='checkbox']"):
 					checkbox.click()
 
-	Select(browser.find_elements_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
-	browser.find_elements_by_css_selector('input[name="select_cmd"]').click()
+	Select(driver.find_elements_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
+	driver.find_elements_by_css_selector('input[name="select_cmd"]').click()
 
-	browser.find_element_by_name('cmd[confirmdelete]').click()
+	driver.find_element_by_name('cmd[confirmdelete]').click()
 
 
 def verify_admin_setting(name, value, expected, log):
@@ -164,13 +160,11 @@ def verify_admin_setting(name, value, expected, log):
 	log.append("%s is %s." % (name, expected))
 
 
-def verify_admin_settings(browser, workarounds, report):
+def verify_admin_settings(driver, workarounds, report):
 	log = []
 
-	goto_test_administration(browser)
+	goto_test_administration(driver)
 	report("verifying test admin settings.")
-
-	driver = browser.driver
 
 	verify_admin_setting(
 		"locking for tests",
@@ -190,7 +184,7 @@ def verify_admin_settings(browser, workarounds, report):
 		True,
 		log)
 
-	goto_editor_administration(browser)
+	goto_editor_administration(driver)
 	report("verifying editor admin settings.")
 
 	driver.find_element_by_css_selector("#tab_adve_rte_settings a").click()
@@ -225,18 +219,18 @@ class TemporaryUser:
 		self.username = None
 		self.password = None
 
-	def create(self, browser, report, unique_id):
+	def create(self, driver, report, unique_id):
 		self.username = datetime.datetime.today().strftime('testuser_%Y%m%d%H%M%S') + ("_%s" % unique_id)
 		self.password = "dev1234"
-		goto_user_administration(browser)
+		goto_user_administration(driver)
 		report("creating user %s." % self.username)
-		add_user(browser, self.username, self.password)
+		add_user(driver, self.username, self.password)
 
-	def destroy(self, browser, report):
+	def destroy(self, driver, report):
 		try:
 			report("deleting user %s." % self.username)
-			goto_user_administration(browser)
-			delete_user(browser, self.username)
+			goto_user_administration(driver)
+			delete_user(driver, self.username)
 		except Exception as e:
 			report("deletion of user failed.")
 			report("!traceback")

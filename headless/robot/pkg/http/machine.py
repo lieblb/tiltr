@@ -59,7 +59,7 @@ class Runner(threading.Thread):
 
 		try:
 			report("machine browser has wait time %d." % self.wait_time)
-			expected_result = self.command.run(self.browser, report)
+			expected_result = self.command.run(self.browser.driver, report)
 			if expected_result is None:
 				self.messages.append(["ERROR", "no result obtained"])
 			else:
