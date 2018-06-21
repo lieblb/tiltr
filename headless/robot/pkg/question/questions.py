@@ -46,33 +46,45 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		self.comparator = comparator
 		self.size = size
 
+	def _modify_solution(self, text, score, context):
+		mode = random.choices(
+			("unmodified", "randchar", "randcase"),
+			weights=(0.5, 0.25, 0.25))[0]
+
+		if mode == "unmodified":
+			# keep exactly as specified.
+			return text, score
+		else:
+			# modify case or content.
+			chars = []
+			for i in range(len(text)):
+				r = random.random()
+				if mode == "randchar" and r < 0.2:
+					chars.append(random.choice(context.cloze_random_chars))
+				elif mode == "randcase" and r < 0.2:
+					chars.append(text[i].swapcase())
+				else:
+					chars.append(text[i])
+			text = "".join(chars)
+			return text, self.get_score(text)
+
 	def get_random_choice(self, context):
 		if random.random() < 0.75 and not context.prefer_text():
 			# pick scored answer.
 			text, score = random.choice(list(self.options.items()))
-
-			mode = random.choices(
-				("unmodified", "randchar", "randcase"), weights=(0.5, 0.25, 0.25))[0]
-
-			if mode == "unmodified":
-				# keep exactly as specified.
-				return text, score
-			else:
-				# modify case or content.
-				chars = []
-				for i in range(len(text)):
-					r = random.random()
-					if mode == "randchar" and r < 0.2:
-						chars.append(random.choice(context.cloze_random_chars))
-					elif mode == "randcase" and r < 0.2:
-						chars.append(text[i].swapcase())
-					else:
-						chars.append(text[i])
-				text = "".join(chars)
-				return text, self.get_score(text)
+			return self._modify_solution(text, score, context)
 		else:
 			# make up something random and probably wrong.
-			text = context.produce_text(self.size, context.cloze_random_chars)
+			if random.random() < 0.9:
+				# produce some random test.
+				text = context.produce_text(
+					self.size, context.cloze_random_chars)
+			else:
+				# insert a random number. this is useful to test
+				# workarounds.implicit_text_number_conversions.
+				num_digits = random.randint(0, 2)
+				format = (".%d" % num_digits) + "%f"
+				text = format % (random.random() * 1000)
 			return text, self.get_score(text)
 
 	def get_score(self, text):
