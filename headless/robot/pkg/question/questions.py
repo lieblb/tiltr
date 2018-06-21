@@ -269,6 +269,14 @@ class ClozeQuestion():
 	def readjust_scores(self, driver, report):
 		pass
 
+	def compute_score(self, answers):
+		score = Decimal(0)
+		for gap_name, text in answers.items():
+			for gap in self.gaps.values():
+				if gap_name == gap.get_export_name():
+					score += gap.get_score(text)
+		return score
+
 
 class SingleChoiceQuestion:
 	@staticmethod

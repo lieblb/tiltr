@@ -166,7 +166,7 @@ class Run:
 
 		return all_assertions_ok
 
-	def _check_readjustment(self, driver, test_driver, questions, all_recorded_results):
+	def _check_readjustment(self, driver, test_driver, questions, all_recorded_results, report_master):
 		protocol = self.protocols["readjustment"]
 
 		def report(s):
@@ -176,11 +176,11 @@ class Run:
 		retries = 0
 
 		while True:
-			with wait_for_page_load(browser):
+			with wait_for_page_load(driver):
 				test_driver.goto_scoring_adjustment()
 
 			links = []
-			for a in browser.find_by_name("questionbrowser").first.find_by_css("table a"):
+			for a in driver.find_element_by_name("questionbrowser").find_elements_by_css_selector("table a"):
 				question_title = a.text.strip()
 				if question_title in questions:
 					links.append((a, questions[question_title]))
@@ -189,33 +189,32 @@ class Run:
 				break
 
 			link, question = links[index]
-			with wait_for_page_load(browser):
+			with wait_for_page_load(driver):
 				link.click()
 
-			self.report_master('readjusting scores for question "%s"' % question.title)
+			report_master('readjusting scores for question "%s"' % question.title)
 
 			# close stats window.
-			browser.find_by_css("#adjustment_stats_container_aggr_usr_answ a").first.click()
+			driver.execute_script("""
+			document.getElementsByClassName("ilOverlay")[0].style.display = "none";
+			""")
 
-			save_ok = True
 			try:
-				question.readjust_scores(browser, report)
+				question.readjust_scores(driver, report)
 
-				with wait_for_page_load(browser):
-					browser.find_by_name("cmd[savescoringfortest]").first.click()
+				report_master("trying to save.")
+				with wait_for_page_load(driver):
+					driver.find_element_by_name("cmd[savescoringfortest]").click()
 			except TimeoutException:
-				# this can take really long sometimes.
-				save_ok = False
-
-			if save_ok:
-				index += 1
-				retries = 0
-			else:
 				retries += 1
-				if retries > 5:
+				if retries >= 1:
 					raise Exception("failed to readjust scores. giving up.")
 				else:
-					self.report_master("readjustment failed, retrying.")
+					report_master("readjustment failed, retrying.")
+				continue
+
+			index += 1
+			retries = 0
 
 		# recompute user score's for all questions.
 		for question_title, question in questions.items():
@@ -330,7 +329,8 @@ class Run:
 				break
 
 			if i < num_readjustments:
-				self._check_readjustment(driver, test_driver, self.questions, self.all_recorded_results)
+				self._check_readjustment(
+					driver, test_driver, self.questions, self.all_recorded_results, report_master)
 
 		if all_assertions_ok:
 			self.success = "OK"
