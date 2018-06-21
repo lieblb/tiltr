@@ -136,6 +136,8 @@ class Run:
 	def _check_results(self, users, test_driver, workbook, all_recorded_results):
 		all_assertions_ok = True
 
+		gui_scores = test_driver.get_gui_scores([user.get_username() for user in users])
+
 		for user, recorded_result in zip(users, all_recorded_results):
 			self.report_master("checking results for user %s." % user.get_username())
 
@@ -144,7 +146,7 @@ class Run:
 				workbook, user.get_username(), self.report_master)
 
 			# check score via gui participants tab as well.
-			ilias_result.add(("exam", "score", "gui"), test_driver.get_score(user.get_username()))
+			ilias_result.add(("exam", "score", "gui"), gui_scores[user.get_username()])
 
 			def report(message):
 				if message:

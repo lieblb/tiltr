@@ -626,7 +626,7 @@ class TestDriver():
 		check_workbook_consistency(wb, self.report, workarounds)
 		return xls, wb
 
-	def get_score(self, username):
+	def get_gui_scores(self, usernames):
 		self.goto_statistics()
 
 		reached = None
@@ -639,13 +639,16 @@ class TestDriver():
 				login = index
 
 		assert reached is not None
+		scores = dict()
+
 		for tr in self.driver.find_elements_by_css_selector("#tst_eval_all tbody tr"):
 			tds = list(tr.find_elements_by_css_selector("td"))
-			if tds[login].text.strip() == ("[%s]" % username):
-				score = re.split("\s+", tds[reached].text)
-				return Decimal(score[0])
+			for username in usernames:
+				if tds[login].text.strip() == ("[%s]" % username):
+					score = re.split("\s+", tds[reached].text)
+					scores[username] = Decimal(score[0])
 
-		return None
+		return scores
 
 	def get_question_definitions(self):
 		driver = self.driver
