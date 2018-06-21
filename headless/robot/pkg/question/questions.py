@@ -294,7 +294,7 @@ class SingleChoiceQuestion:
 			except NoSuchElementException:
 				break
 			points = driver.find_element_by_name("choice[points][%d]" % i)
-			set_element_value(points, "value", str(choices[choice.get_attribute("value")]))
+			set_element_value(driver, points, str(choices[choice.get_attribute("value")]))
 			i += 1
 
 	def __init__(self, driver, title):
