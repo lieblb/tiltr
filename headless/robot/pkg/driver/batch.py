@@ -92,7 +92,7 @@ class Run:
 	def __init__(self, batch):
 		self.success = "FAIL"
 
-		self.xls = ""
+		self.xls = b""
 		self.performance_data = []
 		self.users = []
 		self.protocols = dict(header=[], prolog=[], epilog=[], result=[], readjustment=[])
