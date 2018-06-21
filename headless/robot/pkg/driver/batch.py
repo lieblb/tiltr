@@ -36,6 +36,7 @@ import time
 import datetime
 import uuid
 
+monitor_mutex = Lock()
 
 def take_exam(args):
 	asyncio.set_event_loop(asyncio.new_event_loop())
@@ -47,7 +48,6 @@ def take_exam(args):
 
 	result_json = None
 	report("master", "passing take_exam to %s." % machine)
-	sleep_time = 1
 
 	try:
 		r = requests.post("http://%s:8888/start/%s" % (machine, batch_id),
@@ -60,9 +60,15 @@ def take_exam(args):
 		index = 0
 
 		while result_json is None:
-			time.sleep(sleep_time)
+			# we don't want too much traffic for updating machine states. only check
+			# one at a time.
+			monitor_mutex.acquire()
+			try:
+				time.sleep(1)
+				r = requests.get("http://%s:8888/monitor/%s/%d" % (machine, batch_id, index))
+			finally:
+				monitor_mutex.release()
 
-			r = requests.get("http://%s:8888/monitor/%s/%d" % (machine, batch_id, index))
 			if r.status_code != 200:
 				raise Exception("monitor call failed: %s" % r.status_code)
 		
