@@ -15,8 +15,13 @@ from openpyxl import load_workbook
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 from decimal import *
+
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+
 
 from .utils import wait_for_page_load, http_get_parameters, wait_for_css, set_element_value_by_css, set_element_value
 
@@ -82,7 +87,9 @@ class Login:
 
 			with wait_for_page_load(self.driver):
 				driver.find_element_by_css_selector("#userlog a.dropdown-toggle").click()
-				driver.find_element_by_xpath("//a[contains(@href, 'logout.php')]").click()
+				logout = "//a[contains(@href, 'logout.php')]"
+				WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.XPATH, logout)))
+				driver.find_element_by_xpath(logout).click()
 			self.report("logged out.")
 		except Exception as e:
 			self.report("logout failed.")
@@ -363,6 +370,9 @@ class ExamDriver:
 
 			try:
 				if button.is_displayed():
+					# prevent popup on future navigation.
+					self.driver.find_element_by_id("save_on_navigation_prevent_confirmation").click()
+
 					with wait_for_page_load(self.driver):
 						button.click()
 			except:
