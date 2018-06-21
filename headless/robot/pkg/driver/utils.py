@@ -10,7 +10,7 @@ from urllib.parse import urlparse, parse_qs
 from contextlib import contextmanager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
-from selenium.common.exceptions import WebDriverException, TimeoutException
+from selenium.common.exceptions import WebDriverException, TimeoutException, SessionNotCreatedException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
@@ -22,7 +22,12 @@ def is_loaded(driver):
 
 @contextmanager
 def wait_for_page_load(driver, timeout=30):
-	old_page = driver.find_element_by_tag_name('html')
+	for i in range(3):
+		try:
+			old_page = driver.find_element_by_tag_name('html')
+			break
+		except SessionNotCreatedException:
+			time.sleep(1)
 
 	yield
 
