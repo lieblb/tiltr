@@ -128,6 +128,7 @@ class TakeExamCommand:
 			wait_time=self.wait_time))
 
 	def _pass1(self, exam_driver, report):
+		report("entering pass 1.")
 		exam_driver.goto_first_question()
 
 		while True:
@@ -136,6 +137,7 @@ class TakeExamCommand:
 				break
 
 	def _pass2(self, exam_driver, report):
+		report("entering pass 2.")
 		exam_driver.goto_first_question()
 
 		while True:
@@ -145,6 +147,7 @@ class TakeExamCommand:
 				break
 
 	def _pass3(self, exam_driver, report):
+		report("entering pass 3.")
 		for i in range(len(self.questions)):
 			exam_driver.verify_answer()
 			if random.random() < 0.5:
