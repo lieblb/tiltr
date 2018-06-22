@@ -312,7 +312,7 @@ class Run:
 		if self._had_webdriver_errors(self.all_recorded_results):
 			# there were webdriver problems during the test (e.g. we could not control Firefox
 			# properly), which means this result is not a valid test. do not mark this as a FAIL.
-			self.success = "CRASH"
+			self.success = "WEBDRIVER_CRASHED"
 			raise Exception("aborted due to webdriver errors")
 
 		num_readjustments = 0
@@ -493,7 +493,7 @@ class Batch(threading.Thread):
 			traceback.print_exc()
 			self.report("master", "web driver exception received: %s." % traceback.format_exc())
 			run.add_to_protocol("result", "web driver error: %s" % traceback.format_exc())
-			run.success = "CRASH"
+			run.success = "WEBDRIVER_CRASHED"
 
 		except:
 			traceback.print_exc()

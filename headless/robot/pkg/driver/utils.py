@@ -10,9 +10,10 @@ from urllib.parse import urlparse, parse_qs
 from contextlib import contextmanager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
-from selenium.common.exceptions import WebDriverException, TimeoutException, SessionNotCreatedException
+from selenium.common.exceptions import WebDriverException, TimeoutException, SessionNotCreatedException, NoSuchWindowException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.command import Command
 
 import time
 
@@ -61,16 +62,54 @@ def wait_for_page_load(driver, timeout=30):
 
 
 def wait_for_css(driver, css, timeout=30):
-	WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, css)))
+	retries = 0
+
+	while True:
+		try:
+			WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, css)))
+			break
+		except (WebDriverException, SessionNotCreatedException):
+			# sporadically we get: "selenium.common.exceptions.WebDriverException:
+			# Message: Failed to decode response from marionette" for some reason
+			retries += 1
+			if retries >= 5:
+				raise
 
 
 def set_element_value(driver, field, value):
 	driver.execute_script("arguments[0].setAttribute('value', arguments[1])", field, value)
 
 
+def set_elements_values(driver, values):
+	driver.execute_script("""
+		for (var i = 0; i < arguments.length; i++) {
+			var arg = arguments[i];
+			arg.field.setAttribute('value', arg.value)
+		}
+	""", [dict(field=field, value=value) for field, value in values])
+
+
 def set_element_value_by_css(driver, css, value):
-	field = driver.find_element_by_css_selector(css)
+	retries = 0
+
+	while True:
+		try:
+			field = driver.find_element_by_css_selector(css)
+			break
+		except NoSuchWindowException:
+			retries += 1
+			if retries >= 5:
+				raise
+
 	set_element_value(driver, field, value)
+
+
+def is_driver_alive(driver):
+	try:
+		driver.execute(Command.STATUS)
+		return True
+	except:
+		return False
 
 
 def http_get_parameters(url):

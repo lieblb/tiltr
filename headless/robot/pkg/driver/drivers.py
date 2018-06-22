@@ -10,26 +10,26 @@ import datetime
 import io
 import requests
 import time
+import traceback
 
 from openpyxl import load_workbook
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 from decimal import *
 
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 
-from .utils import wait_for_page_load, http_get_parameters, wait_for_css, set_element_value_by_css, set_element_value
+from .utils import wait_for_page_load, http_get_parameters,\
+	wait_for_css, set_element_value_by_css, set_element_value, is_driver_alive
 
 from ..question import *
 from ..result import *
 from ..result.workbook import check_workbook_consistency
-
-
 
 
 class Login:
@@ -80,6 +80,10 @@ class Login:
 		try:
 			driver = self.driver
 
+			if not is_driver_alive(driver):
+				self.report("driver is no longer alive. skipping logout.")
+				return
+
 			try:
 				driver.find_element_by_css_selector("#userlog")
 			except NoSuchElementException:
@@ -91,9 +95,9 @@ class Login:
 				WebDriverWait(driver, 5).until(EC.visibility_of_element_located((By.XPATH, logout)))
 				driver.find_element_by_xpath(logout).click()
 			self.report("logged out.")
-		except Exception as e:
+		except:
 			self.report("logout failed.")
-			self.report(e)
+			self.report(traceback.format_exc())
 
 
 def goto_administration_page(driver, id):
@@ -229,9 +233,18 @@ class TemporaryUser:
 	def create(self, driver, report, unique_id):
 		self.username = datetime.datetime.today().strftime('testuser_%Y%m%d%H%M%S') + ("_%s" % unique_id)
 		self.password = "dev1234"
-		goto_user_administration(driver)
-		report("creating user %s." % self.username)
-		add_user(driver, self.username, self.password)
+
+		retries = 0
+		while True:
+			try:
+				goto_user_administration(driver)
+				report("creating user %s." % self.username)
+				add_user(driver, self.username, self.password)
+				break
+			except WebDriverException:
+				retries += 1
+				if retries >= 3:
+					raise
 
 	def destroy(self, driver, report):
 		try:
