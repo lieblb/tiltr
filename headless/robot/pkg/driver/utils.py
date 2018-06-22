@@ -16,6 +16,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.command import Command
 
 import time
+import itertools
 
 
 def is_loaded(driver):
@@ -82,11 +83,11 @@ def set_element_value(driver, field, value):
 
 def set_elements_values(driver, values):
 	driver.execute_script("""
-		for (var i = 0; i < arguments.length; i++) {
-			var arg = arguments[i];
-			arg.field.setAttribute('value', arg.value)
+		for (var i = 0; i < arguments[0]; i++) {
+			var j = 1 + 2 * i;
+			arguments[j].setAttribute('value', arguments[j + 1])
 		}
-	""", [dict(field=field, value=value) for field, value in values])
+	""", len(values), *list(itertools.chain(*values.items())))
 
 
 def set_element_value_by_css(driver, css, value):
@@ -102,6 +103,28 @@ def set_element_value_by_css(driver, css, value):
 				raise
 
 	set_element_value(driver, field, value)
+
+
+def set_inputs(driver, **kwargs):
+	retries = 0
+
+	while True:
+		try:
+			fields = driver.find_elements_by_tag_name("input")
+			break
+		except NoSuchWindowException:
+			retries += 1
+			if retries >= 5:
+				raise
+
+	field_to_value = dict()
+
+	for field in fields:
+		name = field.get_attribute("name")
+		if name in kwargs:
+			field_to_value[field] = kwargs[name]
+
+	set_elements_values(driver, field_to_value)
 
 
 def is_driver_alive(driver):

@@ -24,7 +24,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 
-from .utils import wait_for_page_load, http_get_parameters,\
+from .utils import wait_for_page_load, http_get_parameters, set_inputs,\
 	wait_for_css, set_element_value_by_css, set_element_value, is_driver_alive
 
 from ..question import *
@@ -50,8 +50,11 @@ class Login:
 		wait_for_css(driver, "form[name='formlogin']")
 
 		with wait_for_page_load(self.driver):
-			set_element_value_by_css(driver, "input[name='username']", self.username)
-			set_element_value_by_css(driver, "input[name='password']", self.password)
+			set_inputs(
+				driver,
+				username=self.username,
+				password=self.password)
+
 			self.report("logging in as " + self.username + "/" + self.password + ".")
 			driver.find_element_by_css_selector("input[name='cmd[doStandardAuthentication]']").click()
 
@@ -136,13 +139,14 @@ def add_user(driver, username, password):
 
 	driver.find_element_by_css_selector("input[id='gender_m']").click()
 
-	set_element_value_by_css(driver, "input[name='login']", username)
-	set_element_value_by_css(driver, "input[name='passwd']", password)
-	set_element_value_by_css(driver, "input[name='passwd_retype']", password)
-
-	set_element_value_by_css(driver, "input[name='firstname']", username)
-	set_element_value_by_css(driver, "input[name='lastname']", "user")
-	set_element_value_by_css(driver, "input[name='email']", "ilias@localhost")
+	set_inputs(
+		driver,
+		login=username,
+		passwd=password,
+		passwd_retype=password,
+		firstname=username,
+		lastname="user",
+		email="ilias@localhost")
 
 	with wait_for_page_load(driver):
 		driver.find_element_by_css_selector("input[name='cmd[save]']").click()
