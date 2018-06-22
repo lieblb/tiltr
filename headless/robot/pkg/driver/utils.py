@@ -77,6 +77,21 @@ def wait_for_css(driver, css, timeout=30):
 				raise
 
 
+def wait_for_css_visible(driver, css, timeout=30):
+	retries = 0
+
+	while True:
+		try:
+			WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, css)))
+			break
+		except (WebDriverException, SessionNotCreatedException):
+			# sporadically we get: "selenium.common.exceptions.WebDriverException:
+			# Message: Failed to decode response from marionette" for some reason
+			retries += 1
+			if retries >= 5:
+				raise
+
+
 def set_element_value(driver, field, value):
 	driver.execute_script("arguments[0].setAttribute('value', arguments[1])", field, value)
 

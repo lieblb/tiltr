@@ -36,7 +36,11 @@ import time
 import datetime
 import uuid
 
+from collections import defaultdict
+from contextlib import contextmanager
+
 monitor_mutex = Lock()
+
 
 def take_exam(args):
 	asyncio.set_event_loop(asyncio.new_event_loop())
@@ -96,6 +100,57 @@ def take_exam(args):
 	return Result(from_json=result_json)
 
 
+class MasterContext:
+	def __init__(self, batch):
+		self.batch = batch
+		self.driver = None
+		self.test_driver = None
+		self.screenshot_url = None
+
+	def report(self, message):
+		try:
+			url = self.driver.current_url
+			if url != self.screenshot_url:
+				self.batch.screenshot = self.driver.get_screenshot_as_base64()
+				self.screenshot_url = url
+		except:
+			self.batch.report("master", "failed to create screenshot.")
+
+		self.batch.report("master", message)
+
+
+@contextmanager
+def in_master(batch):
+	context = MasterContext(batch)
+
+	# moz:webdriverClick needed for file uploads to work.
+	capabilities = {"moz:webdriverClick": False}
+
+	batch.report("master", "connecting to client browser...")
+	with Browser(headless=True, capabilities=capabilities, wait_time=batch.wait_time) as browser:
+		context.driver = browser.driver
+
+		test_driver = TestDriver(browser.driver, batch.test, context.report)
+		context.test_driver = test_driver
+
+		with Login(browser.driver, context.report, "root", "odysseus"):
+			yield context
+
+
+def remove_trailing_zeros(s):
+	parts = s.split(".")
+	if len(parts) == 2 and all(x == "0" for x in parts[1]):
+		# e.g. 2.00 -> 2
+		return parts[0]
+	elif len(parts) == 2 and s[-1] == "0":
+		# e.g. 2.10 -> 2.1
+		while s[-1] == "0":
+			s = s[:-1]
+		return s
+	else:
+		return s
+
+
 class Run:
 	def __init__(self, batch):
 		self.success = "FAIL"
@@ -103,10 +158,9 @@ class Run:
 		self.xls = b""
 		self.performance_data = []
 		self.users = []
-		self.protocols = dict(header=[], prolog=[], epilog=[], result=[], readjustment=[])
+		self.protocols = defaultdict(list)
 
-		self.report = batch.report
-
+		self.batch = batch
 		self.machines = batch.machines
 		self.workarounds = batch.workarounds
 		self.batch_id = batch.batch_id
@@ -121,37 +175,34 @@ class Run:
 		return False
 
 	def _make_protocol(self, users):
+		sections = ["header", "result", "workarounds", "settings", "readjustment", "log"]
+		sections.extend(user.get_username() for user in self.users)
+
 		parts = list()
 
-		parts.extend(self.protocols.get("header", []))
-		parts.extend(self.protocols.get("result", []))
-		parts.append("")
-		parts.extend(self.protocols.get("prolog", []))
-		parts.append("")
-
-		for user in users:
-			parts.append("-" * 80)
-			parts.append("protocol for user %s:" % user.get_username())
-			parts.extend(self.protocols.get(user.get_username(), []))
-			parts.append("-" * 80)
-			parts.append("")
-
-		parts.append("")
-		parts.extend(self.protocols.get("readjustment", []))
+		for section in sections:
+			part = self.protocols[section]
+			if part:
+				parts.append("-" * 80)
+				parts.append(section)
+				parts.append("-" * 80)
+				parts.append("")
+				parts.extend(part)
+				parts.append("")
 
 		return "\n".join(parts)
 
-	def _check_results(self, users, test_driver, workbook, all_recorded_results, report_master):
+	def _check_results(self, index, master, workbook, all_recorded_results):
 		all_assertions_ok = True
 
-		gui_scores = test_driver.get_gui_scores([user.get_username() for user in users])
+		gui_scores = master.test_driver.get_gui_scores([user.get_username() for user in self.users])
 
-		for user, recorded_result in zip(users, all_recorded_results):
-			report_master("checking results for user %s." % user.get_username())
+		for user, recorded_result in zip(self.users, all_recorded_results):
+			master.report("checking results for user %s." % user.get_username())
 
 			# fetch and check results.
 			ilias_result = workbook_to_result(
-				workbook, user.get_username(), report_master)
+				workbook, user.get_username(), master.report)
 
 			# check score via gui participants tab as well.
 			ilias_result.add(("exam", "score", "gui"), gui_scores[user.get_username()])
@@ -160,121 +211,125 @@ class Run:
 				if message:
 					self.protocols[user.get_username()].append(message)
 
-			self.protocols[user.get_username()].extend(["", "results:"])
+			self.protocols[user.get_username()].extend(["", "- results for evaluation %d:" % index])
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				all_assertions_ok = False
 
 		return all_assertions_ok
 
-	def _check_readjustment(self, driver, test_driver, questions, all_recorded_results, report_master):
+	def _check_readjustment(self, index, master, all_recorded_results):
 		protocol = self.protocols["readjustment"]
 
 		def report(s):
 			protocol.append(s)
 
+		if protocol:
+			report("")
+		report("-- readjustment #%d" % (index + 1))
+
 		index = 0
 		retries = 0
 
 		while True:
-			with wait_for_page_load(driver):
-				test_driver.goto_scoring_adjustment()
+			with wait_for_page_load(master.driver):
+				master.test_driver.goto_scoring_adjustment()
 
 			links = []
-			for a in driver.find_element_by_name("questionbrowser").find_elements_by_css_selector("table a"):
+			for a in master.driver.find_element_by_name("questionbrowser").find_elements_by_css_selector("table a"):
 				question_title = a.text.strip()
-				if question_title in questions:
-					links.append((a, questions[question_title]))
+				if question_title in self.questions:
+					links.append((a, self.questions[question_title]))
 
 			if index >= len(links):
 				break
 
 			link, question = links[index]
-			with wait_for_page_load(driver):
+			with wait_for_page_load(master.driver):
 				link.click()
 
-			report_master('readjusting scores for question "%s"' % question.title)
+			master.report('readjusting scores for question "%s"' % question.title)
 
 			# close stats window.
-			driver.execute_script("""
+			master.driver.execute_script("""
 			document.getElementsByClassName("ilOverlay")[0].style.display = "none";
 			""")
 
 			try:
-				question.readjust_scores(driver, report)
+				question.readjust_scores(master.driver, report)
 
-				report_master("trying to save.")
-				with wait_for_page_load(driver):
-					driver.find_element_by_name("cmd[savescoringfortest]").click()
+				master.report("trying to save.")
+				with wait_for_page_load(master.driver):
+					master.driver.find_element_by_name("cmd[savescoringfortest]").click()
 			except TimeoutException:
 				retries += 1
 				if retries >= 1:
 					raise Exception("failed to readjust scores. giving up.")
 				else:
-					report_master("readjustment failed, retrying.")
+					master.report("readjustment failed, retrying.")
 				continue
 
 			index += 1
 			retries = 0
 
+		report("")
+
 		# recompute user score's for all questions.
-		for question_title, question in questions.items():
-			answers = dict()
-			for result in all_recorded_results:
+		for question_title, question in self.questions.items():
+			for user, result in zip(self.users, all_recorded_results):
+				answers = dict()
 				for key, value in result.properties.items():
 					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
 						dimension = key[3]
 						answers[dimension] = value
 				score = question.compute_score(answers)
+				score = remove_trailing_zeros(str(score))
 				result.update(("question", question_title, "score"), score)
+				report("recomputed score for %s / %s as %s based on answer %s" % (
+					user.get_username(), question_title, score, json.dumps(answers)))
 
 		# recompute total scores.
 		for result in all_recorded_results:
 			score = Decimal(0)
 			for key, value in result.properties.items():
 				if key[0] == "question" and key[2] == "score":
-					score += value
+					score += Decimal(value)
 			result.update(("exam", "score", "total"), score)
 			result.update(("exam", "score", "gui"), score)
 
-	def prepare(self, driver, test_driver, report_master):
-		report_master("running with workaround settings:")
-		self.workarounds.print_status(report_master)
+	def prepare(self, master):
+		master.report("running with workaround settings:")
+		self.workarounds.print_status(master.report)
 
 		header = self.protocols["header"]
 		header.append("Tested on ILIAS %s." % self.ilias_version)
 		header.append('Using test "%s".' % self.test.get_title())
 		header.append("")
 
-		prolog = self.protocols["header"]
-		prolog.append("-" * 80)
-		prolog.append("Workarounds:")
-		self.workarounds.print_status(prolog.append)
+		self.workarounds.print_status(self.protocols["workarounds"].append)
+		self.protocols["settings"].extend(
+			verify_admin_settings(master.driver, self.workarounds, master.report))
 
-		prolog.append("-" * 80)
-		prolog.append("ILIAS Settings:")
-		prolog.extend(verify_admin_settings(driver, self.workarounds, report_master))
-
-		report_master("creating users.")
+		master.report("creating users.")
 		# create users for test.
 		for i in range(len(self.machines)):
 			user = TemporaryUser()
-			user.create(driver, report_master, i)
+			user.create(master.driver, master.report, i)
 			self.users.append(user)
-		report_master("done creating users.")
+		master.report("done creating users.")
 
 		# print('switching to test "%s".' % test.get_title())
 		# goto test.
-		if not test_driver.goto():
+		if not master.test_driver.goto():
 			# if test does not exist, add it first.
-			test_driver.import_test()
+			master.test_driver.import_test()
 		else:
-			test_driver.make_online()
-			test_driver.delete_all_participants()
+			master.test_driver.make_online()
+			master.test_driver.delete_all_participants()
 
 		# grab question definitions from UI.
-		self.questions = test_driver.get_question_definitions()
+		self.questions = master.test_driver.get_question_definitions()
 
-	def run_exams(self, report_master):
+	def run_exams(self):
 		# now run exams.
 		take_exam_args = []
 		for i, machine, user in zip(range(len(self.users)), self.machines.values(), self.users):
@@ -294,22 +349,23 @@ class Run:
 
 		pool = ThreadPool(len(self.users))
 		try:
-			self.all_recorded_results = pool.map(take_exam, take_exam_args)
+			all_recorded_results = pool.map(take_exam, take_exam_args)
 			pool.close()
 			pool.join()
+			return all_recorded_results
 		except:
 			traceback.print_exc()
-			report_master("one of the machines failed: %s." % traceback.format_exc())
+			self.report("master", "one of the machines failed: %s." % traceback.format_exc())
 			raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
-	def analyze(self, driver, test_driver, report_master):
-		for user, recorded_result in zip(self.users, self.all_recorded_results):
+	def analyze(self, master, all_recorded_results):
+		for user, recorded_result in zip(self.users, all_recorded_results):
 			self.protocols[user.get_username()] = recorded_result.protocol
 
-		for recorded_result in self.all_recorded_results:
+		for recorded_result in all_recorded_results:
 			self.performance_data.extend(recorded_result.performance)
 
-		if self._had_webdriver_errors(self.all_recorded_results):
+		if self._had_webdriver_errors(all_recorded_results):
 			# there were webdriver problems during the test (e.g. we could not control Firefox
 			# properly), which means this result is not a valid test. do not mark this as a FAIL.
 			self.success = "WEBDRIVER_CRASHED"
@@ -319,18 +375,18 @@ class Run:
 		all_assertions_ok = False
 
 		for i in range(num_readjustments + 1):
-			xls, workbook = test_driver.fetch_exported_workbook(self.batch_id, self.workarounds)
+			xls, workbook = master.test_driver.fetch_exported_workbook(self.batch_id, self.workarounds)
 			if i == 0:
 				self.xls = xls
 
 			all_assertions_ok = self._check_results(
-				self.users, test_driver, workbook, self.all_recorded_results, report_master)
+				i, master, workbook, all_recorded_results)
 			if not all_assertions_ok:
 				break
 
 			if i < num_readjustments:
 				self._check_readjustment(
-					driver, test_driver, self.questions, self.all_recorded_results, report_master)
+					i, master, all_recorded_results)
 
 		if all_assertions_ok:
 			self.success = "OK"
@@ -344,9 +400,52 @@ class Run:
 				protocol=self._make_protocol(self.users), num_users=len(self.users))
 			db.put_performance_data(self.performance_data)
 
-	def close(self, driver, test_driver, report_master):
+	def cleanup(self, master):
 		for user in self.users:
-			user.destroy(driver, report_master)
+			user.destroy(master.driver, master.report)
+
+	def run(self):
+		try:
+			with in_master(self.batch) as master:
+				self.prepare(master)
+
+			all_recorded_results = self.run_exams()
+
+			with in_master(self.batch) as master:
+				self.analyze(master, all_recorded_results)
+
+		except WebDriverException:
+			traceback.print_exc()
+			self.report("master", "web driver exception received: %s." % traceback.format_exc())
+			self.add_to_protocol("result", "web driver error: %s" % traceback.format_exc())
+			self.success = "WEBDRIVER_CRASHED"
+
+		except:
+			traceback.print_exc()
+			self.report("master", "exception received: %s." % traceback.format_exc())
+			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
+
+		finally:
+			self.add_to_protocol("result", "done with status %s." % self.success)
+
+			try:
+				if self.users:
+					with in_master(self.batch) as master:
+						self.cleanup(master)
+			except:
+				self.report("master", "cleanup failed: %s." % traceback.format_exc())
+				traceback.print_exc()
+
+			try:
+				self.store()
+			except:
+				self.report("master", "error saving result to db: %s." % traceback.format_exc())
+			finally:
+				self.report("master", "finished with status %s." % self.success)
+
+	def report(self, origin, message):
+		self.add_to_protocol("log", "[%s] %s" % (origin, message))
+		self.batch.report(origin, message)
 
 
 class Batch(threading.Thread):
@@ -355,6 +454,8 @@ class Batch(threading.Thread):
 
 		self.sockets = []
 		self.buffered = []
+		self.print_mutex = Lock()
+
 		self.machines = machines
 		self.ilias_version = ilias_version
 
@@ -370,7 +471,6 @@ class Batch(threading.Thread):
 
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())
 		self._is_done = False
-		self.print_mutex = Lock()
 
 	def get_id(self):
 		return self.batch_id
@@ -382,29 +482,17 @@ class Batch(threading.Thread):
 		#profiler = cProfile.Profile()
 		#profiler.enable()
 
+		self.report("master", "connecting to ILIAS %s." % self.ilias_version)
+
 		try:
-			self.report("master", "connecting to ILIAS %s." % self.ilias_version)
-
-			# moz:webdriverClick needed for file uploads to work.
-			capabilities = {"moz:webdriverClick": False}
-
-			def run_in_master(f):
-				self.report("master", "connecting to client browser...")
-				with Browser(headless=True, capabilities=capabilities, wait_time=self.wait_time) as browser:
-					def report_master(message):
-						try:
-							self.screenshot = browser.driver.get_screenshot_as_base64()
-						except:
-							self.report("master", "failed to create screenshot.")
-
-						self.report("master", message)
-
-					test_driver = TestDriver(browser.driver, self.test, report_master)
-
-					with Login(browser.driver, report_master, "root", "odysseus"):
-						f(browser.driver, test_driver, report_master)
-
-			self._run_tests(run_in_master)
+			run = Run(self)
+			try:
+				run.run()
+			finally:
+				try:
+					self.report_done()
+				except:
+					print("failed to report done status %s." % run.success)
 
 		finally:
 			pass
@@ -415,16 +503,10 @@ class Batch(threading.Thread):
 	def get_screenshot_as_base64(self):
 		return self.screenshot
 
+	def is_done(self):
+		return self._is_done
+
 	def report(self, origin, message):
-		if message == "!screenshot":
-			return
-
-		if message == "!traceback":
-			try:
-				message = traceback.format_exc()
-			except:
-				message = "something bad happened. cannot produce a traceback."
-
 		self.print_mutex.acquire()
 		try:
 			print("[%s] %s" % (origin, message))
@@ -441,9 +523,6 @@ class Batch(threading.Thread):
 
 		self.buffered.append(encoded)
 		self.flush()
-
-	def is_done(self):
-		return self._is_done
 
 	def flush(self):
 		if self.sockets:
@@ -479,40 +558,3 @@ class Batch(threading.Thread):
 				socket.write_message(encoded)
 			except:
 				pass
-
-	def _run_tests(self, run_in_master):
-		run = Run(self)
-
-		self.report("master", "starting batch %s." % self.batch_id)
-		try:
-			run_in_master(run.prepare)
-			run.run_exams(lambda s: self.report("master", s))
-			run_in_master(run.analyze)
-
-		except WebDriverException:
-			traceback.print_exc()
-			self.report("master", "web driver exception received: %s." % traceback.format_exc())
-			run.add_to_protocol("result", "web driver error: %s" % traceback.format_exc())
-			run.success = "WEBDRIVER_CRASHED"
-
-		except:
-			traceback.print_exc()
-			self.report("master", "exception received: %s." % traceback.format_exc())
-			run.add_to_protocol("result", "error: %s" % traceback.format_exc())
-
-		finally:
-			run.add_to_protocol("result", "done with status %s." % run.success)
-
-			try:
-				run.store()
-			except:
-				self.report("master", "error saving result to db: %s." % traceback.format_exc())
-			finally:
-				self.report("master", "finished with status %s." % run.success)
-
-				try:
-					self.report_done()
-				except:
-					print("failed to report done status %s." % run.success)
-
-				run_in_master(run.close)

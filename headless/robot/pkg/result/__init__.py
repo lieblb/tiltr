@@ -112,8 +112,6 @@ class Result:
 		return dict((tuple(str(k) for k in key), value) for key, value in self.properties.items())
 
 	def check_against(self, other, report, workarounds):
-		report("assertions:")
-
 		all_ok = True
 
 		self_properties = self.get_normalized_properties()

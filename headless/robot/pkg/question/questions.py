@@ -326,8 +326,10 @@ class SingleChoiceQuestion:
 		for key, score in list(choices.items()):
 			new_score = readjust_score(score)
 			choices[key] = new_score
-			report('readjusted score for "%s" from %s to %s.' % (self.title, score, new_score))
+			report('readjusted score for "%s / %s" from %s to %s.' % (self.title, key, score, new_score))
+
 		self._set_ui(driver, choices)
+		self.choices = choices
 
 	def compute_score(self, answers):
 		score = Decimal(0)
@@ -413,6 +415,12 @@ class KPrimQuestion:
 				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
 	def compute_score(self, answers):
+		indexed_answers = dict()
+		for name, value in answers.items():
+			indexed_answers[self.names.index(name)] = value
+		return self.compute_score_by_indices(indexed_answers)
+
+	def compute_score_by_indices(self, answers):
 		if not self.halfpoints:
 			s = self.score / Decimal(4)
 			score = Decimal(0)
@@ -434,7 +442,7 @@ class KPrimQuestion:
 
 	def get_random_answer(self, context):
 		answers = [random.random() < 0.5 for _ in range(4)]
-		return answers, self.compute_score(answers)
+		return answers, self.compute_score_by_indices(answers)
 
 	def readjust_scores(self, driver, report):
 		pass

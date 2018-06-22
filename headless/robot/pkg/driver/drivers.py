@@ -25,7 +25,7 @@ from selenium.webdriver.common.by import By
 
 
 from .utils import wait_for_page_load, http_get_parameters, set_inputs,\
-	wait_for_css, set_element_value_by_css, set_element_value, is_driver_alive
+	wait_for_css, wait_for_css_visible, set_element_value_by_css, set_element_value, is_driver_alive
 
 from ..question import *
 from ..result import *
@@ -74,9 +74,12 @@ class Login:
 		if change_password:
 			self.report("changing password.")
 			with wait_for_page_load(self.driver):
-				set_element_value_by_css(driver, "input[name='current_password']", self.password)
-				set_element_value_by_css(driver, "input[name='new_password']", self.password + "_")
-				set_element_value_by_css(driver, "input[name='new_password_retype']", self.password + "_")
+				set_inputs(
+					driver,
+					current_password=self.password,
+					new_password=self.password + "_",
+					new_password_retype=self.password + "_"
+				)
 				driver.find_element_by_css_selector("input[name='cmd[savePassword]']").click()
 
 	def __exit__(self, *args):
@@ -153,20 +156,26 @@ def add_user(driver, username, password):
 
 
 def delete_user(driver, username):
-	set_element_value_by_css(driver, "input[name='query']", username)
+	apply_filter = "input[name='cmd[applyFilter]']"
 
-	driver.find_element_by_css_selector("input[name='cmd[applyFilter]']").click()
+	driver.find_element_by_css_selector(".ilTableFilterActivator")
+	wait_for_css_visible(driver, apply_filter)
+
+	set_element_value_by_css(driver, "input[name='query']", username)
+	driver.find_element_by_css_selector(apply_filter).click()
 
 	for tr in driver.find_elements_by_css_selector("table tr"):
 		for a in tr.find_elements_by_css_selector("td a"):
 			if a.text.strip() == username:
-				for checkbox in tr.find_element_by_css_selector("input[type='checkbox']"):
+				for checkbox in tr.find_elements_by_css_selector("input[type='checkbox']"):
 					checkbox.click()
 
-	Select(driver.find_elements_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
-	driver.find_elements_by_css_selector('input[name="select_cmd"]').click()
+	Select(driver.find_element_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
+	with wait_for_page_load(driver):
+		driver.find_element_by_css_selector('input[name="select_cmd"]').click()
 
-	driver.find_element_by_name('cmd[confirmdelete]').click()
+	with wait_for_page_load(driver):
+		driver.find_element_by_name('cmd[confirmdelete]').click()
 
 
 def verify_admin_setting(name, value, expected, log):
@@ -255,9 +264,9 @@ class TemporaryUser:
 			report("deleting user %s." % self.username)
 			goto_user_administration(driver)
 			delete_user(driver, self.username)
-		except Exception as e:
+		except:
 			report("deletion of user failed.")
-			report("!traceback")
+			report(traceback.format_exc())
 
 	def get_username(self):
 		return self.username
