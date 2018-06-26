@@ -9,6 +9,7 @@ import json
 import time
 from enum import Enum
 from decimal import *
+from ..question.coverage import Coverage
 
 from .database import DB
 
@@ -60,12 +61,14 @@ class Result:
 			self.protocol = data["protocol"]
 			self.performance = data["performance"]
 			self.errors = data["errors"]
+			self.coverage = Coverage(from_dict=data["coverage"])
 		else:
 			self.origin = kwargs["origin"]
 			self.properties = dict()
 			self.protocol = []
 			self.performance = []
 			self.errors = dict()
+			self.coverage = Coverage()
 
 	def to_json(self):
 		return json.dumps(dict(
@@ -73,7 +76,8 @@ class Result:
 			properties=list(self.properties.items()),
 			protocol=self.protocol,
 			performance=self.performance,
-			errors=self.errors))
+			errors=self.errors,
+			coverage=self.coverage.as_dict()))
 
 	def get_origin(self):
 		return self.origin
@@ -102,11 +106,14 @@ class Result:
 	def get(self, key):
 		return self.properties.get(key, None)
 
-	def set_protocol(self, protocol):
+	def attach_protocol(self, protocol):
 		self.protocol = protocol
 
-	def set_performance_measurements(self, performance):
+	def attach_performance_measurements(self, performance):
 		self.performance = performance
+
+	def attach_coverage(self, coverage):
+		self.coverage = coverage
 
 	def get_normalized_properties(self):
 		return dict((tuple(str(k) for k in key), value) for key, value in self.properties.items())

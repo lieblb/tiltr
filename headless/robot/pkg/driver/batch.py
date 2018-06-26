@@ -19,6 +19,7 @@ from .commands import TakeExamCommand
 from .drivers import Login, TemporaryUser, TestDriver, Test, verify_admin_settings
 from .utils import wait_for_page_load
 from .context import RandomContext
+from ..question.coverage import Coverage
 
 from ..question import *  # for pickling
 from ..workarounds import Workarounds  # for pickling
@@ -102,8 +103,9 @@ def take_exam(args):
 
 
 class MasterContext:
-	def __init__(self, batch):
+	def __init__(self, batch, protocol):
 		self.batch = batch
+		self.protocol = protocol
 		self.driver = None
 		self.test_driver = None
 		self.screenshot_url = None
@@ -118,11 +120,12 @@ class MasterContext:
 			self.batch.report("master", "failed to create screenshot.")
 
 		self.batch.report("master", message)
+		self.protocol(message)
 
 
 @contextmanager
-def in_master(batch):
-	context = MasterContext(batch)
+def in_master(batch, protocol):
+	context = MasterContext(batch, protocol)
 
 	# moz:webdriverClick needed for file uploads to work.
 	capabilities = {"moz:webdriverClick": False}
@@ -131,7 +134,7 @@ def in_master(batch):
 	with Browser(headless=True, capabilities=capabilities, wait_time=batch.wait_time) as browser:
 		context.driver = browser.driver
 
-		test_driver = TestDriver(browser.driver, batch.test, context.report)
+		test_driver = TestDriver(browser.driver, batch.test, batch.workarounds, context.report)
 		context.test_driver = test_driver
 
 		with Login(browser.driver, context.report, "root", "odysseus"):
@@ -176,7 +179,7 @@ class Run:
 		return False
 
 	def _make_protocol(self, users):
-		sections = ["header", "result", "workarounds", "settings", "readjustment", "log"]
+		sections = ["header", "result", "workarounds", "settings", "master", "readjustment", "log"]
 		sections.extend(user.get_username() for user in self.users)
 
 		parts = list()
@@ -273,7 +276,7 @@ class Run:
 			retries = 0
 
 		report("")
-		context = RandomContext(self.workarounds)
+		context = RandomContext(self.questions, self.workarounds)
 
 		# recompute user score's for all questions.
 		for question_title, question in self.questions.items():
@@ -326,8 +329,8 @@ class Run:
 			# if test does not exist, add it first.
 			master.test_driver.import_test()
 		else:
-			master.test_driver.make_online()
 			master.test_driver.delete_all_participants()
+		master.test_driver.configure()
 
 		# grab question definitions from UI.
 		self.questions = master.test_driver.get_question_definitions()
@@ -362,6 +365,11 @@ class Run:
 			raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
 	def analyze(self, master, all_recorded_results):
+		coverage = Coverage()
+		for recorded_result in all_recorded_results:
+			coverage.extend(recorded_result.coverage)
+		self.add_to_protocol("result", "coverage estimated at %d%%." % coverage.get_percentage())
+
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			self.protocols[user.get_username()] = recorded_result.protocol
 
@@ -374,7 +382,7 @@ class Run:
 			self.success = "WEBDRIVER_CRASHED"
 			raise Exception("aborted due to webdriver errors")
 
-		num_readjustments = 0
+		num_readjustments = 1
 		all_assertions_ok = False
 
 		for i in range(num_readjustments + 1):
@@ -397,6 +405,9 @@ class Run:
 	def add_to_protocol(self, type, text):
 		self.protocols[type].append(text)
 
+	def protocol_master(self, text):
+		self.add_to_protocol("master", text)
+
 	def store(self):
 		with open_results() as db:
 			db.put(batch_id=self.batch_id, success=self.success, xls=self.xls,
@@ -409,12 +420,12 @@ class Run:
 
 	def run(self):
 		try:
-			with in_master(self.batch) as master:
+			with in_master(self.batch, self.protocol_master) as master:
 				self.prepare(master)
 
 			all_recorded_results = self.run_exams()
 
-			with in_master(self.batch) as master:
+			with in_master(self.batch, self.protocol_master) as master:
 				self.analyze(master, all_recorded_results)
 
 		except WebDriverException:
@@ -433,7 +444,7 @@ class Run:
 
 			try:
 				if self.users:
-					with in_master(self.batch) as master:
+					with in_master(self.batch, self.protocol_master) as master:
 						self.cleanup(master)
 			except:
 				self.report("master", "cleanup failed: %s." % traceback.format_exc())

@@ -326,6 +326,26 @@ class ExamDriver:
 
 		self.protocol.append((time.time(), "test", "finished test."))
 
+	def simulate_crash(self, wait):
+		sequence_id = self.get_sequence_id()
+		answer = self.answers[sequence_id]
+
+		# simulate crash or loss of session.
+
+		t0 = time.time()
+		t1 = t0 + wait
+		while time.time() < t1:
+			time.sleep(0.5)
+			# keep Selenium alive, otherwise we'll get a closed pipe exception.
+			is_driver_alive(self.driver)
+
+		self.report('edited question "%s" for %.1f seconds, now crashing.' % (
+			answer.question.title, time.time() - t0))
+		#  autosave should have kicked in by now.
+
+		with wait_for_page_load(self.driver):
+			self.driver.get(self.driver.current_url)
+
 	def goto_first_question(self):
 		while True:
 			try:
@@ -442,16 +462,18 @@ class ExamDriver:
 		sequence_id = self.get_sequence_id()
 		if sequence_id not in self.answers:
 			self.create_answer()
-		self.answers[sequence_id].randomize(self.context)
-		# self.answers[sequence_id].verify()
+		answer = self.answers[sequence_id]
+		self.report('answering question "%s".' % answer.question.title)
+		answer.randomize(self.context)
 
 	def verify_answer(self):
 		sequence_id = self.get_sequence_id()
 		if sequence_id not in self.answers:
 			raise Exception("cannot verify unknown answer " + str(sequence_id))
 
-		self.report("verifying question " + str(sequence_id) + ".")
-		self.answers[sequence_id].verify(self.context)
+		answer = self.answers[sequence_id]
+		self.report('verifying question "%s".' % answer.question.title)
+		answer.verify(self.context)
 
 	def copy_protocol(self, result):
 		protocol = self.protocol[:]
@@ -470,7 +492,7 @@ class ExamDriver:
 				title,
 				what) for t, title, what in protocol]
 
-		result.set_protocol(protocol_lines)
+		result.attach_protocol(protocol_lines)
 
 	def get_expected_result(self):
 		def clip_score(score):
@@ -502,7 +524,7 @@ class ExamDriver:
 		result.add(("exam", "score", "gui"), format_score(expected_total_score))
 
 		self.copy_protocol(result)
-		result.set_performance_measurements(self.dts)
+		result.attach_performance_measurements(self.dts)
 		return result
 
 
@@ -535,11 +557,13 @@ class Test:
 
 
 class TestDriver():
-	def __init__(self, driver, test, report):
+	def __init__(self, driver, test, workarounds, report):
 		self.driver = driver
 		self.test = test
+		self.workarounds = workarounds
 		self.report = report
 		self.cached_link = None
+		self.autosave_time = 5
 
 	def import_test(self):
 		driver = self.driver
@@ -569,9 +593,11 @@ class TestDriver():
 		with wait_for_page_load(driver):
 			driver.find_element_by_name("cmd[importVerifiedFile]").click()
 
-		self.make_online()
-
 		self.report("done importing test.")
+
+	def configure(self):
+		self.make_online()
+		self.configure_autosave()
 
 	def make_online(self):
 		# now activate the Test by setting it online.
@@ -584,6 +610,24 @@ class TestDriver():
 			self.driver.find_element_by_name("cmd[saveForm]").click()
 
 		self.report("setting test online.")
+
+	def configure_autosave(self):
+		self.goto_settings()
+
+		autosave = self.driver.find_element_by_id("autosave")
+		if self.workarounds.enable_autosave:
+			if not autosave.is_selected():
+				self.driver.execute_script('document.getElementById("autosave").click()')
+			wait_for_css_visible(self.driver, "#autosave_ival")
+			set_element_value_by_css(self.driver, "#autosave_ival", self.autosave_time)
+			self.report("enabling autosave every %.1fs." % self.autosave_time)
+		else:
+			if autosave.is_selected():
+				self.driver.execute_script('document.getElementById("autosave").click()')
+			self.report("disabling autosave.")
+
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_name("cmd[saveForm]").click()
 
 	def goto_participants(self):
 		assert self.goto()

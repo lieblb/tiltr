@@ -8,6 +8,7 @@
 from collections import namedtuple
 import re
 import cgi
+import json
 import html
 from selenium.common.exceptions import NoSuchElementException
 
@@ -58,6 +59,7 @@ class SingleChoiceAnswer:
 			else:
 				expected = False
 			self.protocol.verify(c.label, expected, c.checked)
+		context.coverage.case_occurred(self.question, "verify", self.current_answer)
 
 	def encode(self, context):
 		answers = dict()
@@ -105,20 +107,25 @@ class MultipleChoiceAnswer:
 				checked=checkbox.is_selected()))
 		return choices
 
-	def verify(self, context):
-		for c in self._parse_ui():
-			self.protocol.verify(c.label, self.current_answers[c.label], c.checked)
-
-	def encode(self, context):
+	def _get_binary_answers(self):
 		answers = dict()
 		for choice in self.question.choices.keys():
 			if self.current_answers[choice]:
 				answers[choice] = 1
 			else:
 				answers[choice] = 0
+		return answers
+
+	def verify(self, context):
+		for c in self._parse_ui():
+			self.protocol.verify(c.label, self.current_answers[c.label], c.checked)
+
+		context.coverage.case_occurred(self.question, "verify", json.dumps(self._get_binary_answers()))
+
+	def encode(self, context):
 		return dict(
 			title=self.question.title,
-			answers=answers,
+			answers=self._get_binary_answers(),
 			protocol=self.protocol.encode())
 
 
@@ -187,6 +194,10 @@ def implicit_text_to_number(context, value):
 	elif value.endswith(".0"):
 		# e.g. 5.0 -> 5
 		value = value[:-2]
+
+	while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
+		# e.g. 0.637010 -> 0.63701
+		value = value[:-1]
 
 	if len(value) >= 2 and value[0] == '+' and value.count('.') <= 1 and all(x.isdigit() for x in value[1:].split('.')):
 		# e.g. +9 -> 9

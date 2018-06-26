@@ -7,9 +7,15 @@
 
 import random
 import re
+from ..question.coverage import Coverage
+
 
 def random_number(n):
-	if random.random() < 0.5:
+	if n == 0:
+		return ""
+	elif n == 1:
+		return str(random.randint(0, 9))
+	elif random.random() < 0.5:
 		if random.random() < 0.5:
 			return "." + str(random.randint(0, (10 ** (n - 1)) - 1))
 		else:
@@ -53,7 +59,7 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 
 
 class TestContext:
-	def __init__(self, workarounds):
+	def __init__(self, questions, workarounds):
 		self.workarounds = workarounds
 		self.cloze_random_chars = get_random_chars(
 			allow_newlines=False,
@@ -63,6 +69,7 @@ class TestContext:
 			allow_newlines=True,
 			allow_dollar=True,
 			allow_clamps=True)
+		self.coverage = Coverage(questions, self)
 
 	def strip_whitespace(self, value):
 		return self.workarounds.strip_whitespace(value)

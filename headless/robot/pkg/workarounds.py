@@ -53,6 +53,10 @@ class Workarounds:
 			(
 				"identical_scoring_ignores_comparator",
 				"identical scoring option in cloze texts ignores comparation settings."
+			),
+			(
+				"enable_autosave",
+				"only test with enabled autosave, as simulated crashes will irretrievably lose data otherwise."
 			)
 		]
 

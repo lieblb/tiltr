@@ -7,6 +7,8 @@
 
 from collections import namedtuple
 import random
+import itertools
+import json
 from enum import Enum
 from decimal import *
 from collections import defaultdict
@@ -231,6 +233,9 @@ class ClozeQuestion():
 
 			self.gaps[gap_index] = gap
 
+	def initialize_coverage(self, coverage, context):
+		pass
+
 	def _get_normalized(self, s):
 		if self.comparator == ClozeComparator.case_sensitive:
 			return s
@@ -329,6 +334,11 @@ class SingleChoiceQuestion:
 		self.title = title
 		self.choices = self._get_ui(driver)
 
+	def initialize_coverage(self, coverage, context):
+		for choice in self.choices.keys():
+			coverage.add_case(self, "verify", choice)
+			coverage.add_case(self, "export", choice)
+
 	def get_random_answer(self, context):
 		choice = random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
@@ -380,6 +390,40 @@ class MultipleChoiceQuestion:
 			self.choices[choice.get_attribute("value")] = MultipleChoiceItem(
 				checked_score=Decimal(points.get_attribute("value")),
 				unchecked_score=Decimal(points_unchecked.get_attribute("value")))
+
+	def initialize_coverage(self, coverage, context):
+		if True:  # all cases
+			for combination in itertools.combinations_with_replacement((False, True), len(self.choices)):
+				if context.workarounds.disallow_empty_answers or any(combination):
+					solution = dict()
+					for checked, label in zip(combination, self.choices.keys()):
+						solution[label] = 1 if checked else 0
+					coverage.add_case(self, "verify", json.dumps(solution))
+					coverage.add_case(self, "export", json.dumps(solution))
+
+		else:  # only some border cases
+			best_solution = dict()
+			worst_solution = dict()
+			for label, choice in self.choices.items():
+				best_solution[label] = choice.checked_score > choice.unchecked_score
+				worst_solution[label] = not best_solution[label]
+
+			if context.workarounds.disallow_empty_answers or any(best_solution.values()):
+				coverage.add_case(self, "verify", best_solution)
+				coverage.add_case(self, "export", best_solution)
+
+			if context.workarounds.disallow_empty_answers or any(worst_solution.values()):
+				coverage.add_case(self, "verify", worst_solution)
+				coverage.add_case(self, "export", worst_solution)
+
+			for i in len(self.choices):
+				minimal_good_solution = dict()
+				for j, (label, choice) in enumerate(self.choices.items()):
+					pick = choice.checked_score > choice.unchecked_score
+					pick = pick if i == j else not pick
+					minimal_good_solution[label] = pick
+				coverage.add_case(self, "verify", minimal_good_solution)
+				coverage.add_case(self, "export", minimal_good_solution)
 
 	def get_random_answer(self, context):
 		answers = dict()
@@ -434,6 +478,9 @@ class KPrimQuestion:
 			self.names.append(driver.find_element_by_name(
 				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
+	def initialize_coverage(self, coverage, context):
+		pass
+
 	def compute_score(self, answers, context):
 		indexed_answers = dict()
 		for name, value in answers.items():
@@ -471,13 +518,24 @@ class KPrimQuestion:
 class LongTextQuestion:
 	def __init__(self, driver, title):
 		self.title = title
+		self.length = 20
 
 		if not driver.find_element_by_id("scoring_mode_non").is_selected():
 			raise Exception("only manual scoring is supported for tests with LongTextQuestion")
 
+	def initialize_coverage(self, coverage, context):
+		for c in context.long_text_random_chars:
+			coverage.add_case(self, "verify", "char", c)
+			coverage.add_case(self, "export", "char", c)
+		for i in range(self.length):
+			if i > 0 or not context.workarounds.disallow_empty_answers:
+				coverage.add_case(self, "verify", "len", i)
+				coverage.add_case(self, "export", "len", i)
+
 	def get_random_answer(self, context):
 		while True:
-			text = context.produce_text(20, context.long_text_random_chars)
+			n = random.randint(0, self.length)
+			text = context.produce_text(n, context.long_text_random_chars)
 
 			if not context.workarounds.disallow_empty_answers:
 				break
