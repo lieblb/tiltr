@@ -18,6 +18,7 @@ from ..result.workbook import workbook_to_result
 from .commands import TakeExamCommand
 from .drivers import Login, TemporaryUser, TestDriver, Test, verify_admin_settings
 from .utils import wait_for_page_load
+from .context import RandomContext
 
 from ..question import *  # for pickling
 from ..workarounds import Workarounds  # for pickling
@@ -272,6 +273,7 @@ class Run:
 			retries = 0
 
 		report("")
+		context = RandomContext(self.workarounds)
 
 		# recompute user score's for all questions.
 		for question_title, question in self.questions.items():
@@ -281,7 +283,7 @@ class Run:
 					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
 						dimension = key[3]
 						answers[dimension] = value
-				score = question.compute_score(answers)
+				score = question.compute_score(answers, context)
 				score = remove_trailing_zeros(str(score))
 				result.update(("question", question_title, "score"), score)
 				report("recomputed score for %s / %s as %s based on answer %s" % (
@@ -293,6 +295,7 @@ class Run:
 			for key, value in result.properties.items():
 				if key[0] == "question" and key[2] == "score":
 					score += Decimal(value)
+			score = remove_trailing_zeros(str(score))
 			result.update(("exam", "score", "total"), score)
 			result.update(("exam", "score", "gui"), score)
 

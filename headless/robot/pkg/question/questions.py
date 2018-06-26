@@ -197,7 +197,7 @@ class ClozeQuestion():
 		else:
 			fallback_length = int(fallback_length)
 
-		comparator = ClozeComparator(driver.find_element_by_css_selector(
+		self.comparator = ClozeComparator(driver.find_element_by_css_selector(
 			"#textgap_rating option[selected]").get_attribute("value"))
 
 		while True:
@@ -218,7 +218,7 @@ class ClozeQuestion():
 
 				if cloze_type == ClozeType.text:
 					gap = ClozeQuestionTextGap(
-						gap_index, options, comparator, parse_gap_size(driver, gap_index, fallback_length))
+						gap_index, options, self.comparator, parse_gap_size(driver, gap_index, fallback_length))
 				elif cloze_type == ClozeType.select:
 					gap = ClozeQuestionSelectGap(gap_index, options)
 
@@ -231,10 +231,16 @@ class ClozeQuestion():
 
 			self.gaps[gap_index] = gap
 
+	def _get_normalized(self, s):
+		if self.comparator == ClozeComparator.case_sensitive:
+			return s
+		else:
+			assert self.comparator == ClozeComparator.ignore_case
+			return s.casefold()
+
 	def get_random_answer(self, context):
 		while True:
 			answers = dict()
-			score = Decimal(0)
 
 			previous_answers = defaultdict(set)
 			previous_answers_prob = 0.1 if self.identical_scoring else 0.25
@@ -244,37 +250,51 @@ class ClozeQuestion():
 				previous = previous_answers[gap.get_type()]
 
 				if len(previous) > 0 and random.random() < previous_answers_prob:
-					# use some previous answer to test identical_scoring option
+					# use some previous answer to explicitly test identical_scoring
+					# option, though it's also tested through the case below.
 					choice = random.choice(list(previous))
-					if self.identical_scoring:
-						choice_score = gap.get_score(choice)
-					else:
-						choice_score = Decimal(0)
 				else:
 					choice, choice_score = gap.get_random_choice(context)
-					if (not self.identical_scoring) and choice in previous:
-						choice_score = Decimal(0)
 
 				previous.add(choice)
-
-				score += choice_score
 				answers[gap.index] = choice
 				all_empty = all_empty and len(choice) == 0
 
 			if all_empty and context.workarounds.disallow_empty_answers:
 				pass  # retry
 			else:
-				return answers, score
+				return answers, self.compute_score_by_indices(answers, context)
 
 	def readjust_scores(self, driver, report):
 		pass
 
-	def compute_score(self, answers):
+	def compute_score(self, answers, context):
+		gaps = dict()
+		for gap in self.gaps.values():
+			gaps[gap.get_export_name()] = gap.index
+
+		indexed_answers = dict()
+		for name, value in answers.items():
+			indexed_answers[gaps[name]] = value
+		return self.compute_score_by_indices(indexed_answers, context)
+
+	def compute_score_by_indices(self, answers, context):
 		score = Decimal(0)
-		for gap_name, text in answers.items():
-			for gap in self.gaps.values():
-				if gap_name == gap.get_export_name():
-					score += gap.get_score(text)
+		given_answers = set()
+
+		for index, text in answers.items():
+			if not self.identical_scoring:
+				normalized = text
+
+				if not context.workarounds.identical_scoring_ignores_comparator:
+					if self.comparator == ClozeComparator.ignore_case:
+						normalized = text.casefold()
+				if normalized in given_answers:
+					continue
+				given_answers.add(normalized)
+
+			score += self.gaps[index].get_score(text)
+
 		return score
 
 
@@ -331,7 +351,7 @@ class SingleChoiceQuestion:
 		self._set_ui(driver, choices)
 		self.choices = choices
 
-	def compute_score(self, answers):
+	def compute_score(self, answers, context):
 		score = Decimal(0)
 		for label, checked in answers.items():
 			if checked:
@@ -376,12 +396,12 @@ class MultipleChoiceQuestion:
 			if label not in answers:
 				answers[label] = random.random() < 0.5
 
-		return answers, self.compute_score(answers)
+		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, report):
 		pass
 
-	def compute_score(self, answers):
+	def compute_score(self, answers, context):
 		score = Decimal(0)
 		for label, checked in answers.items():
 			item = self.choices[label]
@@ -414,7 +434,7 @@ class KPrimQuestion:
 			self.names.append(driver.find_element_by_name(
 				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
-	def compute_score(self, answers):
+	def compute_score(self, answers, context):
 		indexed_answers = dict()
 		for name, value in answers.items():
 			indexed_answers[self.names.index(name)] = value
@@ -466,10 +486,10 @@ class LongTextQuestion:
 			# a None score in the XLS
 			if len(text.strip()) >= 1:
 				break
-		return text, self.compute_score(text)
+		return text, self.compute_score(text, context)
 
 	def readjust_scores(self, driver, report):
 		pass
 
-	def compute_score(self, text):
+	def compute_score(self, text, context):
 		return Decimal(0)

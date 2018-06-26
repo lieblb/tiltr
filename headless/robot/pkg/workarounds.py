@@ -49,6 +49,10 @@ class Workarounds:
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1094
 				"no_plaintext_longtext",
 				"text in XLS export won't be plaintext due to TinyMCE escaping."
+			),
+			(
+				"identical_scoring_ignores_comparator",
+				"identical scoring option in cloze texts ignores comparation settings."
 			)
 		]
 
