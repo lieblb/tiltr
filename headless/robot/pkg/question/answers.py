@@ -188,7 +188,7 @@ def implicit_text_to_number(context, value):
 		# e.g. 5.0 -> 5
 		value = value[:-2]
 
-	if len(value) >= 2 and value[0] == '+' and value.count('.') <= 1 and all(x.isdigit() for x in value.split('.')):
+	if len(value) >= 2 and value[0] == '+' and value.count('.') <= 1 and all(x.isdigit() for x in value[1:].split('.')):
 		# e.g. +9 -> 9
 		value = value[1:]
 
