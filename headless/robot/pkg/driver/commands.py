@@ -18,6 +18,7 @@ from selenium.common.exceptions import WebDriverException
 from .drivers import Login, TestDriver, Test
 from ..result import Result, Origin, ErrorDomain
 from .context import RegressionContext, RandomContext
+from ..settings import Settings, Workarounds
 
 
 class TakeExamCommand:
@@ -26,10 +27,12 @@ class TakeExamCommand:
 			data = json.loads(from_json)
 			assert data["command"] == "take_exam"
 			self.questions = pickle.loads(base64.b64decode(data["questions"].encode("utf-8")))
-			self.workarounds = pickle.loads(base64.b64decode(data["workarounds"].encode("utf-8")))
+			self.settings = Settings(from_dict=data["settings"])
+			self.workarounds = Workarounds(from_dict=data["workarounds"])
 		else:
 			data = kwargs
 			self.questions = kwargs["questions"]
+			self.settings = kwargs["settings"]
 			self.workarounds = kwargs["workarounds"]
 
 		self.machine = data["machine"]
@@ -38,8 +41,6 @@ class TakeExamCommand:
 		self.password = data["password"]
 		self.test_id = data["test_id"]
 		self.wait_time = data["wait_time"]
-
-		self.crash_percentage = 1
 
 	def to_json(self):
 		return json.dumps(dict(
@@ -50,12 +51,13 @@ class TakeExamCommand:
 			password=self.password,
 			test_id=self.test_id,
 			questions=base64.b64encode(pickle.dumps(self.questions, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
-			workarounds=base64.b64encode(pickle.dumps(self.workarounds, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
+			settings=self.settings.to_dict(),
+			workarounds=self.workarounds.to_dict(),
 			wait_time=self.wait_time))
 
 	def _simulate_crash(self, exam_driver):
-		if random.random() * 100 < self.crash_percentage:
-			exam_driver.simulate_crash(10.0)
+		if random.random() * 100 < self.settings.crash_frequency:
+			exam_driver.simulate_crash(self.settings.autosave_duration + self.settings.autosave_tolerance)
 
 	def _pass1(self, exam_driver, report):
 		report("entering pass 1.")

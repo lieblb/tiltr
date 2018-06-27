@@ -6,12 +6,53 @@
 #
 
 import json
-import re
 
 
-class Workarounds:
-	def __init__(self, from_json=None):
-		self.options = [
+class ValueBag:
+	def __init__(self, options, from_dict=None):
+		self.options = options
+
+		self.keys = [option[0] for option in self.options]
+
+		if from_dict:
+			for key in self.keys:
+				setattr(self, key, from_dict[key])
+		else:
+			for option in self.options:
+				setattr(self, option[0], option[2] if len(option) > 2 else True)
+
+	def get_catalog(self):
+		return [dict(key=o[0], description=o[1], value=getattr(self, o[0])) for o in self.options]
+
+	def to_dict(self):
+		return dict((o[0], getattr(self, o[0])) for o in self.options)
+
+	def print_status(self, report):
+		for key in self.keys:
+			report("  %s = %s" % (key, getattr(self, key)))
+
+
+class Settings(ValueBag):
+	def __init__(self, **kwargs):
+		super().__init__([
+			("crash_frequency",
+			 "frequency of simulated crashes as percentage of question navigations.",
+			 1
+			),
+			("autosave_duration",
+			 "configured autosave time.",
+			 5
+			),
+			("autosave_tolerance",
+			 "additional time to give autosave until crashing is considered safe.",
+			 10
+			)
+		], **kwargs)
+
+
+class Workarounds(ValueBag):
+	def __init__(self, **kwargs):
+		super().__init__([
 			(
 				"sloppy_whitespace",
 				"whitespace is not always correctly preserved when saving answers."
@@ -58,23 +99,8 @@ class Workarounds:
 				"enable_autosave",
 				"only test with enabled autosave, as simulated crashes will irretrievably lose data otherwise."
 			)
-		]
+		], **kwargs)
 
-		self.keys = [option[0] for option in self.options]
-
-		if from_json:
-			for key in self.keys:
-				setattr(self, key, from_json[key])
-		else:
-			for key in self.keys:
-				setattr(self, key, True)
-
-	def to_json(self):
-		return json.dumps([dict(key=o[0], description=o[1], value=getattr(self, o[0])) for o in self.options])
-
-	def print_status(self, report):
-		for key in self.keys:
-			report("  %s = %s" % (key, getattr(self, key)))
 
 	def strip_whitespace(self, value):
 		if isinstance(value, str):

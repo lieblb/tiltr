@@ -9,37 +9,10 @@ import json
 import time
 from enum import Enum
 from decimal import *
+from collections import defaultdict
+
 from ..question.coverage import Coverage
-
 from .database import DB
-
-
-def normalize_answer(value):
-	if isinstance(value, str):
-		value = value.replace("\n", "\\n")
-	return value
-
-
-class AnswerProtocol:
-	def __init__(self, title):
-		self.title = title
-		self.entries = []
-
-	def choose(self, key, value):
-		self.entries.append((time.time(), "answered '%s' with '%s'" % (key, normalize_answer(value))))
-
-	def verify(self, key, expected, actual):
-		if expected == actual:
-			self.entries.append(
-				(time.time(), "OK verified that '%s' is still '%s'" % (key, normalize_answer(expected))))
-		else:
-			err = "FAIL answer on '%s' was stored incorrectly: answer was '%s', but ILIAS stored '%s'" % (
-				key, normalize_answer(expected), normalize_answer(actual))
-			self.entries.append((time.time(), err))
-			raise Exception("answer mismatch during in-test verification: " + err)
-
-	def encode(self):
-		return self.entries
 
 
 class Origin(Enum):
@@ -117,6 +90,16 @@ class Result:
 
 	def get_normalized_properties(self):
 		return dict((tuple(str(k) for k in key), value) for key, value in self.properties.items())
+
+	def get_answers(self):
+		answers = defaultdict(dict)
+		for p, value in self.properties.items():
+			if p[0] == "question" and p[2] == "answer":
+				question_title = p[1]
+				dimension = p[3]
+				answers[question_title][dimension] = value
+		return answers
+
 
 	def check_against(self, other, report, workarounds):
 		all_ok = True

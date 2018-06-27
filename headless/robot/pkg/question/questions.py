@@ -236,6 +236,9 @@ class ClozeQuestion():
 	def initialize_coverage(self, coverage, context):
 		pass
 
+	def add_export_coverage(self, coverage, answers):
+		pass
+
 	def _get_normalized(self, s):
 		if self.comparator == ClozeComparator.case_sensitive:
 			return s
@@ -339,6 +342,11 @@ class SingleChoiceQuestion:
 			coverage.add_case(self, "verify", choice)
 			coverage.add_case(self, "export", choice)
 
+	def add_export_coverage(self, coverage, answers):
+		for choice, checked in answers.items():
+			if checked:
+				coverage.case_occurred(self, "export", choice)
+
 	def get_random_answer(self, context):
 		choice = random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
@@ -425,6 +433,9 @@ class MultipleChoiceQuestion:
 				coverage.add_case(self, "verify", minimal_good_solution)
 				coverage.add_case(self, "export", minimal_good_solution)
 
+	def add_export_coverage(self, coverage, answers):
+		coverage.case_occurred(self, "export", json.dumps(answers))
+
 	def get_random_answer(self, context):
 		answers = dict()
 
@@ -481,6 +492,9 @@ class KPrimQuestion:
 	def initialize_coverage(self, coverage, context):
 		pass
 
+	def add_export_coverage(self, coverage, answers):
+		pass
+
 	def compute_score(self, answers, context):
 		indexed_answers = dict()
 		for name, value in answers.items():
@@ -531,6 +545,12 @@ class LongTextQuestion:
 			if i > 0 or not context.workarounds.disallow_empty_answers:
 				coverage.add_case(self, "verify", "len", i)
 				coverage.add_case(self, "export", "len", i)
+
+	def add_export_coverage(self, coverage, answers):
+		for text in answers.values():
+			for c in text:
+				coverage.case_occurred(self, "export", "char", c)
+			coverage.case_occurred(self, "export", "len", len(text))
 
 	def get_random_answer(self, context):
 		while True:

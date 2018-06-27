@@ -22,7 +22,6 @@ from .context import RandomContext
 from ..question.coverage import Coverage
 
 from ..question import *  # for pickling
-from ..workarounds import Workarounds  # for pickling
 
 import selenium
 from selenium import webdriver
@@ -163,9 +162,11 @@ class Run:
 		self.performance_data = []
 		self.users = []
 		self.protocols = defaultdict(list)
+		self.questions = None
 
 		self.batch = batch
 		self.machines = batch.machines
+		self.settings = batch.settings
 		self.workarounds = batch.workarounds
 		self.batch_id = batch.batch_id
 		self.ilias_version = batch.ilias_version
@@ -196,7 +197,7 @@ class Run:
 
 		return "\n".join(parts)
 
-	def _check_results(self, index, master, workbook, all_recorded_results):
+	def _check_results(self, index, master, workbook, all_recorded_results, coverage):
 		all_assertions_ok = True
 
 		gui_scores = master.test_driver.get_gui_scores([user.get_username() for user in self.users])
@@ -218,6 +219,10 @@ class Run:
 			self.protocols[user.get_username()].extend(["", "- results for evaluation %d:" % index])
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				all_assertions_ok = False
+
+			for question_title, answers in ilias_result.get_answers().items():
+				question = self.questions[question_title]
+				question.add_export_coverage(coverage, answers)
 
 		return all_assertions_ok
 
@@ -350,6 +355,7 @@ class Run:
 						password=user.get_password(),
 						test_id=self.test.get_id(),
 						questions=self.questions,
+						settings=self.settings,
 						workarounds=self.workarounds,
 						wait_time=self.wait_time)))
 
@@ -368,7 +374,6 @@ class Run:
 		coverage = Coverage()
 		for recorded_result in all_recorded_results:
 			coverage.extend(recorded_result.coverage)
-		self.add_to_protocol("result", "coverage estimated at %d%%." % coverage.get_percentage())
 
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			self.protocols[user.get_username()] = recorded_result.protocol
@@ -391,13 +396,15 @@ class Run:
 				self.xls = xls
 
 			all_assertions_ok = self._check_results(
-				i, master, workbook, all_recorded_results)
+				i, master, workbook, all_recorded_results, coverage)
 			if not all_assertions_ok:
 				break
 
 			if i < num_readjustments:
 				self._check_readjustment(
 					i, master, all_recorded_results)
+
+		self.add_to_protocol("result", "coverage estimated at %d%%." % coverage.get_percentage())
 
 		if all_assertions_ok:
 			self.success = "OK"
@@ -463,7 +470,7 @@ class Run:
 
 
 class Batch(threading.Thread):
-	def __init__(self, machines, ilias_version, test_name, workarounds, wait_time):
+	def __init__(self, machines, ilias_version, test_name, settings, workarounds, wait_time):
 		threading.Thread.__init__(self)
 
 		self.sockets = []
@@ -474,6 +481,7 @@ class Batch(threading.Thread):
 		self.ilias_version = ilias_version
 
 		self.test_name = test_name
+		self.settings = settings
 		self.workarounds = workarounds
 		self.wait_time = wait_time
 

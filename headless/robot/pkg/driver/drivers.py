@@ -331,6 +331,7 @@ class ExamDriver:
 		answer = self.answers[sequence_id]
 
 		# simulate crash or loss of session.
+		answer.protocol.add("starting wait for simulated crash.")
 
 		t0 = time.time()
 		t1 = t0 + wait
@@ -342,6 +343,8 @@ class ExamDriver:
 		self.report('edited question "%s" for %.1f seconds, now crashing.' % (
 			answer.question.title, time.time() - t0))
 		#  autosave should have kicked in by now.
+
+		answer.protocol.add("simulating crash.")
 
 		with wait_for_page_load(self.driver):
 			self.driver.get(self.driver.current_url)
@@ -750,7 +753,8 @@ class TestDriver():
 
 				title = driver.find_element_by_css_selector("#title").get_attribute("value")
 				if title in questions:
-					raise Exception('duplicate question titled "%s"' % title)
+					# our data structures use question titles as a primary key for questions.
+					raise Exception('duplicate question titled "%s" is not allowed.' % title)
 
 				cmd_class = http_get_parameters(self.driver.current_url)["cmdClass"]
 

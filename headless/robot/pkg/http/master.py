@@ -21,7 +21,7 @@ from .discovery import connect_machines
 from ..driver.batch import Batch
 from ..driver.drivers import Test
 from ..result import open_results
-from ..workarounds import Workarounds
+from ..settings import Settings, Workarounds
 
 
 def get_ilias_version():
@@ -43,10 +43,11 @@ def get_ilias_version():
 
 
 class Looper(threading.Thread):
-	def __init__(self, state, test_name, workarounds, wait_time):
+	def __init__(self, state, test_name, settings, workarounds, wait_time):
 		threading.Thread.__init__(self)
 		self.state = state
 		self.test_name = test_name
+		self.settings = settings
 		self.workarounds = workarounds
 		self.wait_time = wait_time
 		self.done = False
@@ -57,7 +58,7 @@ class Looper(threading.Thread):
 				self.state.batch = None
 
 			if self.state.batch is None:
-				self.state.start_batch(self.test_name, self.workarounds, self.wait_time)
+				self.state.start_batch(self.test_name, self.settings, self.workarounds, self.wait_time)
 
 			time.sleep(1)
 
@@ -82,10 +83,10 @@ class GlobalState:
 		print("setting looping to %s." % looping)
 		if self.batch and self.looping and self.looper is None:
 			batch = self.batch
-			self.looper = Looper(self, batch.test_name, batch.workarounds, batch.wait_time)
+			self.looper = Looper(self, batch.test_name, batch.settings, batch.workarounds, batch.wait_time)
 			self.looper.start()
 
-	def start_batch(self, test_name, workarounds, wait_time):
+	def start_batch(self, test_name, settings, workarounds, wait_time):
 		if self.batch and self.batch.is_done():
 			self.batch = None
 
@@ -94,12 +95,12 @@ class GlobalState:
 			return None
 
 		if self.batch is None:
-			self.batch = Batch(self.machines, ilias_version, test_name, workarounds, wait_time)
+			self.batch = Batch(self.machines, ilias_version, test_name, settings, workarounds, wait_time)
 			self.batch.start()
 
 		if self.looping:
 			if self.looper is None:
-				self.looper = Looper(self, test_name, workarounds, wait_time)
+				self.looper = Looper(self, test_name, settings, workarounds, wait_time)
 				self.looper.start()
 			else:
 				self.looper.workarounds = workarounds
@@ -149,10 +150,11 @@ class StartBatchHandler(tornado.web.RequestHandler):
 	def post(self):
 		data = json.loads(self.request.body)
 
-		workarounds = Workarounds(from_json=data["workarounds"])
+		settings = Settings()
+		workarounds = Workarounds(from_dict=data["workarounds"])
 		test_id = data["test"]
 		wait_time = 0
-		batch_id = self.state.start_batch(test_id, workarounds, wait_time)
+		batch_id = self.state.start_batch(test_id, settings, workarounds, wait_time)
 
 		if batch_id is None:
 			self.write("error")
@@ -213,7 +215,7 @@ class WorkaroundsHandler(tornado.web.RequestHandler):
 		else:
 			workarounds = Workarounds()  # default settings
 
-		self.write(workarounds.to_json())
+		self.write(json.dumps(workarounds.get_catalog()))
 		self.finish()
 
 
