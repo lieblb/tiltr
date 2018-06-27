@@ -36,6 +36,60 @@ $(function() {
 		return $($("#icon_" + name).html());
 	}
 
+	function removeIds(element) {
+		$(element).children().each(function() {
+			$(this).removeAttr("id");
+			removeIds(this);
+		});
+	}
+
+	function updateCoverage(coverage) {
+		if (coverage.cases < 1) {
+			$("#message-results-coverage").hide();
+			return;
+		}
+
+        var percentage = 100.0 * coverage.observed / coverage.cases;
+        $("#coverage").val(percentage);
+        var coverageText = percentage.toFixed(1) + "%";
+        $("#coverage").text(coverageText);
+
+        $("#coverage-cases").text(coverage.cases);
+        $("#coverage-observed").text(coverage.observed);
+        $("#coverage-percentage").text(coverageText);
+
+        var children = $("#coverage-overview").children();
+        while (children.length > 1) {
+			$("#coverage-overview").remove($(children[2]));
+		}
+
+		var n = coverage.questions.length;
+		for (var i = 0; i < n; i++) {
+			var q = coverage.questions[i];
+
+			var row = $($("#coverage-row").html());
+			$(row).find("#name").text(q.name);
+
+			if (q.cases > 0 && q.observed !== undefined) {
+				var percentage = 100.0 * q.observed / q.cases;
+				var coverageText = percentage.toFixed(1) + "%";
+
+				$(row).find("#coverage").val(percentage);
+				$(row).find("#coverage-cases").text(q.cases);
+				$(row).find("#coverage-observed").text(q.observed);
+				$(row).find("#coverage-percentage").text(coverageText);
+			} else {
+				$(row).find("#coverage").val(0);
+				$(row).find("#coverage-cases").text("0");
+				$(row).find("#coverage-observed").text("0");
+				$(row).find("#coverage-percentage").text("0");
+			}
+
+			removeIds(row);
+			$("#coverage-overview").append(row);
+		}
+    }
+
 	function updateResults() {
 		$.getJSON(host + "/results.json", function(results) {
 			$("#results-overview").empty();
@@ -46,6 +100,7 @@ $(function() {
 				articles.hide();
 			} else {
 				articles.show();
+				updateCoverage(results.coverage);
 			}
 
 			for (var status in results.counts) {

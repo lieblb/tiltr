@@ -151,7 +151,8 @@ class MultipleChoiceAnswer:
 		for c in self._parse_ui():
 			self.protocol.verify(c.label, self.current_answers[c.label], c.checked)
 
-		context.coverage.case_occurred(self.question, "verify", json.dumps(self._get_binary_answers()))
+		context.coverage.case_occurred(
+			self.question, "verify", json.dumps(self._get_binary_answers()))
 
 	def encode(self, context):
 		return dict(
@@ -177,7 +178,7 @@ class ClozeAnswerGap(object):
 		self.index = int(match.group(1))
 
 
-class TextAnswerGap(ClozeAnswerGap):
+class TextOrNumericAnswerGap(ClozeAnswerGap):
 	@property
 	def value(self):
 		return self._value
@@ -234,6 +235,9 @@ def implicit_text_to_number(context, value):
 		# e.g. +9 -> 9
 		value = value[1:]
 
+	if value == "0.0":
+		value = "0"
+
 	return value
 
 
@@ -268,7 +272,7 @@ class ClozeAnswer(object):
 		gaps = []
 
 		for element in root.find_elements_by_css_selector('input[type="text"].ilc_qinput_TextInput'):
-			gaps.append(TextAnswerGap(self.driver, element))
+			gaps.append(TextOrNumericAnswerGap(self.driver, element))
 
 		for element in root.find_elements_by_css_selector("select.ilc_qinput_ClozeGapSelect"):
 			gaps.append(SelectAnswerGap(self.driver, element))
@@ -283,10 +287,12 @@ class ClozeAnswer(object):
 		assert len(self.current_answers) == len(ui) and len(ui) == len(self.question.gaps)
 
 		for gap in self.question.gaps.values():
+			recorded_value = context.strip_whitespace(self.current_answers[gap.index])
 			self.protocol.verify(
 				gap.get_export_name(),
-				context.strip_whitespace(self.current_answers[gap.index]),
+				recorded_value,
 				ui[gap.index].value)
+			gap.add_verify_coverage(context.coverage, recorded_value)
 
 	def encode(self, context):
 		answers = dict()
@@ -333,6 +339,9 @@ class KPrimAnswer(object):
 			ui.append(radios)
 		return ui
 
+	def _get_binary_answers(self):
+		return dict(zip(self.question.names, [int(x) for x in self.current_answers]))
+
 	def verify(self, context):
 		ui = self._parse_ui()
 
@@ -342,10 +351,13 @@ class KPrimAnswer(object):
 				self.current_answers[i],
 				ui[i][True].is_selected())
 
+		context.coverage.case_occurred(
+			self.question, "verify", json.dumps(self._get_binary_answers()))
+
 	def encode(self, context):
 		return dict(
 			title=self.question.title,
-			answers=dict(zip(self.question.names, [int(x) for x in self.current_answers])),
+			answers=self._get_binary_answers(),
 			protocol=self.protocol.encode())
 
 

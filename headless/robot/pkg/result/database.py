@@ -10,6 +10,7 @@ import sqlite3
 import json
 import datetime
 import zipfile
+from collections import defaultdict
 import pytz
 
 
@@ -23,6 +24,8 @@ class DB:
 		c = self.db.cursor()
 		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT, nusers INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
+		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT, name TEXT, UNIQUE(name))")
+		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT, name TEXT, UNIQUE(name))")
 		self.db.commit()
 		c.close()
 		return self
@@ -42,6 +45,50 @@ class DB:
 		c.executemany("insert into performance(dt) values (?)", [(1000 * dt,) for dt in dts])
 		self.db.commit()
 		c.close()
+
+	def put_coverage_data(self, coverage):
+		c = self.db.cursor()
+		c.executemany("INSERT OR IGNORE INTO coverage_cases(question, name) VALUES (?, ?)",
+			[(x[0].encode("utf-8"), json.dumps(x).encode("utf-8")) for x in coverage.get_cases()])
+		c.executemany("INSERT OR IGNORE INTO coverage_occurrences(question, name) VALUES (?, ?)",
+			[(x[0].encode("utf-8"), json.dumps(x).encode("utf-8")) for x in coverage.get_occurrences()])
+		self.db.commit()
+		c.close()
+
+	def _get_total_coverage(self):
+		c = self.db.cursor()
+
+		c.execute("SELECT COUNT(*) FROM coverage_cases")
+		num_cases = int(c.fetchone()[0])
+
+		c.execute("SELECT COUNT(*) FROM coverage_occurrences o INNER JOIN coverage_cases c ON c.name = o.name")
+		num_occurrences = int(c.fetchone()[0])
+
+		questions = defaultdict(dict)
+		c.execute("SELECT question, COUNT(*) FROM coverage_cases GROUP BY question")
+		while True:
+			row = c.fetchone()
+			if row is None:
+				break
+			questions[row[0].decode("utf-8")]["cases"] = row[1]
+
+		c.execute("SELECT o.question, COUNT(*) FROM coverage_occurrences o "
+			"INNER JOIN coverage_cases c ON c.name = o.name GROUP BY o.question")
+		while True:
+			row = c.fetchone()
+			if row is None:
+				break
+			questions[row[0].decode("utf-8")]["observed"] = row[1]
+
+		c.close()
+
+		for name, q in questions.items():
+			q["name"] = name
+
+		return dict(
+			cases=num_cases,
+			observed=num_occurrences,
+			questions=list(questions.values()))
 
 	def get_json(self):
 		c = self.db.cursor()
@@ -74,7 +121,7 @@ class DB:
 				success=success.decode("utf-8")
 			))
 		c.close()
-		return json.dumps(dict(counts=counts, entries=entries))
+		return json.dumps(dict(counts=counts, entries=entries, coverage=self._get_total_coverage()))
 
 	def get_performance_data_json(self):
 		c = self.db.cursor()

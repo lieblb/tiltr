@@ -37,6 +37,14 @@
 			</span>
 		</script>
 
+		<script id="coverage-row" type="text/plain">
+			<tr>
+				<td id="name"></td>
+				<td><progress id="coverage" class="progress is-large is-info" value="0" max="100"></progress></td>
+				<td><span id="coverage-observed"></span> / <span id="coverage-cases"></span> (<span id="coverage-percentage"></span>)</td>
+			</tr>
+		</script>
+
 	</head>
 	<body>
 		<section class="hero is-primary">
@@ -107,6 +115,23 @@
 								<td>Users</td>
 							</thead>
 							<tbody id="results-overview">
+							</tbody>
+						</table>
+					</div>
+				</article>
+
+				<article id="message-results-coverage" class="message is-info" style="margin-top:2em;">
+					<div class="message-header">
+						<p>Coverage</p>
+					</div>
+					<div class="message-body">
+						<table class="table is-fullwidth">
+							<tbody id="coverage-overview">
+								<tr>
+									<td>Total</td>
+									<td><progress id="coverage" class="progress is-large is-info" value="0" max="100"></progress></td>
+									<td><span id="coverage-observed"></span> / <span id="coverage-cases"></span> (<span id="coverage-percentage"></span>)</td>
+								</tr>
 							</tbody>
 						</table>
 					</div>

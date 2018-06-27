@@ -160,6 +160,7 @@ class Run:
 
 		self.xls = b""
 		self.performance_data = []
+		self.coverage = Coverage()
 		self.users = []
 		self.protocols = defaultdict(list)
 		self.questions = None
@@ -197,7 +198,7 @@ class Run:
 
 		return "\n".join(parts)
 
-	def _check_results(self, index, master, workbook, all_recorded_results, coverage):
+	def _check_results(self, index, master, workbook, all_recorded_results):
 		all_assertions_ok = True
 
 		gui_scores = master.test_driver.get_gui_scores([user.get_username() for user in self.users])
@@ -222,7 +223,7 @@ class Run:
 
 			for question_title, answers in ilias_result.get_answers().items():
 				question = self.questions[question_title]
-				question.add_export_coverage(coverage, answers)
+				question.add_export_coverage(self.coverage, answers)
 
 		return all_assertions_ok
 
@@ -371,7 +372,7 @@ class Run:
 			raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
 	def analyze(self, master, all_recorded_results):
-		coverage = Coverage()
+		coverage = self.coverage
 		for recorded_result in all_recorded_results:
 			coverage.extend(recorded_result.coverage)
 
@@ -396,7 +397,7 @@ class Run:
 				self.xls = xls
 
 			all_assertions_ok = self._check_results(
-				i, master, workbook, all_recorded_results, coverage)
+				i, master, workbook, all_recorded_results)
 			if not all_assertions_ok:
 				break
 
@@ -420,6 +421,7 @@ class Run:
 			db.put(batch_id=self.batch_id, success=self.success, xls=self.xls,
 				protocol=self._make_protocol(self.users), num_users=len(self.users))
 			db.put_performance_data(self.performance_data)
+			db.put_coverage_data(self.coverage)
 
 	def cleanup(self, master):
 		for user in self.users:

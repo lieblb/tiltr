@@ -35,7 +35,8 @@ class ClozeComparator(Enum):
 
 
 class ClozeQuestionGap():
-	def __init__(self, index):
+	def __init__(self, question, index):
+		self.question = question
 		self.index = index
 
 	def get_export_name(self):
@@ -43,11 +44,30 @@ class ClozeQuestionGap():
 
 
 class ClozeQuestionTextGap(ClozeQuestionGap):
-	def __init__(self, index, options, comparator, size):
-		ClozeQuestionGap.__init__(self, index)
+	def __init__(self, question, index, options, comparator, size):
+		ClozeQuestionGap.__init__(self, question, index)
 		self.options = options
 		self.comparator = comparator
 		self.size = size
+
+	def initialize_coverage(self, coverage, context):
+		for mode in ("verify", "export"):
+			for c in context.long_text_random_chars:
+				coverage.add_case(self.question, self.index, mode, "char", c)
+			for solution in self.options.keys():
+				coverage.add_case(self.question, self.index, mode, "solution", solution)
+
+	def add_verify_coverage(self, coverage, value):
+		for c in value:
+			coverage.add_case(self.question, self.index, "verify", "char", c)
+		if value in self.options:
+			coverage.add_case(self.question, self.index, "verify", "solution", value)
+
+	def add_export_coverage(self, coverage, value):
+		for c in value:
+			coverage.add_case(self.question, self.index, "export", "char", c)
+		if value in self.options:
+			coverage.add_case(self.question, self.index, "export", "solution", value)
 
 	def _modify_solution(self, text, score, context):
 		mode = random.choices(
@@ -106,9 +126,20 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 
 class ClozeQuestionSelectGap(ClozeQuestionGap):
-	def __init__(self, index, options):
-		ClozeQuestionGap.__init__(self, index)
+	def __init__(self, question, index, options):
+		ClozeQuestionGap.__init__(self, question, index)
 		self.options = options
+
+	def initialize_coverage(self, coverage, context):
+		for value in self.options.keys():
+			for mode in ("verify", "export"):
+				coverage.add_case(self.question, self.index, mode, value)
+
+	def add_verify_coverage(self, coverage, value):
+		coverage.case_occurred(self.question, self.index, "verify", value)
+
+	def add_export_coverage(self, coverage, value):
+		coverage.case_occurred(self.question, self.index, "export", value)
 
 	def get_random_choice(self, context):
 		return random.choice(list(self.options.items()))
@@ -121,8 +152,8 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 
 
 class ClozeQuestionNumericGap(ClozeQuestionGap):
-	def __init__(self, driver, index, size):
-		ClozeQuestionGap.__init__(self, index)
+	def __init__(self, question, index, size, driver):
+		ClozeQuestionGap.__init__(self, question, index)
 		self.size = size
 
 		self.numeric_value = Decimal(driver.find_element_by_name("gap_%d_numeric" % index).get_attribute("value"))
@@ -131,6 +162,18 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		self.score = Decimal(driver.find_element_by_name("gap_%d_numeric_points" % index).get_attribute("value"))
 
 		self.exponent = min(x.as_tuple().exponent for x in (self.numeric_value, self.numeric_lower, self.numeric_upper))
+
+	def initialize_coverage(self, coverage, context):
+		for mode in ("verify", "export"):
+			coverage.add_case(self.question, self.index, mode, str(self.numeric_value))
+			coverage.add_case(self.question, self.index, mode, str(self.numeric_lower))
+			coverage.add_case(self.question, self.index, mode, str(self.numeric_upper))
+
+	def add_verify_coverage(self, coverage, value):
+		coverage.case_occurred(self.question, self.index, "verify", str(value))
+
+	def add_export_coverage(self, coverage, value):
+		coverage.case_occurred(self.question, self.index, "export", str(value))
 
 	def get_random_choice(self, context):
 		t = random.randint(1, 4)
@@ -220,13 +263,16 @@ class ClozeQuestion():
 
 				if cloze_type == ClozeType.text:
 					gap = ClozeQuestionTextGap(
-						gap_index, options, self.comparator, parse_gap_size(driver, gap_index, fallback_length))
+						self, gap_index, options, self.comparator,
+						parse_gap_size(driver, gap_index, fallback_length))
 				elif cloze_type == ClozeType.select:
-					gap = ClozeQuestionSelectGap(gap_index, options)
+					gap = ClozeQuestionSelectGap(self, gap_index, options)
 
 			elif cloze_type == ClozeType.numeric:
 				gap = ClozeQuestionNumericGap(
-					driver, gap_index, parse_gap_size(driver, gap_index, fallback_length))
+					self, gap_index,
+					parse_gap_size(driver, gap_index, fallback_length),
+					driver)
 
 			else:
 				raise Exception("unsupported cloze type " + str(cloze_type))				
@@ -234,10 +280,19 @@ class ClozeQuestion():
 			self.gaps[gap_index] = gap
 
 	def initialize_coverage(self, coverage, context):
-		pass
+		for gap in self.gaps.values():
+			gap.initialize_coverage(coverage, context)
 
 	def add_export_coverage(self, coverage, answers):
-		pass
+		gaps = dict()
+		for gap in self.gaps.values():
+			gaps[gap.get_export_name()] = self.gaps[gap.index]
+		for gap_name, value in answers.items():
+			print("cloze value %s" % value)
+			gaps[gap_name].add_export_coverage(coverage, str(value))
+
+	def get_gap_definition(self, index):
+		return self.gap[index]
 
 	def _get_normalized(self, s):
 		if self.comparator == ClozeComparator.case_sensitive:
@@ -490,10 +545,16 @@ class KPrimQuestion:
 				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
 	def initialize_coverage(self, coverage, context):
-		pass
+		for combination in itertools.combinations_with_replacement((False, True), len(self.names)):
+			if context.workarounds.disallow_empty_answers or any(combination):
+				solution = dict()
+				for checked, label in zip(combination, self.names):
+					solution[label] = 1 if checked else 0
+				coverage.add_case(self, "verify", json.dumps(solution))
+				coverage.add_case(self, "export", json.dumps(solution))
 
 	def add_export_coverage(self, coverage, answers):
-		pass
+		coverage.case_occurred(self, "export", json.dumps(answers))
 
 	def compute_score(self, answers, context):
 		indexed_answers = dict()

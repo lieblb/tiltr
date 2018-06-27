@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+import json
+
 
 class Coverage:
 	def __init__(self, questions=None, context=None, from_dict=None):
@@ -28,6 +30,12 @@ class Coverage:
 		return dict(
 			cases=list(self._cases),
 			occurred=list(self._occurred))
+
+	def get_cases(self):
+		return list(self._cases)
+
+	def get_occurrences(self):
+		return list(self._occurred)
 
 	def extend(self, coverage):
 		self._cases.update(coverage._cases)
