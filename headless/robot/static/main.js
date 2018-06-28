@@ -58,9 +58,12 @@ $(function() {
         $("#coverage-observed").text(coverage.observed);
         $("#coverage-percentage").text(coverageText);
 
-        var children = $("#coverage-overview").children();
-        while (children.length > 1) {
-			$("#coverage-overview").remove($(children[2]));
+        while (true) {
+	        var children = $("#coverage-overview").children();
+	        if (children.length < 2) {
+	        	break;
+			}
+			$(children[1]).remove();
 		}
 
 		var n = coverage.questions.length;

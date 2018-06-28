@@ -93,10 +93,12 @@ def take_exam(args):
 
 	except:
 		traceback.print_exc()
-		report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+		try:
+			report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+		except:
+			print("report failed.")
 		return Result.from_error(Origin.recorded, ErrorDomain.qa, traceback.format_exc())
 
-	assert result_json is not None
 	report("master", "received take_exam results from %s." % machine)
 	return Result(from_json=result_json)
 
@@ -363,8 +365,10 @@ class Run:
 		pool = ThreadPool(len(self.users))
 		try:
 			all_recorded_results = pool.map(take_exam, take_exam_args)
+			self.report("master", "waiting for results.")
 			pool.close()
 			pool.join()
+			self.report("master", "all results arrived.")
 			return all_recorded_results
 		except:
 			traceback.print_exc()
@@ -500,28 +504,24 @@ class Batch(threading.Thread):
 		return self.batch_id
 
 	def run(self):
-		asyncio.set_event_loop(asyncio.new_event_loop())
-
 		#import cProfile
 		#profiler = cProfile.Profile()
 		#profiler.enable()
 
-		self.report("master", "connecting to ILIAS %s." % self.ilias_version)
-
 		try:
+			asyncio.set_event_loop(asyncio.new_event_loop())
+
+			self.report("master", "connecting to ILIAS %s." % self.ilias_version)
+
 			run = Run(self)
-			try:
-				run.run()
-			finally:
-				try:
-					self.report_done()
-				except:
-					print("failed to report done status %s." % run.success)
-
+			run.run()
 		finally:
-			pass
+			try:
+				self.report_done()
+			except:
+				print("failed to report done status %s." % run.success)
 
-			#profiler.disable()
+		#profiler.disable()
 			#profiler.print_stats(sort='time')
 
 	def get_screenshot_as_base64(self):

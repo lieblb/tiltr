@@ -59,15 +59,16 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 	def add_verify_coverage(self, coverage, value):
 		for c in value:
-			coverage.add_case(self.question, self.index, "verify", "char", c)
+			coverage.case_occurred(self.question, self.index, "verify", "char", c)
 		if value in self.options:
-			coverage.add_case(self.question, self.index, "verify", "solution", value)
+			coverage.case_occurred(self.question, self.index, "verify", "solution", value)
 
 	def add_export_coverage(self, coverage, value):
+		value = str(value)
 		for c in value:
-			coverage.add_case(self.question, self.index, "export", "char", c)
+			coverage.case_occurred(self.question, self.index, "export", "char", c)
 		if value in self.options:
-			coverage.add_case(self.question, self.index, "export", "solution", value)
+			coverage.case_occurred(self.question, self.index, "export", "solution", value)
 
 	def _modify_solution(self, text, score, context):
 		mode = random.choices(
@@ -139,6 +140,7 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 		coverage.case_occurred(self.question, self.index, "verify", value)
 
 	def add_export_coverage(self, coverage, value):
+		value = str(value)
 		coverage.case_occurred(self.question, self.index, "export", value)
 
 	def get_random_choice(self, context):
@@ -170,10 +172,14 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 			coverage.add_case(self.question, self.index, mode, str(self.numeric_upper))
 
 	def add_verify_coverage(self, coverage, value):
-		coverage.case_occurred(self.question, self.index, "verify", str(value))
+		x = str(value)
+		if x in [str(self.numeric_value), str(self.numeric_lower), str(self.numeric_upper)]:
+			coverage.case_occurred(self.question, self.index, "verify", x)
 
 	def add_export_coverage(self, coverage, value):
-		coverage.case_occurred(self.question, self.index, "export", str(value))
+		x = str(value)
+		if x in [str(self.numeric_value), str(self.numeric_lower), str(self.numeric_upper)]:
+			coverage.case_occurred(self.question, self.index, "export", x)
 
 	def get_random_choice(self, context):
 		t = random.randint(1, 4)
@@ -196,7 +202,7 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 
 	def get_score(self, text):
 		value = Decimal(text)
-		if value >= self.numeric_lower and value <= self.numeric_upper:
+		if self.numeric_lower <= value <= self.numeric_upper:
 			return self.score
 		else:
 			return Decimal(0)
@@ -399,8 +405,9 @@ class SingleChoiceQuestion:
 
 	def add_export_coverage(self, coverage, answers):
 		for choice, checked in answers.items():
-			if checked:
-				coverage.case_occurred(self, "export", choice)
+			if checked != 0:
+				coverage.case_occurred(self, "export", str(choice))
+				break
 
 	def get_random_answer(self, context):
 		choice = random.choice(list(self.choices.keys()))
@@ -456,7 +463,8 @@ class MultipleChoiceQuestion:
 
 	def initialize_coverage(self, coverage, context):
 		if True:  # all cases
-			for combination in itertools.combinations_with_replacement((False, True), len(self.choices)):
+			elements = [(False, True)] * len(self.choices)
+			for combination in itertools.product(*elements):
 				if context.workarounds.disallow_empty_answers or any(combination):
 					solution = dict()
 					for checked, label in zip(combination, self.choices.keys()):
@@ -545,7 +553,8 @@ class KPrimQuestion:
 				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
 	def initialize_coverage(self, coverage, context):
-		for combination in itertools.combinations_with_replacement((False, True), len(self.names)):
+		elements = [(False, True)] * len(self.names)
+		for combination in itertools.product(*elements):
 			if context.workarounds.disallow_empty_answers or any(combination):
 				solution = dict()
 				for checked, label in zip(combination, self.names):

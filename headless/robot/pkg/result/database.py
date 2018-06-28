@@ -24,8 +24,8 @@ class DB:
 		c = self.db.cursor()
 		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT, nusers INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
-		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT, name TEXT, UNIQUE(name))")
-		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT, name TEXT, UNIQUE(name))")
+		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
+		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
 		self.db.commit()
 		c.close()
 		return self
@@ -139,6 +139,8 @@ class DB:
 		c = self.db.cursor()
 		c.execute("DELETE FROM results")
 		c.execute("DELETE FROM performance")
+		c.execute("DELETE FROM coverage_cases")
+		c.execute("DELETE FROM coverage_occurrences")
 		self.db.commit()
 		c.close()		
 
