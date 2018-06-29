@@ -347,7 +347,9 @@ class ExamDriver:
 		answer.protocol.add("simulating crash.")
 
 		with wait_for_page_load(self.driver):
-			self.driver.get(self.driver.current_url)
+			self.driver.refresh()
+
+		self.verify_answer()
 
 	def goto_first_question(self):
 		while True:
@@ -363,6 +365,8 @@ class ExamDriver:
 					self.confirm_save()
 
 	def goto_next_question(self):
+		self.protocol.append((time.time(), "test", "goto next question."))
+
 		try:
 			button = self.driver.find_element_by_css_selector(
 				'a[data-nextcmd="nextQuestion"]')
@@ -378,6 +382,8 @@ class ExamDriver:
 		return True
 
 	def goto_next_or_previous_question(self):
+		self.protocol.append((time.time(), "test", "goto next or previous question."))
+
 		for what in ("next", "previous"):
 			try:
 				button = self.driver.find_element_by_css_selector(
