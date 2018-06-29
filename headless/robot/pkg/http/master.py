@@ -222,7 +222,7 @@ class WorkaroundsHandler(tornado.web.RequestHandler):
 class ResultsJsonHandler(tornado.web.RequestHandler):
 	def get(self):
 		with open_results() as db:
-			self.write(db.get_json())
+			self.write(json.dumps(db.get_results()))
 		self.finish()
 
 
@@ -271,6 +271,34 @@ class SettingsHandler(tornado.web.RequestHandler):
 		self.state.set_looping(settings["looping"])
 
 
+class ReportHandler(tornado.web.RequestHandler):
+	def initialize(self, state):
+		self.state = state
+
+	def get(self):
+		with open_results() as db:
+			protocols = db.get_protocols()
+
+			nprotocols = dict()
+			sep = "-" * 40
+			for name, text in protocols.items():
+				lines = text.split("\n")
+				sections = []
+				i = 0
+				while i < len(lines):
+					if lines[i].startswith(sep) and lines[i + 2].startswith(sep):
+						sections.append(dict(name=lines[i + 1], lines=[]))
+						i += 3
+					else:
+						sections[-1]["lines"].append(lines[i])
+						i += 1
+				nprotocols[name] = sections
+
+			self.render("report.html",
+				ilias_version=self.state.get_ilias_version() or "unavailable",
+				results=db.get_results(),
+				protocols=nprotocols)
+
 def make_app(machines):
 	state = GlobalState(machines)
 
@@ -278,6 +306,8 @@ def make_app(machines):
 
 	return tornado.web.Application([
 		(r"/", AppHandler, dict(state=state)),
+		(r"/report", ReportHandler, dict(state=state)),
+
 		(r"/start", StartBatchHandler, dict(state=state)),
 		(r"/websocket/(?P<batch>[^/]+)", WebSocketHandler, dict(state=state)),
 		(r"/screenshot/(?P<machine>.+)", ScreenshotHandler, dict(state=state)),

@@ -90,7 +90,7 @@ class DB:
 			observed=num_occurrences,
 			questions=list(questions.values()))
 
-	def get_json(self):
+	def get_results(self):
 		c = self.db.cursor()
 
 		c.execute("SELECT success, COUNT(success), SUM(nusers) FROM results GROUP BY success")
@@ -121,7 +121,7 @@ class DB:
 				success=success.decode("utf-8")
 			))
 		c.close()
-		return json.dumps(dict(counts=counts, entries=entries, coverage=self._get_total_coverage()))
+		return dict(counts=counts, entries=entries, coverage=self._get_total_coverage())
 
 	def get_performance_data_json(self):
 		c = self.db.cursor()
@@ -134,6 +134,18 @@ class DB:
 			dts.append(row[0] / 1000.0)
 		c.close()
 		return json.dumps(dts)
+
+	def get_protocols(self):
+		c = self.db.cursor()
+		c.execute("SELECT batch, protocol FROM results")
+		protocols = dict()
+		while True:
+			row = c.fetchone()
+			if row is None:
+				break
+			protocols[row[0].decode("utf-8")] = row[1].decode("utf-8")
+		c.close()
+		return protocols
 
 	def clear(self):
 		c = self.db.cursor()

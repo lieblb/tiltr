@@ -1,0 +1,75 @@
+<html>
+	<head>
+		<link rel="stylesheet" type="text/css" href="/static/bulma/css/bulma.min.css">
+    </head>
+    <body>
+        <div class="container">
+            <div class="content">
+                <section class="hero is-info">
+                  <div class="hero-body">
+                    <div class="container">
+                      <h1 class="title">
+                        Report
+                      </h1>
+                      <h2>ILIAS {{ ilias_version }}</h2>
+                    </div>
+                  </div>
+                </section>
+
+                <div class="box" style="margin-top: 2em;">
+                    <table class="table is-fullwidth">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Exams</th>
+                                <th>Users</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for status, counts in results["counts"].items() %}
+                                <tr>
+                                    <td>{{ status }}</td>
+                                    <td>{{ counts["runs"] }}</td>
+                                    <td>{{ counts["users"] }}</td>
+                                </tr>
+                            {% end %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="box" style="margin-top: 2em;">
+                    <table class="table is-fullwidth is-striped">
+                        <thead>
+                            <tr>
+                                <th>Question</th>
+                                <th>Coverage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for q in results["coverage"]["questions"] %}
+                                <tr>
+                                    <td>{{ q["name"] }}</td>
+                                    <td>{{ "%.1f" % (100 * q["observed"] / q["cases"]) }}% ({{ q["observed"] }} / {{ q["cases"] }})</td>
+                                </tr>
+                            {% end %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% for batch, sections in protocols.items() %}
+            <div class="container" style="padding-top: 2em;">
+                <div class="content is-small">
+                    <h1>Batch {{ batch }}</h1>
+                    {% for section in sections %}
+                        <h2>{{ section["name"] }}</h2>
+                        <div class="box">
+                            <pre>{{ "\n".join(section["lines"]) }}</pre>
+                        </div>
+                    {% end %}
+                </div>
+            </div>
+        {% end %}
+    </body>
+</html>
