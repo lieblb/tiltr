@@ -214,29 +214,35 @@ class SelectAnswerGap(ClozeAnswerGap):
 		self._value = new_value
 
 
+def looks_like_a_number(x):
+	return x.count('.') <= 1 and all(y.isdigit() or len(y) < 1 for y in x.split('.'))
+
+
 def implicit_text_to_number(context, value):
 	if not context.workarounds.implicit_text_number_conversions:
 		return value
-	if len(value) >= 2 and value.endswith(".") and value[:-1].isdigit():
-		# e.g. 13. -> 13
-		value = value[:-1]
-	elif len(value) >= 2 and value.startswith(".") and value[1:].isdigit():
-		# e.g. .17 -> 0.17
-		value = "0" + value
-	elif value.endswith(".0"):
-		# e.g. 5.0 -> 5
-		value = value[:-2]
 
-	while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
-		# e.g. 0.637010 -> 0.63701
-		value = value[:-1]
+	if value == "0.0":
+		return "0"
 
-	if len(value) >= 2 and value[0] == '+' and value.count('.') <= 1 and all(x.isdigit() for x in value[1:].split('.')):
+	if len(value) >= 2 and value[0] == '+' and looks_like_a_number(value[1:]):
 		# e.g. +9 -> 9
 		value = value[1:]
 
-	if value == "0.0":
-		value = "0"
+	if looks_like_a_number(value):
+		if len(value) >= 2 and value.endswith("."):
+			# e.g. 13. -> 13
+			value = value[:-1]
+		elif len(value) >= 2 and value.startswith("."):
+			# e.g. .17 -> 0.17
+			value = "0" + value
+		elif value.endswith(".0"):
+			# e.g. 5.0 -> 5
+			value = value[:-2]
+
+		while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
+			# e.g. 0.637010 -> 0.63701
+			value = value[:-1]
 
 	return value
 
