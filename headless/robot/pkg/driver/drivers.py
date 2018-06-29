@@ -29,7 +29,6 @@ from .utils import wait_for_page_load, http_get_parameters, set_inputs,\
 
 from ..question import *
 from ..result import *
-from ..result.workbook import check_workbook_consistency
 
 
 class Login:
@@ -244,7 +243,9 @@ class TemporaryUser:
 		self.password = None
 
 	def create(self, driver, report, unique_id):
-		self.username = datetime.datetime.today().strftime('testuser_%Y%m%d%H%M%S') + ("_%s" % unique_id)
+		# note: self.username must always stay <= 31 chars, as Excel tab names are limited to that
+		# size and we fail to match names if names are longer here.
+		self.username = datetime.datetime.today().strftime('tu_%Y%m%d%H%M%S') + ("_%s" % unique_id)
 		self.password = "dev1234"
 
 		retries = 0
@@ -666,7 +667,7 @@ class TestDriver():
 		assert self.goto()
 		self.driver.find_element_by_css_selector("#tab_scoringadjust a").click()
 
-	def fetch_exported_workbook(self, batch_id, workarounds):
+	def fetch_exported_workbook(self):
 		self.goto_export()
 
 		driver = self.driver
@@ -706,7 +707,6 @@ class TestDriver():
 		xls = result.content
 
 		wb = load_workbook(filename=io.BytesIO(xls))
-		check_workbook_consistency(wb, self.report, workarounds)
 		return xls, wb
 
 	def get_gui_scores(self, usernames):

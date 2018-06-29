@@ -13,7 +13,7 @@ from splinter import Browser
 
 from ..result import Result, Origin, ErrorDomain
 from ..result import open_results
-from ..result.workbook import workbook_to_result
+from ..result.workbook import workbook_to_result, check_workbook_consistency
 
 from .commands import TakeExamCommand
 from .drivers import Login, TemporaryUser, TestDriver, Test, verify_admin_settings
@@ -396,7 +396,8 @@ class Run:
 		all_assertions_ok = False
 
 		for i in range(num_readjustments + 1):
-			xls, workbook = master.test_driver.fetch_exported_workbook(self.batch_id, self.workarounds)
+			xls, workbook = master.test_driver.fetch_exported_workbook()
+			check_workbook_consistency(workbook, master.report, self.workarounds)
 			if i == 0:
 				self.xls = xls
 
