@@ -471,6 +471,8 @@ class Run:
 			finally:
 				self.report("master", "finished with status %s." % self.success)
 
+		return self.success
+
 	def report(self, origin, message):
 		self.add_to_protocol("log", "[%s] %s" % (origin, message))
 		self.batch.report(origin, message)
@@ -509,16 +511,17 @@ class Batch(threading.Thread):
 		#profiler = cProfile.Profile()
 		#profiler.enable()
 
+		success = "FAIL"
 		try:
 			asyncio.set_event_loop(asyncio.new_event_loop())
 
 			self.report("master", "connecting to ILIAS %s." % self.ilias_version)
 
 			run = Run(self)
-			run.run()
+			success = run.run()
 		finally:
 			try:
-				self.report_done()
+				self.report_done(success)
 			except:
 				print("failed to report done status %s." % run.success)
 
@@ -566,18 +569,18 @@ class Batch(threading.Thread):
 		self.flush()
 
 		if self.is_done():
-			self.report_done()
+			self.report_done("UNKNOWN")
 
 	def remove_socket(self, socket):
 		if socket in self.sockets:
 			self.sockets.remove(socket)
 
-	def report_done(self):
+	def report_done(self, success):
 		self._is_done = True
 
 		self.flush()
 
-		encoded = json.dumps(dict(command="done"))
+		encoded = json.dumps(dict(command="done", success=success))
 		for socket in self.sockets:
 			try:
 				socket.write_message(encoded)

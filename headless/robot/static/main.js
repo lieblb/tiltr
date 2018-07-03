@@ -303,6 +303,9 @@ $(function() {
 		$("#workarounds").addClass("disabled");
 		$("#status").addClass("is-active");
 
+		$("#status").show();
+		$("#workarounds").hide();
+
 		$("#start").attr("disabled", true);
 		$("#start").addClass("is-loading");
 		$("#log").empty();
@@ -323,7 +326,7 @@ $(function() {
 
 				$("#start").removeClass("is-loading");
 				$("#start").attr("disabled", false);
-				
+
 				ws.onclose = function() {
 					// ok to close now.
 				};
@@ -332,6 +335,12 @@ $(function() {
 
 				$("#status").removeClass("is-active");
 				$("#workarounds").removeClass("disabled");
+				$("#workarounds").show();
+
+				if (data.success == "OK") {
+					$("#status").hide();
+				}
+
 
 				/*if ($("#run-loop").hasClass("is-selected")) {
 					setTimeout(restart, 1000);
@@ -415,6 +424,7 @@ $(function() {
 	}, 2000);
 
 	$("#start").on("click", restart);
+	$("#status").hide();
 
 	setScreenshot("master", "/static/default/screen.svg");
 	for (var i = 1; i <= NUM_MACHINES; i++) {
