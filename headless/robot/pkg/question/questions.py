@@ -307,6 +307,10 @@ class ClozeQuestion():
 			assert self.comparator == ClozeComparator.ignore_case
 			return s.casefold()
 
+	def _is_empty_answer(self, answer, context):
+		answer = context.strip_whitespace(answer)
+		return len(answer) == 0
+
 	def get_random_answer(self, context):
 		while True:
 			answers = dict()
@@ -327,7 +331,7 @@ class ClozeQuestion():
 
 				previous.add(choice)
 				answers[gap.index] = choice
-				all_empty = all_empty and len(choice) == 0
+				all_empty = all_empty and self._is_empty_answer(choice, context)
 
 			if all_empty and context.workarounds.disallow_empty_answers:
 				pass  # retry

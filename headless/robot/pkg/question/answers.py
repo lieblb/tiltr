@@ -222,14 +222,15 @@ def implicit_text_to_number(context, value):
 	if not context.workarounds.implicit_text_number_conversions:
 		return value
 
-	if value == "0.0":
-		return "0"
-
 	if len(value) >= 2 and value[0] == '+' and looks_like_a_number(value[1:]):
 		# e.g. +9 -> 9
 		value = value[1:]
 
 	if looks_like_a_number(value):
+		while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
+			# e.g. 0.637010 -> 0.63701
+			value = value[:-1]
+
 		if len(value) >= 2 and value.endswith("."):
 			# e.g. 13. -> 13
 			value = value[:-1]
@@ -240,9 +241,25 @@ def implicit_text_to_number(context, value):
 			# e.g. 5.0 -> 5
 			value = value[:-2]
 
+	return value
+
+
+def implicit_text_to_number_xls(context, value):
+	# there are also several implicit conversions taking place when taking the number
+	# from ILIAS into the XLS, but they are different from the ones inside ILIAS itself,
+	# i.e. from implicit_text_to_number.
+
+	if not context.workarounds.implicit_text_number_conversions:
+		return value
+
+	if looks_like_a_number(value):
 		while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
 			# e.g. 0.637010 -> 0.63701
 			value = value[:-1]
+
+		if value.endswith(".0"):
+			# e.g. 5.0 -> 5
+			value = value[:-2]
 
 	return value
 
@@ -306,6 +323,12 @@ class ClozeAnswer(object):
 			value = self.current_answers[gap.index]
 			if gap.get_type() == ClozeType.text:
 				value = implicit_text_to_number(context, value)
+
+				# apply implicit_text_to_number twice here, as ILIAS converts numbers to
+				# into DB first, then into XLS, and will make ".0" into "0.0" during the
+				# test, which will become "0" in excel export. not good.
+				value = implicit_text_to_number_xls(context, value)
+
 			answers[gap.get_export_name()] = value
 		return dict(
 			title=self.question.title,
@@ -421,7 +444,8 @@ class LongTextAnswerPlainHTML(AbstractLongTextAnswer):
 		set_element_value(self.driver, element, value)
 
 	def _encoded_current_answer(self, context):
-		return self.current_answer
+		# certain implicit number conversions, e.g. 92.0 -> 92 in xls
+		return implicit_text_to_number_xls(context, self.current_answer)
 
 
 class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
@@ -467,7 +491,10 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 			return ""
 		else:
 			s = ""
-			for line in self.current_answer.split("\n"):
+			# certain implicit number conversions, e.g. 92.0 -> 92 in xls
+			answer = implicit_text_to_number_xls(context, self.current_answer)
+
+			for line in answer.split("\n"):
 				if len(s) > 0:
 					s += "\n"
 				line = context.strip_whitespace(line)
@@ -476,4 +503,5 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 				if context.workarounds.sloppy_whitespace:
 					line = line.replace("\t", " ")
 				s += "<p>%s</p>" % context.collapse_whitespace(line)
+
 			return s
