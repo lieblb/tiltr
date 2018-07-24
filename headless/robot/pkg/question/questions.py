@@ -11,7 +11,7 @@ import itertools
 import json
 from enum import Enum
 from decimal import *
-from collections import defaultdict
+from collections import defaultdict, Counter
 from selenium.common.exceptions import NoSuchElementException
 
 from ..driver.utils import wait_for_page_load, set_element_value
@@ -52,21 +52,21 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 	def initialize_coverage(self, coverage, context):
 		for mode in ("verify", "export"):
-			for c in context.long_text_random_chars:
-				coverage.add_case(self.question, self.index, mode, "char", c)
+			for args in coverage.text_cases(self.size, context):
+				coverage.add_case(self.question, self.index, mode, *args)
 			for solution in self.options.keys():
 				coverage.add_case(self.question, self.index, mode, "solution", solution)
 
 	def add_verify_coverage(self, coverage, value):
-		for c in value:
-			coverage.case_occurred(self.question, self.index, "verify", "char", c)
+		for args in coverage.text_cases_occurred(value):
+			coverage.case_occurred(self.question, self.index, "verify", *args)
 		if value in self.options:
 			coverage.case_occurred(self.question, self.index, "verify", "solution", value)
 
 	def add_export_coverage(self, coverage, value):
 		value = str(value)
-		for c in value:
-			coverage.case_occurred(self.question, self.index, "export", "char", c)
+		for args in coverage.text_cases_occurred(value):
+			coverage.case_occurred(self.question, self.index, "export", *args)
 		if value in self.options:
 			coverage.case_occurred(self.question, self.index, "export", "solution", value)
 
@@ -612,19 +612,19 @@ class LongTextQuestion:
 			raise Exception("only manual scoring is supported for tests with LongTextQuestion")
 
 	def initialize_coverage(self, coverage, context):
-		for c in context.long_text_random_chars:
-			coverage.add_case(self, "verify", "char", c)
-			coverage.add_case(self, "export", "char", c)
-		for i in range(self.length):
-			if i > 0 or not context.workarounds.disallow_empty_answers:
-				coverage.add_case(self, "verify", "len", i)
-				coverage.add_case(self, "export", "len", i)
+		for args in coverage.text_cases(self.length, context):
+			coverage.add_case(self, "verify", *args)
+			coverage.add_case(self, "export", *args)
+
+	def add_verify_coverage(self, coverage, answers):
+		for text in answers.values():
+			for args in coverage.text_cases_occurred(text):
+				coverage.case_occurred(self, "verify", *args)
 
 	def add_export_coverage(self, coverage, answers):
 		for text in answers.values():
-			for c in text:
-				coverage.case_occurred(self, "export", "char", c)
-			coverage.case_occurred(self, "export", "len", len(text))
+			for args in coverage.text_cases_occurred(text):
+				coverage.case_occurred(self, "export", *args)
 
 	def get_random_answer(self, context):
 		while True:

@@ -8,14 +8,29 @@ $(function() {
 	var host = "http://" + window.location.hostname + ":" + port;
 
 	var workaroundKeys = [];
+	var settingKeys = [];
 
-	$.getJSON(host + "/workarounds.json", function(workarounds) {
+	$.getJSON(host + "/preferences.json", function(preferences) {
+		var settings = preferences.settings;
+		for (var i = 0; i < settings.length; i++) {
+			var key = settings[i].key;
+			settingKeys.push(key);
+			var help = settings[i].description;
+			$("#settings-table").append('<tr><td><label><input id="' +
+				key + '" type="text" class="input is-rounded"></td><td>' + key.split("_").join(" ") +
+				'</label><p id="' + key + '_help" class="help"></p></td></tr>');
+			$("#" + key + "_help").text(help);
+			$("#" + key).val(settings[i].value);
+		}
+
+		var workarounds = preferences.workarounds;
 		for (var i = 0; i < workarounds.length; i++) {
 			var key = workarounds[i].key;
 			workaroundKeys.push(key);
 			var help = workarounds[i].description;
-			$("#workarounds-body").append('<label class="checkbox"><input id="' +
-				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label><p id="' + key + '_help" class="help"></p>');
+			$("#workarounds-table").append('<tr><td><label class="checkbox"><input id="' +
+				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label><p id="' +
+				key + '_help" class="help"></p></td></tr>');
 			$("#" + key + "_help").text(help);
 			$("#" + key).prop("checked", workarounds[i].value);
 		}
@@ -395,12 +410,19 @@ $(function() {
 				workarounds[key] = $("#" + key).prop("checked");
 			}
 
+			var settings = {};
+			for (var i = 0; i < settingKeys.length; i++) {
+				var key = settingKeys[i];
+				settings[key] = $("#" + key).val();
+			}
+
 			$.ajax({
 				method: "POST",
 				url: host + "/start",
 				data: JSON.stringify({
 					test: $("#select-test").val(),
-					workarounds: workarounds
+					workarounds: workarounds,
+					settings: settings
                 })
 			}).done(function(batchId) {
 				if (batchId == "error") {

@@ -56,8 +56,10 @@ class TakeExamCommand:
 			wait_time=self.wait_time))
 
 	def _simulate_crash(self, exam_driver):
-		if random.random() * 100 < self.settings.crash_frequency:
-			exam_driver.simulate_crash(self.settings.autosave_duration + self.settings.autosave_tolerance)
+		if random.random() * 100 < float(self.settings.crash_frequency):
+			exam_driver.simulate_crash(
+				float(self.settings.autosave_duration) +
+				float(self.settings.autosave_tolerance))
 
 	def _pass1(self, exam_driver, report):
 		report("entering pass 1.")
@@ -83,7 +85,7 @@ class TakeExamCommand:
 		report("entering pass 3.")
 		for i in range(len(self.questions)):
 			exam_driver.verify_answer()
-			if random.random() < 0.5:
+			if random.random() * 100 < float(self.settings.modify_answer_frequency):
 				exam_driver.randomize_answer()
 				self._simulate_crash(exam_driver)
 			exam_driver.goto_next_or_previous_question()

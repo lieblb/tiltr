@@ -35,17 +35,30 @@ class ValueBag:
 class Settings(ValueBag):
 	def __init__(self, **kwargs):
 		super().__init__([
-			("crash_frequency",
-			 "frequency of simulated crashes as percentage of question navigations.",
-			 1
+			(
+				"crash_frequency",
+			 	"frequency of simulated crashes of question navigations (in percent).",
+			 	1
 			),
-			("autosave_duration",
-			 "configured autosave time.",
-			 5
+			(
+				"autosave_duration",
+			 	"configured autosave time.",
+			 	5
 			),
-			("autosave_tolerance",
-			 "additional time to give autosave until crashing is considered safe.",
-			 10
+			(
+				"autosave_tolerance",
+			 	"additional time to give autosave until crashing is considered safe.",
+			 	10
+			),
+			(
+				"num_readjustments",
+				"number of readjustment tests after each exam (very patchy).",
+				0
+			),
+			(
+				"modify_answer_frequency",
+				"frequency of changing already given answers (in percent).",
+				50
 			)
 		], **kwargs)
 

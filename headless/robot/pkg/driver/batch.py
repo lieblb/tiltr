@@ -183,7 +183,13 @@ class Run:
 		return False
 
 	def _make_protocol(self, users):
-		sections = ["header", "result", "workarounds", "settings", "master", "readjustment", "log"]
+		sections = ["header",
+			"result",
+			"preferences-workarounds",
+			"preferences-settings",
+			"master",
+			"readjustment",
+			"log"]
 		sections.extend(user.get_username() for user in self.users)
 
 		parts = list()
@@ -311,15 +317,19 @@ class Run:
 			result.update(("exam", "score", "gui"), score)
 
 	def prepare(self, master):
-		master.report("running with workaround settings:")
+		master.report("running with workarounds:")
 		self.workarounds.print_status(master.report)
+		self.workarounds.print_status(self.protocols["preferences-workarounds"].append)
+
+		master.report("running with settings:")
+		self.settings.print_status(master.report)
+		self.settings.print_status(self.protocols["preferences-settings"].append)
 
 		header = self.protocols["header"]
 		header.append("Tested on ILIAS %s." % self.ilias_version)
 		header.append('Using test "%s".' % self.test.get_title())
 		header.append("")
 
-		self.workarounds.print_status(self.protocols["workarounds"].append)
 		self.protocols["settings"].extend(
 			verify_admin_settings(master.driver, self.workarounds, master.report))
 
@@ -392,7 +402,7 @@ class Run:
 			self.success = "WEBDRIVER_CRASHED"
 			raise Exception("aborted due to webdriver errors")
 
-		num_readjustments = 1
+		num_readjustments = max(0, int(self.settings.num_readjustments))
 		all_assertions_ok = False
 
 		for i in range(num_readjustments + 1):

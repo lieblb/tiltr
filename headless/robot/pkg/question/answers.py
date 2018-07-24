@@ -257,9 +257,10 @@ def implicit_text_to_number_xls(context, value):
 			# e.g. 0.637010 -> 0.63701
 			value = value[:-1]
 
-		if value.endswith(".0"):
-			# e.g. 5.0 -> 5
-			value = value[:-2]
+		if value == "0.0":
+			# e.g. "0.0" -> "0".  note that other conversions, e.g. 597.0 -> 597, don't
+			# take place!
+			value = "0"
 
 	return value
 
@@ -421,9 +422,7 @@ class AbstractLongTextAnswer:
 				"\n".join(context.strip_whitespace(s) for s in self.current_answer.split("\n")))),
 			context.collapse_whitespace(context.strip_whitespace(text)))
 
-		for c in text:
-			context.coverage.case_occurred(self.question, "verify", "char", c)
-		context.coverage.case_occurred(self.question, "verify", "len", len(text))
+		self.question.add_verify_coverage(context.coverage, dict(Ergebnis=text))
 
 	def encode(self, context):
 		return dict(

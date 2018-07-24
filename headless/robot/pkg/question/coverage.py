@@ -6,6 +6,7 @@
 #
 
 import json
+from collections import Counter
 
 
 class Coverage:
@@ -25,6 +26,25 @@ class Coverage:
 
 	def add_case(self, question, *args):
 		self._cases.add(tuple([question.title] + list(args)))
+
+	def text_cases_occurred(self, text):
+		counts = Counter()
+		for char in text:
+			counts[char] += 1
+			yield ("char1", char)
+			yield ("len", len(text))
+		for char, count in counts.items():
+			if count >= 2:
+				yield ("char2", char)
+
+	def text_cases(self, max_size, context):
+		for char in context.long_text_random_chars:
+			yield ("char1", char)
+			yield ("char2", char)
+
+		for i in range(max_size):
+			if i > 0 or not context.workarounds.disallow_empty_answers:
+				yield ("len", i)
 
 	def as_dict(self):
 		return dict(

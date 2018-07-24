@@ -150,7 +150,7 @@ class StartBatchHandler(tornado.web.RequestHandler):
 	def post(self):
 		data = json.loads(self.request.body)
 
-		settings = Settings()
+		settings = Settings(from_dict=data["settings"])
 		workarounds = Workarounds(from_dict=data["workarounds"])
 		test_id = data["test"]
 		wait_time = 0
@@ -205,17 +205,22 @@ class ScreenshotHandler(tornado.web.RequestHandler):
 		self.finish()
 
 
-class WorkaroundsHandler(tornado.web.RequestHandler):
+class PreferencesHandler(tornado.web.RequestHandler):
 	def initialize(self, state):
 		self.state = state
 
 	def get(self):
 		if self.state.batch:
+			settings = self.state.batch.settings
 			workarounds = self.state.batch.workarounds
 		else:
-			workarounds = Workarounds()  # default settings
+			# use defaults
+			settings = Settings()
+			workarounds = Workarounds()
 
-		self.write(json.dumps(workarounds.get_catalog()))
+		self.write(json.dumps(dict(
+			settings=settings.get_catalog(),
+			workarounds=workarounds.get_catalog())))
 		self.finish()
 
 
@@ -311,7 +316,7 @@ def make_app(machines):
 		(r"/start", StartBatchHandler, dict(state=state)),
 		(r"/websocket/(?P<batch>[^/]+)", WebSocketHandler, dict(state=state)),
 		(r"/screenshot/(?P<machine>.+)", ScreenshotHandler, dict(state=state)),
-		(r"/workarounds.json", WorkaroundsHandler, dict(state=state)),
+		(r"/preferences.json", PreferencesHandler, dict(state=state)),
 
 		(r"/tests.json", TestsHandler, dict(state=state)),
 		(r"/status.json", StatusHandler, dict(state=state)),
