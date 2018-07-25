@@ -8,6 +8,9 @@
 import json
 
 
+def looks_like_a_number(x):
+	return x.count('.') <= 1 and all(y.isdigit() or len(y) < 1 for y in x.split('.'))
+
 class ValueBag:
 	def __init__(self, options, from_dict=None):
 		self.options = options
@@ -72,7 +75,7 @@ class Workarounds(ValueBag):
 			),
 			(
 				"implicit_text_number_conversions",
-				"cloze texts in xls are converted into numbers, e.g. \".17\" becomes \"0,17\"."
+				"cloze texts in xls are converted into numbers, e.g. \".17\" becomes \"0.17\"."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1082.
@@ -116,7 +119,26 @@ class Workarounds(ValueBag):
 
 
 	def strip_whitespace(self, value):
-		if isinstance(value, str):
-			if self.sloppy_whitespace:
-				value = value.strip()
+		if isinstance(value, str) and self.sloppy_whitespace:
+			value = value.strip()
 		return value
+
+	def implicit_text_to_number_xls(self, value):
+		# there are also several implicit conversions taking place when taking the number
+		# from ILIAS into the XLS, but they are different from the ones inside ILIAS itself,
+		# i.e. from implicit_text_to_number.
+
+		if isinstance(value, str) and looks_like_a_number(value) and self.implicit_text_number_conversions:
+			while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
+				# e.g. 0.637010 -> 0.63701
+				value = value[:-1]
+
+			if value == "0.0":
+				# e.g. "0.0" -> "0".  note that other conversions, e.g. 597.0 -> 597, don't
+				# take place!
+				value = "0"
+
+		return value
+
+	def normalize(self, value):
+		return self.implicit_text_to_number_xls(self.strip_whitespace(value))

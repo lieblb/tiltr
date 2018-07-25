@@ -100,7 +100,6 @@ class Result:
 				answers[question_title][dimension] = value
 		return answers
 
-
 	def check_against(self, other, report, workarounds):
 		all_ok = True
 
@@ -114,8 +113,8 @@ class Result:
 			value_self = "%s" % self_properties.get(k, None)
 			value_other = "%s" % other_properties.get(k, None)
 
-			value_self = workarounds.strip_whitespace(value_self)
-			value_other = workarounds.strip_whitespace(value_other)
+			value_self = workarounds.normalize(value_self)
+			value_other = workarounds.normalize(value_other)
 
 			if value_self == value_other:
 				status = "OK"

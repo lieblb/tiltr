@@ -257,6 +257,10 @@ def implicit_text_to_number_xls(context, value):
 			# e.g. 0.637010 -> 0.63701
 			value = value[:-1]
 
+		if len(value) >= 2 and value[0] == '.' and value[-1] != '0':
+			# e.g. .94853 -> .948530
+			value += "0"
+
 		if value == "0.0":
 			# e.g. "0.0" -> "0".  note that other conversions, e.g. 597.0 -> 597, don't
 			# take place!
@@ -443,8 +447,7 @@ class LongTextAnswerPlainHTML(AbstractLongTextAnswer):
 		set_element_value(self.driver, element, value)
 
 	def _encoded_current_answer(self, context):
-		# certain implicit number conversions, e.g. 92.0 -> 92 in xls
-		return implicit_text_to_number_xls(context, self.current_answer)
+		return self.current_answer
 
 
 class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
@@ -490,8 +493,7 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 			return ""
 		else:
 			s = ""
-			# certain implicit number conversions, e.g. 92.0 -> 92 in xls
-			answer = implicit_text_to_number_xls(context, self.current_answer)
+			answer = self.current_answer
 
 			for line in answer.split("\n"):
 				if len(s) > 0:
