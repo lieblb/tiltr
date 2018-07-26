@@ -128,15 +128,22 @@ class Workarounds(ValueBag):
 		# from ILIAS into the XLS, but they are different from the ones inside ILIAS itself,
 		# i.e. from implicit_text_to_number.
 
-		if isinstance(value, str) and looks_like_a_number(value) and self.implicit_text_number_conversions:
-			while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
-				# e.g. 0.637010 -> 0.63701
-				value = value[:-1]
+		if self.implicit_text_number_conversions:
+			# also catch more esoteric conversions like 3E6 -> 3000000
+			try:
+				value = str(float(value))
+			except ValueError:
+				pass
 
-			if value == "0.0":
-				# e.g. "0.0" -> "0".  note that other conversions, e.g. 597.0 -> 597, don't
-				# take place!
-				value = "0"
+			if isinstance(value, str) and looks_like_a_number(value):
+				while value.endswith("0") and value.count('.') == 1 and not value.endswith(".0"):
+					# e.g. 0.637010 -> 0.63701
+					value = value[:-1]
+
+				if value == "0.0":
+					# e.g. "0.0" -> "0".  note that other conversions, e.g. 597.0 -> 597, don't
+					# take place!
+					value = "0"
 
 		return value
 
