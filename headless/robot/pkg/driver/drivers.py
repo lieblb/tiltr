@@ -586,19 +586,30 @@ class TestDriver():
 		# add new item: Test.
 		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
 		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
+		wait_for_css(driver, 'input[name="cmd[importFile]"]')
 
 		# click on import to get dedicated import mask.
+		import_button = None
 		for accordion in driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"):
-			if accordion.find_element_by_name("cmd[importFile]"):
-				accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
-				accordion.find_element_by_name("cmd[importFile]").click()
+			accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
+			try:
+				import_button = accordion.find_element_by_name("cmd[importFile]")
 				break
+			except NoSuchElementException:
+				pass
+
+		if not import_button:
+			raise Exception("test import button not found.")
+		with wait_for_page_load(driver):
+			#driver.execute_script("document.getElementById('xmldoc').value = arguments[0]", self.test.get_path())
+			driver.find_element_by_id("xmldoc").send_keys(self.test.get_path())
+			import_button.click()
 
 		# now import.
-		with wait_for_page_load(driver):
-			driver.find_element_by_css_selector(".ilCreationFormSection #xmldoc")
-			set_element_value_by_css(driver, "#xmldoc", self.test.get_path())
-			driver.find_element_by_name("cmd[importFile]").click()
+		#with wait_for_page_load(driver):
+		#	driver.find_element_by_css_selector(".ilCreationFormSection #xmldoc")
+		#	set_element_value_by_css(driver, "#xmldoc", self.test.get_path())
+		#	driver.find_element_by_name("cmd[importFile]").click()
 
 		with wait_for_page_load(driver):
 			driver.find_element_by_name("cmd[importVerifiedFile]").click()
