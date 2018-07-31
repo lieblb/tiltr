@@ -102,6 +102,24 @@ sudo docker volume rm $(sudo docker volume ls -qf dangling=true)
 docker-compose build --no-cache
 ```
 
+## Cleaning up docker
+
+Over time, and if running over several days, the involved docker images will grow larger and larger (GBs per machine). At some point,
+drives might get full and ILIAS will fail with random errors. To clean up, you might want to do a `docker system prune`.
+
+## Building the DB container from scratch
+
+Sometimes - after purging containers - ILIAS itself won't start up and you get `An undefined Database Exception occured. SQLSTATE[42S02]: Base table or view not found`.
+
+In these cases, delete the DB container and image, e.g.:
+
+```
+docker rm testilias_db_1
+docker rmi testilias_db
+```
+
+Then start `up.py` and give it several minutes, as the DB import needs substantial time.
+
 ## Updating the DB dump for newer versions of ILIAS
 
 TestILIAS intializes its ILIAS installation using a minimal default DB. As new ILIAS versions are published, it will be necessary to recreate this dump. Here's how to do this:
