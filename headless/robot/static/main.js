@@ -379,16 +379,17 @@ $(function() {
 		};
 	}
 
-	function updateLoopButton() {
+	function updateSettings() {
 		$.getJSON(host + "/settings.json", function(settings) {
 			if (settings.looping) {
 				$("#run-loop").addClass("is-info is-selected");
 			} else {
 				$("#run-loop").removeClass("is-info is-selected");
 			}
+			$("#host_disk_free").text(settings.host_disk_free + " on host disk.");
 		});
 	}
-	updateLoopButton();
+	updateSettings();
 
 	$("#run-loop").click(function() {
 			$.ajax({
@@ -397,7 +398,7 @@ $(function() {
 				data: JSON.stringify({
 					looping: !$("#run-loop").hasClass("is-selected")})
 			}).done(function() {
-				updateLoopButton();
+				updateSettings();
 			});
 	});
 
@@ -442,7 +443,7 @@ $(function() {
 				}
 			});
 		}
-		updateLoopButton();
+		updateSettings();
 	}, 2000);
 
 	$("#start").on("click", restart);

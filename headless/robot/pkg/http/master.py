@@ -12,6 +12,8 @@ import re
 import json
 import threading
 import time
+import humanize
+import shutil
 
 import tornado.ioloop
 import tornado.web
@@ -267,8 +269,12 @@ class SettingsHandler(tornado.web.RequestHandler):
 		self.state = state
 
 	def get(self):
+		total, used, free = shutil.disk_usage(__file__)
+
 		self.write(json.dumps(dict(
-			looping=self.state.looping)))
+			looping=self.state.looping,
+			host_disk_free=humanize.naturalsize(free))))
+
 		self.finish()
 
 	def post(self):
