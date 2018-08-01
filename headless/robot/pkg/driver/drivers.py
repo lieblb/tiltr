@@ -155,12 +155,11 @@ def add_user(driver, username, password):
 
 
 def delete_user(driver, username):
-	activator = driver.find_element_by_css_selector(".ilTableFilterActivator")
-	if activator.isDisplayed():
-		try:
-			activator.click()
-		except:
-			pass
+	try:
+		activator = driver.find_element_by_css_selector(".ilTableFilterActivator")
+		activator.click()
+	except WebDriverException:
+		pass
 
 	apply_filter = "input[name='cmd[applyFilter]']"
 	wait_for_css_visible(driver, apply_filter)
