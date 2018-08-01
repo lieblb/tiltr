@@ -131,8 +131,11 @@ def in_master(batch, protocol):
 	# moz:webdriverClick needed for file uploads to work.
 	capabilities = {"moz:webdriverClick": False}
 
+	log_path = "tmp/geckodriver.master.log"
+	open(log_path, 'w').close()  # empty log file
+
 	batch.report("master", "connecting to client browser...")
-	with Browser(headless=True, capabilities=capabilities, wait_time=batch.wait_time) as browser:
+	with Browser(headless=True, capabilities=capabilities, log_path=log_path, wait_time=batch.wait_time) as browser:
 		context.driver = browser.driver
 
 		test_driver = TestDriver(browser.driver, batch.test, batch.workarounds, context.report)
