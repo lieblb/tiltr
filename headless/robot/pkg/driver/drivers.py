@@ -440,7 +440,11 @@ class ExamDriver:
 				pass
 
 	def get_sequence_id(self):
-		return int(http_get_parameters(self.driver.current_url)["sequence"])
+		url = self.driver.current_url
+		try:
+			return int(http_get_parameters(url)["sequence"])
+		except KeyError:
+			raise Exception("could not find sequence in URL %s" % url)
 
 	def create_answer(self):
 		try:
