@@ -314,6 +314,7 @@ class ExamDriver:
 		self.report("finishing test.")
 
 		finish_test_css = 'a[data-nextcmd="finishTest"]'
+		give_up = False
 		with wait_for_page_load(self.driver):
 			while True:
 				try:
@@ -324,7 +325,10 @@ class ExamDriver:
 				except NoSuchElementException:
 					# try to go to next question
 					if not self.goto_next_question():
+						if give_up:
+							raise Exception("failed to finish test.")
 						self.driver.refresh()
+						give_up = True
 
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
