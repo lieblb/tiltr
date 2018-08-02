@@ -36,7 +36,7 @@ class Result:
 			self.errors = data["errors"]
 			self.coverage = Coverage(from_dict=data["coverage"])
 		else:
-			self.origin = kwargs["origin"]
+			self.origin = kwargs.get("origin", "unknown")
 			self.properties = dict()
 			self.protocol = []
 			self.performance = []
