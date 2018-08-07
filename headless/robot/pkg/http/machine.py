@@ -10,6 +10,7 @@ import traceback
 import sys
 import json
 import time
+import os
 
 import tornado.ioloop
 import tornado.web
@@ -17,6 +18,7 @@ import tornado.web
 from splinter import Browser
 
 from ..driver import TakeExamCommand
+from .utils import clear_tmp
 
 
 class GlobalState:
@@ -32,6 +34,7 @@ class GlobalState:
 class Runner(threading.Thread):
 	def __init__(self, state, batch, command):
 		threading.Thread.__init__(self)
+		clear_tmp()
 		self.browser = state.create_browser(command.machine_index, command.wait_time)
 		self.wait_time = command.wait_time
 		self.batch = batch

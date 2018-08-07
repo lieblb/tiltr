@@ -24,6 +24,7 @@ from ..driver.batch import Batch
 from ..driver.drivers import Test
 from ..result import open_results
 from ..settings import Settings, Workarounds
+from .utils import clear_tmp
 
 
 def get_ilias_version():
@@ -97,6 +98,7 @@ class GlobalState:
 			return None
 
 		if self.batch is None:
+			clear_tmp()
 			self.batch = Batch(self.machines, ilias_version, test_name, settings, workarounds, wait_time)
 			self.batch.start()
 
