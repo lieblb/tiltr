@@ -125,7 +125,7 @@
 				<article id="message-results-summary" class="message is-info">
 					<div class="message-header">
 						<p>Results</p>
-						<button class="delete" id="delete-results"></button>
+						<a id="delete-results" class="button is-danger">Delete</a>
 					</div>
 					<div class="message-body">
 						<table class="table is-fullwidth">
@@ -143,6 +143,10 @@
 				<article id="message-results-coverage" class="message is-info" style="margin-top:2em;">
 					<div class="message-header">
 						<p>Coverage</p>
+						<a id="toggle-coverage" class="button">
+							<span class="oi iconic-size-lg" data-glyph="chevron-bottom" style="font-size:1em;">
+							</span>
+						</a>
 					</div>
 					<div class="message-body">
 						<table class="table is-fullwidth">
@@ -157,9 +161,13 @@
 					</div>
 				</article>
 
-				<article id="message-results" class="message is-info" style="margin-top:2em;">
+				<article id="message-results-details" class="message is-info" style="margin-top:2em;">
 					<div class="message-header">
 						<p>Details</p>
+						<a id="toggle-details" class="button">
+							<span class="oi iconic-size-lg" data-glyph="chevron-bottom" style="font-size:1em;">
+							</span>
+						</a>
 					</div>
 					<div class="message-body">
 						<table class="table is-fullwidth">
@@ -172,6 +180,10 @@
 				<article id="message-results-performance" class="message is-info" style="margin-top:2em;">
 					<div class="message-header">
 						<p>Performance</p>
+						<a id="toggle-performance" class="button">
+							<span class="oi iconic-size-lg" data-glyph="chevron-bottom" style="font-size:1em;">
+							</span>
+						</a>
 					</div>
 					<div class="message-body">
 						<div id="performance-plot"></div>

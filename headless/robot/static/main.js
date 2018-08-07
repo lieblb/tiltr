@@ -108,21 +108,19 @@ $(function() {
 		}
     }
 
+    var panels = {
+		"coverage": false,
+		"details": false,
+		"performance": false
+	};
+
 	function updateResults() {
-		$.getJSON(host + "/results.json", function(results) {
-			$("#results-overview").empty();
-			$("#results").empty();
+		$.getJSON(host + "/results-counts.json", function(counts) {
+            $("#results-overview").empty();
 
-			var articles = $('article[id^="message-results"]');
-			if (results.entries.length == 0) {
-				articles.hide();
-			} else {
-				articles.show();
-				updateCoverage(results.coverage);
-			}
-
-			for (var status in results.counts) {
-				var count = results.counts[status];
+			var n = 0;
+			for (var status in counts) {
+				var count = counts[status];
 
 				var tr = $("<tr></tr>");
 
@@ -141,38 +139,84 @@ $(function() {
 				tr.append(td);
 
 				$("#results-overview").append(tr);
+
+				n += count.runs;
             }
 
-			var entries = results.entries;
-			for (var i = 0; i < entries.length; i++) {
-				var tr = $("<tr></tr>");
-				tr.append($("<td>" + entries[i].time + "</td>"));
-
-				var td = $("<td></td>");
-				td.append(getIcon("status_" + entries[i].success));
-				tr.append(td);
-
-				tr.append($("<td>" + entries[i].success + ".</td>"));
-
-				tr.append($('<td><a href="' + host + '/result/' + entries[i].batch + '.zip">Download</a></td>'));
-
-				$("#results").append(tr);
+			var articles = $('article[id^="message-results"]');
+			if (n < 1) {
+				articles.hide();
+			} else {
+				articles.show();
 			}
+        });
 
-			if (entries.length > 0) {
-				$.getJSON(host + "/performance.json", function(performance) {
-					var trace = {
-					    x: performance,
-					    type: 'histogram'
-					};
-					var layout = {
-					};
-					var data = [trace];
-					Plotly.newPlot('performance-plot', data, layout);
-				});
-			}
-		});
+		if (panels.coverage) {
+			$.getJSON(host + "/results-coverage.json", function(coverage) {
+				$("#message-results-coverage .message-body").show();
+				updateCoverage(coverage);
+	        });
+		} else {
+			$("#message-results-coverage .message-body").hide();
+		}
+
+		if (panels.details) {
+			$.getJSON(host + "/results-details.json", function(entries) {
+				$("#results").empty();
+
+				$("#message-results-details .message-body").show();
+
+				for (var i = 0; i < entries.length; i++) {
+					var tr = $("<tr></tr>");
+					tr.append($("<td>" + entries[i].time + "</td>"));
+
+					var td = $("<td></td>");
+					td.append(getIcon("status_" + entries[i].success));
+					tr.append(td);
+
+					tr.append($("<td>" + entries[i].success + ".</td>"));
+
+					tr.append($('<td><a href="' + host + '/result/' + entries[i].batch + '.zip">Download</a></td>'));
+
+					$("#results").append(tr);
+				}
+			});
+		} else {
+			$("#message-results-details .message-body").hide();
+		}
+
+		if (panels.performance) {
+			$("#message-results-performance .message-body").show();
+
+			$.getJSON(host + "/performance.json", function(performance) {
+				var trace = {
+					x: performance,
+					type: 'histogram'
+				};
+				var layout = {
+				};
+				var data = [trace];
+				Plotly.newPlot('performance-plot', data, layout);
+			});
+		} else {
+			$("#message-results-performance .message-body").hide();
+		}
 	}
+
+	$("#toggle-coverage").on("click", function() {
+		panels.coverage = !panels.coverage;
+		updateResults();
+	});
+
+	$("#toggle-details").on("click", function() {
+		panels.details = !panels.details;
+		updateResults();
+	});
+
+	$("#toggle-performance").on("click", function() {
+		panels.performance = !panels.performance;
+		updateResults();
+	});
 
 	$("#delete-results").click(function() {
 		$.ajax({
@@ -392,14 +436,14 @@ $(function() {
 	updateSettings();
 
 	$("#run-loop").click(function() {
-			$.ajax({
-				method: "POST",
-				url: host + "/settings.json",
-				data: JSON.stringify({
-					looping: !$("#run-loop").hasClass("is-selected")})
-			}).done(function() {
-				updateSettings();
-			});
+		$.ajax({
+			method: "POST",
+			url: host + "/settings.json",
+			data: JSON.stringify({
+				looping: !$("#run-loop").hasClass("is-selected")})
+		}).done(function() {
+			updateSettings();
+		});
 	});
 
 	restart = function() {

@@ -55,7 +55,7 @@ class DB:
 		self.db.commit()
 		c.close()
 
-	def _get_total_coverage(self):
+	def get_coverage(self):
 		c = self.db.cursor()
 
 		c.execute("SELECT COUNT(*) FROM coverage_cases")
@@ -90,7 +90,7 @@ class DB:
 			observed=num_occurrences,
 			questions=list(questions.values()))
 
-	def get_results(self):
+	def get_counts(self):
 		c = self.db.cursor()
 
 		c.execute("SELECT success, COUNT(success), SUM(nusers) FROM results GROUP BY success")
@@ -102,6 +102,12 @@ class DB:
 			counts[row[0].decode("utf-8")] = dict(
 				runs=row[1],
 				users=row[2])
+
+		c.close()
+		return counts
+
+	def get_details(self):
+		c = self.db.cursor()
 
 		c.execute("SELECT created, batch, success FROM results ORDER BY created")
 
@@ -121,7 +127,8 @@ class DB:
 				success=success.decode("utf-8")
 			))
 		c.close()
-		return dict(counts=counts, entries=entries, coverage=self._get_total_coverage())
+		return entries
+
 
 	def get_performance_data_json(self):
 		c = self.db.cursor()

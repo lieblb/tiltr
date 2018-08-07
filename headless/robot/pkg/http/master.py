@@ -229,9 +229,19 @@ class PreferencesHandler(tornado.web.RequestHandler):
 
 
 class ResultsJsonHandler(tornado.web.RequestHandler):
-	def get(self):
+	def get(self, what):
 		with open_results() as db:
-			self.write(json.dumps(db.get_results()))
+			if what == "counts":
+				data = db.get_counts()
+			elif what == "details":
+				data = db.get_details()
+			elif what == "coverage":
+				data = db.get_coverage()
+			#elif what == "performance":
+			#	data = db.get_performance()
+
+			self.write(json.dumps(data))
+
 		self.finish()
 
 
@@ -328,7 +338,7 @@ def make_app(machines):
 
 		(r"/tests.json", TestsHandler, dict(state=state)),
 		(r"/status.json", StatusHandler, dict(state=state)),
-		(r"/results.json", ResultsJsonHandler),
+		(r"/results-(.*?).json", ResultsJsonHandler),
 		(r"/result/(?P<batch>[^/]+)", ResultsHandler),
 		(r"/delete-results", DeleteResultsHandler),
 		(r"/performance.json", PerformanceJsonHandler),
