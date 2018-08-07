@@ -26,6 +26,7 @@ class DB:
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
+		c.execute("CREATE TABLE IF NOT EXISTS longterm (created TIMESTAMP, success INTEGER, nusers INTEGER)")
 		self.db.commit()
 		c.close()
 		return self
@@ -35,8 +36,13 @@ class DB:
 
 	def put(self, batch_id, success, xls, protocol, num_users):
 		c = self.db.cursor()
+		now = datetime.datetime.now()
 		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers) VALUES (?, ?, ?, ?, ?, ?)",
-			(datetime.datetime.now(), batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users))
+			(now, batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users))
+
+		success_code = dict(OK=1, FAIL=0).get(success, -1)
+		c.execute("INSERT INTO longterm (created, success, nusers) VALUES (?, ?, ?)", (now, success_code, num_users));
+
 		self.db.commit()
 		c.close()
 
@@ -129,8 +135,7 @@ class DB:
 		c.close()
 		return entries
 
-
-	def get_performance_data_json(self):
+	def get_performance_data(self):
 		c = self.db.cursor()
 		c.execute("SELECT dt FROM performance")
 		dts = []
@@ -140,7 +145,28 @@ class DB:
 				break
 			dts.append(row[0] / 1000.0)
 		c.close()
-		return json.dumps(dts)
+		return dts
+
+	def get_longterm_data(self):
+		c = self.db.cursor()
+		data = dict()
+		tz = pytz.timezone('Europe/Berlin')
+		for success in ("OK", "FAIL"):
+			success_code = dict(OK=1, FAIL=0).get(success, -1)
+			c.execute("SELECT created, nusers FROM longterm WHERE success=?", (success_code,))
+			values = []
+			while True:
+				row = c.fetchone()
+				if row is None:
+					break
+
+				timestamp, n_users = row
+				timestamp = timestamp.replace(tzinfo=pytz.utc).astimezone(tz)
+
+				values.append((timestamp.strftime('%d.%m.%Y %H:%M:%S'), n_users))
+			data[success] = values
+		c.close()
+		return data
 
 	def get_protocols(self):
 		c = self.db.cursor()

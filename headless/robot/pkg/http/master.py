@@ -237,8 +237,10 @@ class ResultsJsonHandler(tornado.web.RequestHandler):
 				data = db.get_details()
 			elif what == "coverage":
 				data = db.get_coverage()
-			#elif what == "performance":
-			#	data = db.get_performance()
+			elif what == "performance":
+				data = db.get_performance_data()
+			elif what == "longterm":
+				data = db.get_longterm_data()
 
 			self.write(json.dumps(data))
 
@@ -266,13 +268,6 @@ class DeleteResultsHandler(tornado.web.RequestHandler):
 	def get(self):
 		with open_results() as db:
 			db.clear()
-		self.finish()
-
-
-class PerformanceJsonHandler(tornado.web.RequestHandler):
-	def get(self):
-		with open_results() as db:
-			self.write(db.get_performance_data_json())
 		self.finish()
 
 
@@ -341,7 +336,6 @@ def make_app(machines):
 		(r"/results-(.*?).json", ResultsJsonHandler),
 		(r"/result/(?P<batch>[^/]+)", ResultsHandler),
 		(r"/delete-results", DeleteResultsHandler),
-		(r"/performance.json", PerformanceJsonHandler),
 		(r"/settings.json", SettingsHandler, dict(state=state)),
 
 		(r"/static/jquery/(.*)", tornado.web.StaticFileHandler, {

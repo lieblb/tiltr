@@ -111,7 +111,8 @@ $(function() {
     var panels = {
 		"coverage": false,
 		"details": false,
-		"performance": false
+		"performance": false,
+		"longterm": false
 	};
 
 	function updateResults() {
@@ -188,7 +189,7 @@ $(function() {
 		if (panels.performance) {
 			$("#message-results-performance .message-body").show();
 
-			$.getJSON(host + "/performance.json", function(performance) {
+			$.getJSON(host + "/results-performance.json", function(performance) {
 				var trace = {
 					x: performance,
 					type: 'histogram'
@@ -201,6 +202,40 @@ $(function() {
 		} else {
 			$("#message-results-performance .message-body").hide();
 		}
+
+		if (panels.longterm) {
+			$("#message-results-longterm .message-body").show();
+
+			$.getJSON(host + "/results-longterm.json", function(longterm) {
+				var data = [];
+				for (var k = 0; k < 2; k++) {
+					var name = ["FAIL", "OK"][k];
+					var values = longterm[name];
+
+					var x = [];
+					var y = [];
+					for (var i = 0; i < values.length; i++) {
+						x.push(values[i][0]);
+						y.push(values[i][1]);
+					}
+
+					data.push({
+						x: x,
+						y: y,
+						type: 'scatter',
+						showlegend: true,
+						name: name
+					});
+				}
+
+				var layout = {
+				};
+
+				Plotly.newPlot('longterm-plot', data, layout);
+			});
+		} else {
+            $("#message-results-longterm .message-body").hide();
+        }
 	}
 
 	$("#toggle-coverage").on("click", function() {
@@ -215,6 +250,11 @@ $(function() {
 
 	$("#toggle-performance").on("click", function() {
 		panels.performance = !panels.performance;
+		updateResults();
+	});
+
+	$("#toggle-longterm").on("click", function() {
+		panels.longterm = !panels.longterm;
 		updateResults();
 	});
 
