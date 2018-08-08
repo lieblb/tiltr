@@ -208,23 +208,31 @@ $(function() {
 
 			$.getJSON(host + "/results-longterm.json", function(longterm) {
 				var data = [];
+				var counts = {};
+
 				for (var k = 0; k < 2; k++) {
 					var name = ["FAIL", "OK"][k];
 					var values = longterm[name];
 
 					var x = [];
 					var y = [];
+					var c = 0;
 					for (var i = 0; i < values.length; i++) {
 						x.push(values[i][0]);
 						y.push(values[i][1]);
+						c += values[i][1];
 					}
+					counts[name] = c;
 
 					data.push({
 						x: x,
 						y: y,
-						type: 'scatter',
+						type: 'bar',
 						showlegend: true,
-						name: name
+						name: name,
+						marker: {
+							color: name == "OK" ? 'rgb(0, 200, 0)' : 'rgb(200, 0, 0)'
+						}
 					});
 				}
 
@@ -232,6 +240,9 @@ $(function() {
 				};
 
 				Plotly.newPlot('longterm-plot', data, layout);
+
+				$("#longterm-ok").text(counts["OK"] + " users");
+				$("#longterm-fail").text(counts["FAIL"] + " users");
 			});
 		} else {
             $("#message-results-longterm .message-body").hide();
