@@ -327,7 +327,8 @@ class ExamDriver:
 					if not self.goto_next_question():
 						if give_up:
 							raise Exception("failed to finish test.")
-						self.driver.refresh()
+						with wait_for_page_load(self.driver):
+							self.driver.refresh()
 						give_up = True
 
 		with wait_for_page_load(self.driver):
@@ -733,18 +734,30 @@ class TestDriver():
 		return xls, wb
 
 	def get_gui_scores(self, usernames):
-		self.goto_statistics()
+		n_retries = 0
+		while True:
+			with wait_for_page_load(self.driver):
+				self.goto_statistics()
 
-		reached = None
-		login = None
-		for index, a in enumerate(self.driver.find_elements_by_css_selector("#tst_eval_all thead th a")):
-			nav = http_get_parameters(a.get_attribute("href"))["tst_eval_all_table_nav"].split(":")
-			if nav[0] == "reached":
-				reached = index
-			elif nav[0] == "login":
-				login = index
+			reached = None
+			login = None
 
-		assert reached is not None
+			for index, a in enumerate(self.driver.find_elements_by_css_selector("#tst_eval_all thead th a")):
+				nav = http_get_parameters(a.get_attribute("href"))["tst_eval_all_table_nav"].split(":")
+				if nav[0] == "reached":
+					reached = index
+				elif nav[0] == "login":
+					login = index
+
+			if reached is not None and login is not None:
+				break
+
+			n_retries += 1
+			if n_retries >= 2:
+				raise Exception("unable to get gui score")
+			with wait_for_page_load(self.driver):
+				self.driver.refresh()
+
 		scores = dict()
 
 		for tr in self.driver.find_elements_by_css_selector("#tst_eval_all tbody tr"):
