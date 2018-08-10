@@ -150,6 +150,7 @@ $(function() {
 			} else {
 				articles.show();
 			}
+			$('article[id="message-results-longterm"]').show();
         });
 
 		if (panels.coverage) {
