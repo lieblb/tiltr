@@ -19,6 +19,7 @@ from .drivers import Login, TestDriver, Test
 from ..result import Result, Origin, ErrorDomain
 from .context import RegressionContext, RandomContext
 from ..settings import Settings, Workarounds
+from ..question.answers import Validness
 
 
 class TakeExamCommand:
@@ -61,12 +62,19 @@ class TakeExamCommand:
 				float(self.settings.autosave_duration) +
 				float(self.settings.autosave_tolerance))
 
+	def _randomize_answer(self, exam_driver):
+		while True:
+			validness = exam_driver.randomize_answer()
+			if validness == Validness.VALID:
+				break
+			exam_driver.assert_error_on_save()
+
 	def _pass1(self, exam_driver, report):
 		report("entering pass 1.")
 		exam_driver.goto_first_question()
 
 		while True:
-			exam_driver.randomize_answer()
+			self._randomize_answer(exam_driver)
 			self._simulate_crash(exam_driver)
 			if not exam_driver.goto_next_question():
 				break
@@ -86,7 +94,7 @@ class TakeExamCommand:
 		for i in range(len(self.questions)):
 			exam_driver.verify_answer()
 			if random.random() * 100 < float(self.settings.modify_answer_frequency):
-				exam_driver.randomize_answer()
+				self._randomize_answer(exam_driver)
 				self._simulate_crash(exam_driver)
 			exam_driver.goto_next_or_previous_question()
 

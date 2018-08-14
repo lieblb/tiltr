@@ -122,6 +122,9 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 		return Decimal(0)
 
+	def is_valid_answer(self, value):
+		return True
+
 	def get_type(self):
 		return ClozeType.text
 
@@ -148,6 +151,9 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 
 	def get_score(self, text):
 		return self.options.get(text, Decimal(0))
+
+	def is_valid_answer(self, value):
+		return value in self.options
 
 	def get_type(self):
 		return ClozeType.select
@@ -182,6 +188,10 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 			coverage.case_occurred(self.question, self.index, "export", x)
 
 	def get_random_choice(self, context):
+		if not context.workarounds.disallow_invalid_answers:
+			if random.random() < 0.25:
+				return context.produce_text(20, context.cloze_random_chars), Decimal(0)
+
 		t = random.randint(1, 4)
 		if t == 1:
 			return str(self.numeric_lower), self.score
@@ -201,11 +211,21 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 				return str(round(self.numeric_upper + off, -self.exponent)), Decimal(0)
 
 	def get_score(self, text):
-		value = Decimal(text)
-		if self.numeric_lower <= value <= self.numeric_upper:
-			return self.score
-		else:
+		try:
+			value = Decimal(text)
+			if self.numeric_lower <= value <= self.numeric_upper:
+				return self.score
+			else:
+				return Decimal(0)
+		except InvalidOperation:
 			return Decimal(0)
+
+	def is_valid_answer(self, value):
+		try:
+			Decimal(value)
+			return True
+		except InvalidOperation:
+			return False
 
 	def get_type(self):
 		return ClozeType.numeric
@@ -314,6 +334,7 @@ class ClozeQuestion():
 	def get_random_answer(self, context):
 		while True:
 			answers = dict()
+			valid = dict()
 
 			previous_answers = defaultdict(set)
 			previous_answers_prob = 0.1 if self.identical_scoring else 0.25
@@ -327,16 +348,17 @@ class ClozeQuestion():
 					# option, though it's also tested through the case below.
 					choice = random.choice(list(previous))
 				else:
-					choice, choice_score = gap.get_random_choice(context)
+					choice, _ = gap.get_random_choice(context)
 
 				previous.add(choice)
 				answers[gap.index] = choice
+				valid[gap.index] = gap.is_valid_answer(choice)
 				all_empty = all_empty and self._is_empty_answer(choice, context)
 
 			if all_empty and context.workarounds.disallow_empty_answers:
 				pass  # retry
 			else:
-				return answers, self.compute_score_by_indices(answers, context)
+				return answers, valid, self.compute_score_by_indices(answers, context)
 
 	def readjust_scores(self, driver, report):
 		pass

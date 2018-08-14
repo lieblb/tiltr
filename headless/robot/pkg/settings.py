@@ -112,6 +112,11 @@ class Workarounds(ValueBag):
 				"identical scoring option in cloze texts ignores comparation settings."
 			),
 			(
+				# see https://www.ilias.de/mantis/view.php?id=23432
+				"disallow_invalid_answers",
+				"if enabled, prevents entering e.g. text in numeric cloze gaps. problems if disabled."
+			),
+			(
 				"enable_autosave",
 				"only test with enabled autosave, as simulated crashes will irretrievably lose data otherwise."
 			)

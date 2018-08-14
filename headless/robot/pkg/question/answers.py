@@ -11,6 +11,7 @@ import cgi
 import json
 import time
 import html
+from enum import Enum
 from selenium.common.exceptions import NoSuchElementException
 
 from .questions import ClozeType
@@ -21,6 +22,11 @@ def normalize_answer(value):
 	if isinstance(value, str):
 		value = value.replace("\n", "\\n")
 	return value
+
+
+class Validness:
+	VALID = 1
+	INVALID = -1
 
 
 class AnswerProtocol:
@@ -62,6 +68,7 @@ class SingleChoiceAnswer:
 
 	def randomize(self, context):
 		self._set_answer(*self.question.get_random_answer(context))
+		return Validness.VALID
 
 	def _set_answer(self, answer, score):
 		for choice in self._parse_ui():
@@ -116,6 +123,7 @@ class MultipleChoiceAnswer:
 
 	def randomize(self, context):
 		self._set_answers(*self.question.get_random_answer(context))
+		return Validness.VALID
 
 	def _set_answers(self, answers, score):
 		for choice in self._parse_ui():
@@ -282,7 +290,9 @@ class ClozeAnswer(object):
 		return u"Lücke " + str(gap.index)
 
 	def randomize(self, context):
-		self._set_answers(*self.question.get_random_answer(context))
+		answers, valid, score = self.question.get_random_answer(context)
+		self._set_answers(answers, score)
+		return Validness.VALID if all(valid.values()) else Validness.INVALID
 
 	def _set_answers(self, answers, score):
 		ui = self._parse_ui()
@@ -352,6 +362,7 @@ class KPrimAnswer(object):
 
 	def randomize(self, context):
 		self._set_answers(*self.question.get_random_answer(context))
+		return Validness.VALID
 
 	def _set_answers(self, answers, score):
 		ui = self._parse_ui()
@@ -407,6 +418,7 @@ class AbstractLongTextAnswer:
 	def randomize(self, context):
 		answer, score = self.question.get_random_answer(context)
 		self._set_answer(answer, score, context)
+		return Validness.VALID
 
 	def _set_answer(self, answer, score, context):
 		self.protocol.choose("Ergebnis", answer)

@@ -11,6 +11,7 @@ import io
 import requests
 import time
 import traceback
+import random
 
 from openpyxl import load_workbook
 from zipfile import ZipFile
@@ -391,10 +392,14 @@ class ExamDriver:
 
 		return True
 
-	def goto_next_or_previous_question(self):
+	def goto_next_or_previous_question(self, random_dir=False):
 		self.protocol.append((time.time(), "test", "goto next or previous question."))
 
-		for what in ("next", "previous"):
+		options = ("next", "previous")
+		if random_dir and random.random() < 0.5:
+			options = reversed(options)
+
+		for what in options:
 			try:
 				button = self.driver.find_element_by_css_selector(
 					'a[data-nextcmd="%sQuestion"]' % what)
@@ -409,6 +414,29 @@ class ExamDriver:
 			return True
 
 		return False
+
+	def assert_error_on_save(self):
+		self.protocol.append((time.time(), "test", "checking error on invalid save."))
+
+		sequence_id = self.get_sequence_id()
+		self.goto_next_or_previous_question(random_dir=True)
+
+		err_text = None
+
+		# after save, we should be still on the same page and see an error, like e.g.
+		# "please enter a numeric value." if we entered text in a numeric gap.
+		if self.get_sequence_id() != sequence_id:
+			err_text = "save succeeded even though saved data was invalid."
+
+		if err_text is None:
+			try:
+				self.driver.find_element_by_css_selector('div.alert-danger')
+			except NoSuchElementException:
+				err_text = "save presented no error though saved data was invalid."
+
+		if err_text:
+			self.protocol.append((time.time(), "test", err_text))
+			raise Exception(err_text)
 
 	def has_next_question(self):
 		try:
@@ -487,7 +515,7 @@ class ExamDriver:
 			self.create_answer()
 		answer = self.answers[sequence_id]
 		self.report('answering question "%s".' % answer.question.title)
-		answer.randomize(self.context)
+		return answer.randomize(self.context)
 
 	def verify_answer(self):
 		sequence_id = self.get_sequence_id()
