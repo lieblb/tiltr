@@ -6,6 +6,7 @@
 #
 
 from . import Result, Origin
+from ..exceptions import *
 from decimal import *
 
 
@@ -84,7 +85,7 @@ def check_workbook_consistency(wb, report, workarounds):
 		full_username = main_sheet.cell(row=user_index + 1, column=1).value
 
 		if wb.sheetnames[user_index] != full_username:
-			raise Exception('user worksheet name wrong: "%s" != "%s"' % (
+			raise IntegrityException('user worksheet name wrong: "%s" != "%s"' % (
 				wb.sheetnames[user_index], full_username))
 
 		user_sheet = wb.worksheets[user_index]

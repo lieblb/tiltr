@@ -15,6 +15,7 @@ from collections import defaultdict, Counter
 from selenium.common.exceptions import NoSuchElementException
 
 from ..driver.utils import wait_for_page_load, set_element_value
+from ..exceptions import *
 
 def readjust_score(score):
 	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
@@ -301,7 +302,7 @@ class ClozeQuestion():
 					driver)
 
 			else:
-				raise Exception("unsupported cloze type " + str(cloze_type))				
+				raise NotImplementedException("unsupported cloze type " + str(cloze_type))
 
 			self.gaps[gap_index] = gap
 
@@ -444,10 +445,10 @@ class SingleChoiceQuestion:
 		choices = self._get_ui(driver)
 
 		if len(choices) != len(self.choices):
-			raise Exception("wrong number of choices in readjustment.")
+			raise IntegrityException("wrong number of choices in readjustment.")
 		for key, score in self.choices.items():
 			if choices[key] != score:
-				raise Exception("wrong choice score in readjustment.")
+				raise IntegrityException("wrong choice score in readjustment.")
 
 		for key, score in list(choices.items()):
 			new_score = readjust_score(score)
@@ -631,7 +632,7 @@ class LongTextQuestion:
 		self.length = 20
 
 		if not driver.find_element_by_id("scoring_mode_non").is_selected():
-			raise Exception("only manual scoring is supported for tests with LongTextQuestion")
+			raise NotImplementedException("only manual scoring is supported for tests with LongTextQuestion")
 
 	def initialize_coverage(self, coverage, context):
 		for args in coverage.text_cases(self.length, context):

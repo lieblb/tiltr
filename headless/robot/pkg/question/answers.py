@@ -16,6 +16,7 @@ from selenium.common.exceptions import NoSuchElementException
 
 from .questions import ClozeType
 from ..driver.utils import set_element_value
+from ..exceptions import *
 
 
 def normalize_answer(value):
@@ -24,7 +25,7 @@ def normalize_answer(value):
 	return value
 
 
-class Validness:
+class Validness(Enum):
 	VALID = 1
 	INVALID = -1
 
@@ -37,7 +38,7 @@ class AnswerProtocol:
 	def choose(self, key, value):
 		self.entries.append((time.time(), "answered '%s' with '%s'" % (key, normalize_answer(value))))
 
-	def verify(self, key, expected, actual):
+	def verify(self, key, expected, actual, after_crash=False):
 		if expected == actual:
 			self.entries.append(
 				(time.time(), "OK verified that '%s' is still '%s'" % (key, normalize_answer(expected))))
@@ -45,7 +46,11 @@ class AnswerProtocol:
 			err = "FAIL answer on '%s' was stored incorrectly: answer was '%s', but ILIAS stored '%s'" % (
 				key, normalize_answer(expected), normalize_answer(actual))
 			self.entries.append((time.time(), err))
-			raise Exception("answer mismatch during in-test verification: " + err)
+
+			if after_crash:
+				raise AutoSaveException("answer mismatch after crash: " + err);
+			else:
+				raise IntegrityException("answer mismatch during in-test verification: " + err)
 
 	def add(self, text):
 		self.entries.append((time.time(), text))
@@ -90,13 +95,13 @@ class SingleChoiceAnswer:
 			choices.append(c)
 		return choices
 
-	def verify(self, context):
+	def verify(self, context, after_crash=False):
 		for c in self._parse_ui():
 			if c.label == self.current_answer:
 				expected = True
 			else:
 				expected = False
-			self.protocol.verify(c.label, expected, c.checked)
+			self.protocol.verify(c.label, expected, c.checked, after_crash=after_crash)
 		context.coverage.case_occurred(self.question, "verify", self.current_answer)
 
 	def encode(self, context):
@@ -155,9 +160,9 @@ class MultipleChoiceAnswer:
 				answers[choice] = 0
 		return answers
 
-	def verify(self, context):
+	def verify(self, context, after_crash=False):
 		for c in self._parse_ui():
-			self.protocol.verify(c.label, self.current_answers[c.label], c.checked)
+			self.protocol.verify(c.label, self.current_answers[c.label], c.checked, after_crash=after_crash)
 
 		context.coverage.case_occurred(
 			self.question, "verify", json.dumps(self._get_binary_answers()))
@@ -182,7 +187,7 @@ class ClozeAnswerGap(object):
 
 		match = gap_name_pattern.match(self.name)
 		if not match:
-			raise Exception("illegal gap name " + self.name)
+			raise InteractionException("illegal gap name " + self.name)
 		self.index = int(match.group(1))
 
 
@@ -218,7 +223,7 @@ class SelectAnswerGap(ClozeAnswerGap):
 				found = True
 				break
 		if not found:
-			raise Exception('option "%s" not found.' % new_value)
+			raise InteractionException('option "%s" not found.' % new_value)
 		self._value = new_value
 
 
@@ -320,7 +325,7 @@ class ClozeAnswer(object):
 
 		return indexed
 
-	def verify(self, context):
+	def verify(self, context, after_crash=False):
 		ui = self._parse_ui()
 		assert len(self.current_answers) == len(ui) and len(ui) == len(self.question.gaps)
 
@@ -329,7 +334,8 @@ class ClozeAnswer(object):
 			self.protocol.verify(
 				gap.get_export_name(),
 				recorded_value,
-				ui[gap.index].value)
+				ui[gap.index].value,
+				after_crash=after_crash)
 			gap.add_verify_coverage(context.coverage, recorded_value)
 
 	def encode(self, context):
@@ -387,14 +393,15 @@ class KPrimAnswer(object):
 	def _get_binary_answers(self):
 		return dict(zip(self.question.names, [int(x) for x in self.current_answers]))
 
-	def verify(self, context):
+	def verify(self, context, after_crash=False):
 		ui = self._parse_ui()
 
 		for i in range(4):
 			self.protocol.verify(
 				str(i),
 				self.current_answers[i],
-				ui[i][True].is_selected())
+				ui[i][True].is_selected(),
+				after_crash=after_crash)
 
 		context.coverage.case_occurred(
 			self.question, "verify", json.dumps(self._get_binary_answers()))
@@ -426,7 +433,7 @@ class AbstractLongTextAnswer:
 		self.current_answer = answer
 		self.current_score = score
 
-	def verify(self, context):
+	def verify(self, context, after_crash):
 		text = self._get_ui(context)
 
 		# strip_whitespace, since sometimes ILIAS sometimes adds additional newlines, e.g.:
@@ -436,7 +443,8 @@ class AbstractLongTextAnswer:
 			"Ergebnis",
 			context.collapse_whitespace(context.strip_whitespace(
 				"\n".join(context.strip_whitespace(s) for s in self.current_answer.split("\n")))),
-			context.collapse_whitespace(context.strip_whitespace(text)))
+			context.collapse_whitespace(context.strip_whitespace(text)),
+			after_crash=after_crash)
 
 		self.question.add_verify_coverage(context.coverage, dict(Ergebnis=text))
 
@@ -468,14 +476,14 @@ class LongTextAnswerTinyMCE(AbstractLongTextAnswer):
 		try:
 			iframe = self.driver.find_element_by_css_selector(iframe_css)
 		except NoSuchElementException:
-			raise Exception("could not find ilc_question_TextQuestion iframe")
+			raise InteractionException("could not find ilc_question_TextQuestion iframe")
 		self.driver.switch_to_frame(iframe)
 
 		try:
 			try:
 				tinymce = self.driver.find_element_by_css_selector("#tinymce")
 			except NoSuchElementException:
-				raise Exception("could not find TinyMCE element.")
+				raise InteractionException("could not find TinyMCE element.")
 
 			return f(tinymce)
 		finally:

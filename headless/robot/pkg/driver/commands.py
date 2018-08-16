@@ -16,10 +16,11 @@ import re
 from selenium.common.exceptions import WebDriverException
 
 from .drivers import Login, TestDriver, Test
-from ..result import Result, Origin, ErrorDomain
+from ..result import Result, Origin
 from .context import RegressionContext, RandomContext
 from ..settings import Settings, Workarounds
 from ..question.answers import Validness
+from ..exceptions import ErrorDomain, TestILIASException
 
 
 class TakeExamCommand:
@@ -73,6 +74,9 @@ class TakeExamCommand:
 		report("entering pass 1.")
 		exam_driver.goto_first_question()
 
+		if int(self.settings.self_test_fake_error_level) > ErrorDomain.none.value:
+			raise TestILIASException(ErrorDomain(int(self.settings.self_test_fake_error_level)))
+
 		while True:
 			self._randomize_answer(exam_driver)
 			self._simulate_crash(exam_driver)
@@ -123,25 +127,19 @@ class TakeExamCommand:
 
 						result = exam_driver.get_expected_result()
 						result.attach_coverage(context.coverage)
-					except WebDriverException:
+					except TestILIASException as e:
 						traceback.print_exc()
-						report("test aborted with webdriver error: %s" % traceback.format_exc())
-						r = Result.from_error(Origin.recorded, ErrorDomain.webdriver, traceback.format_exc())
+						report("test aborted: %s" % traceback.format_exc())
+						r = Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
 						exam_driver.copy_protocol(r)
 						return r
-					except:
-						traceback.print_exc()
-						report("test aborted with error: %s" % traceback.format_exc())
-						r = Result.from_error(Origin.recorded, ErrorDomain.qa, traceback.format_exc())
-						exam_driver.copy_protocol(r)
-						return r
-		except WebDriverException:
+		except TestILIASException as e:
 			traceback.print_exc()
-			report("test aborted with webdriver error: %s" % traceback.format_exc())
-			return Result.from_error(Origin.recorded, ErrorDomain.webdriver, traceback.format_exc())
+			report("test aborted: %s" % traceback.format_exc())
+			return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
 		except:
 			traceback.print_exc()
-			report("test aborted with error: %s" % traceback.format_exc())
+			report("test aborted with an unexpected error: %s" % traceback.format_exc())
 			return None
 
 		report("done running test.")

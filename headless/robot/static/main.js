@@ -15,11 +15,11 @@ $(function() {
 		for (var i = 0; i < settings.length; i++) {
 			var key = settings[i].key;
 			settingKeys.push(key);
-			var help = settings[i].description;
+			var description = settings[i].description;
 			$("#settings-table").append('<tr><td><label><input id="' +
-				key + '" type="text" class="input is-rounded"></td><td>' + key.split("_").join(" ") +
+				key + '" type="text" class="input is-rounded is-size-7"></td><td>' + description +
 				'</label><p id="' + key + '_help" class="help"></p></td></tr>');
-			$("#" + key + "_help").text(help);
+			//$("#" + key + "_help").text(help);
 			$("#" + key).val(settings[i].value);
 		}
 
@@ -27,11 +27,15 @@ $(function() {
 		for (var i = 0; i < workarounds.length; i++) {
 			var key = workarounds[i].key;
 			workaroundKeys.push(key);
-			var help = workarounds[i].description;
+			//var help = workarounds[i].description;
+
+			var regex = /^(W[0-9]+) (.+)/g;
+			var match = regex.exec(workarounds[i].description);
+
 			$("#workarounds-table").append('<tr><td><label class="checkbox"><input id="' +
-				key + '" type="checkbox"> ' + key.split("_").join(" ") + '</label><p id="' +
-				key + '_help" class="help"></p></td></tr>');
-			$("#" + key + "_help").text(help);
+				key + '" type="checkbox"> ' + match[1] + '</label><span id="' +
+				key + '_help" class="is-pulled-right"></span></td></tr>');
+			$("#" + key + "_help").text(match[2]);
 			$("#" + key).prop("checked", workarounds[i].value);
 		}
 	});
@@ -48,7 +52,11 @@ $(function() {
 	});
 
 	function getIcon(name) {
-		return $($("#icon_" + name).html());
+		var element = $("#icon_" + name.toLowerCase());
+		if (element.length == 0) {
+			element = $("#icon_status_fail");
+		}
+		return $(element.html());
 	}
 
 	function removeIds(element) {
@@ -128,7 +136,7 @@ $(function() {
 				var td;
 
 				td = $("<td></td>");
-				td.html(getIcon("status_" + status));
+				td.html(getIcon("status_" + status.replace("/", "_")));
 				tr.append(td);
 
 				td = $("<td></td>");
@@ -172,11 +180,13 @@ $(function() {
 					var tr = $("<tr></tr>");
 					tr.append($("<td>" + entries[i].time + "</td>"));
 
+					var success = entries[i].success;
+
 					var td = $("<td></td>");
-					td.append(getIcon("status_" + entries[i].success));
+					td.append(getIcon("status_" + success.replace("/", "_")));
 					tr.append(td);
 
-					tr.append($("<td>" + entries[i].success + ".</td>"));
+					tr.append($("<td>" + success + ".</td>"));
 
 					tr.append($('<td><a href="' + host + '/result/' + entries[i].batch + '.zip">Download</a></td>'));
 

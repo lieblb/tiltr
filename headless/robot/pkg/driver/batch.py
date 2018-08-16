@@ -11,7 +11,8 @@ import threading
 
 from splinter import Browser
 
-from ..result import Result, Origin, ErrorDomain
+from ..exceptions import ErrorDomain
+from ..result import Result, Origin
 from ..result import open_results
 from ..result.workbook import workbook_to_result, check_workbook_consistency
 
@@ -43,6 +44,10 @@ from contextlib import contextmanager
 monitor_mutex = Lock()
 
 
+def encode_success(success):
+	return "/".join(success)
+
+
 def take_exam(args):
 	asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -58,7 +63,7 @@ def take_exam(args):
 		r = requests.post("http://%s:8888/start/%s" % (machine, batch_id),
 			data={"command_json": command.to_json()})
 		if r.status_code != 200:
-			raise Exception("start call failed: %s" % r.status_code)
+			raise InteractionException("start call failed: %s" % r.status_code)
 
 		report("master", "test started on %s." % machine)
 
@@ -75,7 +80,7 @@ def take_exam(args):
 				monitor_mutex.release()
 
 			if r.status_code != 200:
-				raise Exception("monitor call failed: %s" % r.status_code)
+				raise InteractionException("monitor call failed: %s" % r.status_code)
 		
 			messages = json.loads(r.text)
 
@@ -87,7 +92,7 @@ def take_exam(args):
 				elif command == "ERROR":
 					raise Exception(payload)
 				else:
-					raise Exception("unknown command %s" % command)
+					raise InteractionException("unknown command %s" % command)
 
 			index += len(messages)
 
@@ -97,7 +102,7 @@ def take_exam(args):
 			report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
 		except:
 			print("report failed.")
-		return Result.from_error(Origin.recorded, ErrorDomain.qa, traceback.format_exc())
+		return Result.from_error(Origin.recorded, ErrorDomain.integrity, traceback.format_exc())
 
 	report("master", "received take_exam results from %s." % machine)
 	return Result(from_json=result_json)
@@ -159,9 +164,13 @@ def remove_trailing_zeros(s):
 		return s
 
 
+def get_most_severe_error(results):
+	return most_severe(r.get_most_severe_error() for r in results)
+
+
 class Run:
 	def __init__(self, batch):
-		self.success = "FAIL"
+		self.success = ("FAIL", "unknown")
 
 		self.xls = b""
 		self.performance_data = []
@@ -178,12 +187,6 @@ class Run:
 		self.ilias_version = batch.ilias_version
 		self.test = batch.test
 		self.wait_time = batch.wait_time
-
-	def _had_webdriver_errors(self, all_expected_results):
-		for recorded_result in all_expected_results:
-			if recorded_result.has_error(ErrorDomain.webdriver):
-				return True
-		return False
 
 	def _make_protocol(self, users):
 		sections = ["header",
@@ -284,7 +287,7 @@ class Run:
 			except TimeoutException:
 				retries += 1
 				if retries >= 1:
-					raise Exception("failed to readjust scores. giving up.")
+					raise InteractionException("failed to readjust scores. giving up.")
 				else:
 					master.report("readjustment failed, retrying.")
 				continue
@@ -399,11 +402,9 @@ class Run:
 		for recorded_result in all_recorded_results:
 			self.performance_data.extend(recorded_result.performance)
 
-		if self._had_webdriver_errors(all_recorded_results):
-			# there were webdriver problems during the test (e.g. we could not control Firefox
-			# properly), which means this result is not a valid test. do not mark this as a FAIL.
-			self.success = "WEBDRIVER_CRASHED"
-			raise Exception("aborted due to webdriver errors")
+		worst = get_most_severe_error(all_recorded_results)
+		if worst.value > ErrorDomain.none.value:
+			raise TestILIASException(worst)
 
 		num_readjustments = max(0, int(self.settings.num_readjustments))
 		all_assertions_ok = False
@@ -426,7 +427,7 @@ class Run:
 		self.add_to_protocol("result", "coverage estimated at %d%%." % coverage.get_percentage())
 
 		if all_assertions_ok:
-			self.success = "OK"
+			self.success = ("OK",)
 
 	def add_to_protocol(self, type, text):
 		self.protocols[type].append(text)
@@ -436,7 +437,7 @@ class Run:
 
 	def store(self):
 		with open_results() as db:
-			db.put(batch_id=self.batch_id, success=self.success, xls=self.xls,
+			db.put(batch_id=self.batch_id, success=encode_success(self.success), xls=self.xls,
 				protocol=self._make_protocol(self.users), num_users=len(self.users))
 			db.put_performance_data(self.performance_data)
 			db.put_coverage_data(self.coverage)
@@ -455,19 +456,20 @@ class Run:
 			with in_master(self.batch, self.protocol_master) as master:
 				self.analyze(master, all_recorded_results)
 
-		except WebDriverException:
-			traceback.print_exc()
-			self.report("master", "web driver exception received: %s." % traceback.format_exc())
-			self.add_to_protocol("result", "web driver error: %s" % traceback.format_exc())
-			self.success = "WEBDRIVER_CRASHED"
-
-		except:
+		except TestILIASException as e:
+			self.success = ("FAIL", e.get_error_domain_name())
 			traceback.print_exc()
 			self.report("master", "exception received: %s." % traceback.format_exc())
 			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
 
+		except:
+			self.success = ("FAIL", "unknown")
+			traceback.print_exc()
+			self.report("master", "unexpected exception received: %s." % traceback.format_exc())
+			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
+
 		finally:
-			self.add_to_protocol("result", "done with status %s." % self.success)
+			self.add_to_protocol("result", "done with status %s." % encode_success(self.success))
 
 			try:
 				if self.users:
@@ -524,7 +526,7 @@ class Batch(threading.Thread):
 		#profiler = cProfile.Profile()
 		#profiler.enable()
 
-		success = "FAIL"
+		success = ("FAIL", "unknown")
 		try:
 			asyncio.set_event_loop(asyncio.new_event_loop())
 
@@ -593,7 +595,7 @@ class Batch(threading.Thread):
 
 		self.flush()
 
-		encoded = json.dumps(dict(command="done", success=success))
+		encoded = json.dumps(dict(command="done", success=encode_success(success)))
 		for socket in self.sockets:
 			try:
 				socket.write_message(encoded)

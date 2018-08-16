@@ -11,6 +11,7 @@ import json
 def looks_like_a_number(x):
 	return x.count('.') <= 1 and all(y.isdigit() or len(y) < 1 for y in x.split('.'))
 
+
 class ValueBag:
 	def __init__(self, options, from_dict=None):
 		self.options = options
@@ -40,28 +41,35 @@ class Settings(ValueBag):
 		super().__init__([
 			(
 				"crash_frequency",
-			 	"frequency of simulated crashes of question navigations (in percent).",
-			 	1
+				"""Make the automation simulate a complete crash of the client browser with the given
+				percentage of question navigation operations.""",
+				1
 			),
 			(
 				"autosave_duration",
-			 	"configured autosave time.",
-			 	5
+				"""Make autosave happen every n seconds.""",
+				5
 			),
 			(
 				"autosave_tolerance",
-			 	"additional time to give autosave until crashing is considered safe.",
-			 	10
+				"""Additional time to wait after editing a question until crashing is considered safe.""",
+				10
 			),
 			(
 				"num_readjustments",
-				"number of readjustment tests after each exam (very patchy).",
+				"""Number of readjustment rounds after each exam (very patchy support).""",
 				0
 			),
 			(
 				"modify_answer_frequency",
-				"frequency of changing already given answers (in percent).",
+				"""Change already given answers this often on revisiting them (in percent).""",
 				50
+			),
+			(
+				"self_test_fake_error_level",
+				"""Generate fake errors of the specified error level for a simple self tests.
+				Use this to check that the current implementation correctly reports thrown exceptions.""",
+				0
 			)
 		], **kwargs)
 
@@ -70,55 +78,62 @@ class Workarounds(ValueBag):
 	def __init__(self, **kwargs):
 		super().__init__([
 			(
+				# e.g. " abc" might become "abc"
 				"sloppy_whitespace",
-				"whitespace is not always correctly preserved when saving answers."
+				"W01 Ignore whitespace inaccuracies in answers."
 			),
 			(
+				# e.g. allow ".17" to become "0.17"
 				"implicit_text_number_conversions",
-				"cloze texts in xls are converted into numbers, e.g. \".17\" becomes \"0.17\"."
+				"W02 Allow cloze texts to be reformatted as numbers in the XLS export."
 			),
 			(
+				# e.g. "3<Q>2<i" becomes "32"
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1082.
 				"disallow_clamps_in_cloze",
-				"<, > cause problems in cloze questions, e.g. \"3<Q>2<i\" becomes \"32\"."
+				"""W03 Do not use <, > in cloze questions."""
 			),
 			(
+				# e.g. "cv$1a" becomes "cva"
 				# see https://www.ilias.de/mantis/view.php?id=23143.
 				"disallow_dollar_in_cloze",
-				"$ cause problems in cloze questions, e.g. \"cv$1a\" becomes \"cva\"."
+				"""W04 Do not use $ in cloze questions."""
 			),
 			(
+				#  work around a missing numeric value like 0 or the computed score (which might be > 0)
 				"disallow_empty_answers",
-				"empty questions' scores in Excel are blank instead "
-				"of stating a number like 0 or the computed score (which might be > 0)."
+				"W05 Never give empty answers, as empty questions' scores in XLS exports are blank."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1052/
 				"random_xls_participant_sheet_orders",
-				"answer order for each xls participant sheet is random (and not normalized)."
+				"W06 Do not check for a defined participant order in the XLS export, as it is currently random."
 			),
 			(
 				# see https://www.ilias.de/mantis/view.php?id=18720
 				"force_tinymce",
-				"various encoding and decoding problems in non-TinyMCE mode"
+				"W07 Force TinyMCE to work around encoding and decoding problems in non-TinyMCE mode."
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1094
+				# work around plaintext in the XLS export undergoing HTML escapes due to TinyMCE escaping
 				"no_plaintext_longtext",
-				"text in XLS export won't be plaintext due to TinyMCE escaping."
+				"""W08 Allow the plaintext answer "a < b" to show up as "a &lt; b" in the XLS export."""
 			),
 			(
 				"identical_scoring_ignores_comparator",
-				"identical scoring option in cloze texts ignores comparation settings."
+				"W09 Allow the identical scoring option in cloze texts to ignore comparation settings."
 			),
 			(
 				# see https://www.ilias.de/mantis/view.php?id=23432
+				# works around problems with the error reporting of the current form submit mechanism.
 				"disallow_invalid_answers",
-				"if enabled, prevents entering e.g. text in numeric cloze gaps. problems if disabled."
+				"W10 Do not enter text in number cloze gaps."
 			),
 			(
+				# simulated crash will provoke data loss without this.
 				"enable_autosave",
-				"only test with enabled autosave, as simulated crashes will irretrievably lose data otherwise."
+				"W11 Inhibit tests without enabled autosave."
 			)
 		], **kwargs)
 

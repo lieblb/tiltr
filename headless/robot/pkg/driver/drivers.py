@@ -60,7 +60,7 @@ class Login:
 
 		try:
 			driver.find_element_by_css_selector("form[name='formlogin']")
-			raise Exception("login failed (error 2). aborting.")
+			raise InteractionException("login failed. aborting.")
 		except NoSuchElementException:
 			pass  # expected
 
@@ -121,7 +121,7 @@ def goto_administration_page(driver, id):
 			with wait_for_page_load(driver):
 				driver.get("http://web:80/ILIAS")
 
-	raise Exception("going to admin page %s failed." % id)
+	raise InteractionException("going to admin page %s failed." % id)
 
 
 def goto_test_administration(driver):
@@ -184,7 +184,7 @@ def delete_user(driver, username):
 
 def verify_admin_setting(name, value, expected, log):
 	if value != expected:
-		raise Exception("wrong administration setting: %s must be %s." % (name, expected))
+		raise InteractionException("wrong administration setting: %s must be %s." % (name, expected))
 	log.append("%s is %s." % (name, expected))
 
 
@@ -327,7 +327,7 @@ class ExamDriver:
 					# try to go to next question
 					if not self.goto_next_question():
 						if give_up:
-							raise Exception("failed to finish test.")
+							raise InteractionException("failed to finish test.")
 						with wait_for_page_load(self.driver):
 							self.driver.refresh()
 						give_up = True
@@ -360,7 +360,7 @@ class ExamDriver:
 		with wait_for_page_load(self.driver):
 			self.driver.refresh()
 
-		self.verify_answer()
+		self.verify_answer(after_crash=True)
 
 	def goto_first_question(self):
 		while True:
@@ -436,7 +436,7 @@ class ExamDriver:
 
 		if err_text:
 			self.protocol.append((time.time(), "test", err_text))
-			raise Exception(err_text)
+			raise IntegrityException(err_text)
 
 	def has_next_question(self):
 		try:
@@ -477,13 +477,13 @@ class ExamDriver:
 		try:
 			return int(http_get_parameters(url)["sequence"])
 		except KeyError:
-			raise Exception("could not find sequence in URL %s" % url)
+			raise InteractionException("could not find sequence in URL %s" % url)
 
 	def create_answer(self):
 		try:
 			page_title = self.driver.find_element_by_css_selector(".ilc_page_title_PageTitle")
 		except NoSuchElementException:
-			raise Exception("no question title found.")
+			raise InteractionException("no question title found.")
 
 		title = page_title.text
 		self.report('entering question "' + title + '"')
@@ -517,14 +517,14 @@ class ExamDriver:
 		self.report('answering question "%s".' % answer.question.title)
 		return answer.randomize(self.context)
 
-	def verify_answer(self):
+	def verify_answer(self, after_crash=False):
 		sequence_id = self.get_sequence_id()
 		if sequence_id not in self.answers:
-			raise Exception("cannot verify unknown answer " + str(sequence_id))
+			raise InteractionException("cannot verify unknown answer " + str(sequence_id))
 
 		answer = self.answers[sequence_id]
 		self.report('verifying question "%s".' % answer.question.title)
-		answer.verify(self.context)
+		answer.verify(self.context, after_crash)
 
 	def copy_protocol(self, result):
 		protocol = self.protocol[:]
@@ -640,7 +640,7 @@ class TestDriver():
 				pass
 
 		if not import_button:
-			raise Exception("test import button not found.")
+			raise InteractionException("test import button not found.")
 		with wait_for_page_load(driver):
 			#driver.execute_script("document.getElementById('xmldoc').value = arguments[0]", self.test.get_path())
 			driver.find_element_by_id("xmldoc").send_keys(self.test.get_path())
@@ -782,7 +782,7 @@ class TestDriver():
 
 			n_retries += 1
 			if n_retries >= 2:
-				raise Exception("unable to get gui score")
+				raise InteractionException("unable to get gui score")
 			with wait_for_page_load(self.driver):
 				self.driver.refresh()
 
@@ -824,7 +824,7 @@ class TestDriver():
 				title = driver.find_element_by_css_selector("#title").get_attribute("value")
 				if title in questions:
 					# our data structures use question titles as a primary key for questions.
-					raise Exception('duplicate question titled "%s" is not allowed.' % title)
+					raise InteractionException('duplicate question titled "%s" is not allowed.' % title)
 
 				cmd_class = http_get_parameters(self.driver.current_url)["cmdClass"]
 
@@ -844,7 +844,7 @@ class TestDriver():
 					self.report('parsing text question "%s".' % title)
 					questions[title] = LongTextQuestion(driver, title)
 				else:
-					raise Exception("unsupported question gui cmd_class " + cmd_class)
+					raise NotImplementedException("unsupported question gui cmd_class " + cmd_class)
 
 		return questions
 
@@ -925,7 +925,7 @@ class TestDriver():
 
 		if resume_player:
 			if not allow_resume:
-				raise Exception("test has already been started by this user. aborting.")
+				raise InteractionException("test has already been started by this user. aborting.")
 			with wait_for_page_load(self.driver):
 				resume_player.click()
 		else:
@@ -935,7 +935,7 @@ class TestDriver():
 				with wait_for_page_load(self.driver):
 					start_button.click()
 			except NoSuchElementException:
-				raise Exception("user does not have rights to start this test. aborting.")
+				raise InteractionException("user does not have rights to start this test. aborting.")
 
 		return ExamDriver(driver, self.report, context, questions)
 

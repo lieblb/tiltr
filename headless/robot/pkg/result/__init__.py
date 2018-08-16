@@ -6,23 +6,18 @@
 #
 
 import json
-import time
 from enum import Enum
 from decimal import *
 from collections import defaultdict
 
 from ..question.coverage import Coverage
 from .database import DB
+from ..exceptions import ErrorDomain, most_severe
 
 
 class Origin(Enum):
 	recorded = 0
 	exported = 1
-
-
-class ErrorDomain(Enum):
-	webdriver = 0
-	qa = 1
 
 
 class Result:
@@ -73,8 +68,8 @@ class Result:
 		r.errors[domain.name] = err
 		return r
 
-	def has_error(self, domain):
-		return domain.name in self.errors
+	def get_most_severe_error(self):
+		return most_severe(ErrorDomain[d] for d in self.errors.keys())
 
 	def get(self, key):
 		return self.properties.get(key, None)
