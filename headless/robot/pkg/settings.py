@@ -25,8 +25,13 @@ class ValueBag:
 			for option in self.options:
 				setattr(self, option[0], option[2] if len(option) > 2 else True)
 
-	def get_catalog(self):
-		return [dict(key=o[0], description=o[1], value=getattr(self, o[0])) for o in self.options]
+	def get_catalog(self, exclude=None):
+		if exclude is None:
+			exclude = set()
+		return [dict(
+			key=o[0],
+			description=o[1],
+			value=getattr(self, o[0])) for o in self.options if o[0] not in exclude]
 
 	def to_dict(self):
 		return dict((o[0], getattr(self, o[0])) for o in self.options)
@@ -75,6 +80,22 @@ class Settings(ValueBag):
 
 
 class Workarounds(ValueBag):
+	_solved = dict(
+		disallow_clamps_in_cloze=(5, 4)  # see https://github.com/ILIAS-eLearning/ILIAS/pull/1082.
+	)
+
+	@staticmethod
+	def get_solved(ilias_version_tuple):
+		if ilias_version_tuple is None:
+			return set()
+		else:
+			return set(k for k, version in Workarounds._solved.items() if ilias_version_tuple >= version)
+
+	@staticmethod
+	def disable_solved(d, ilias_version_tuple):
+		for key in Workarounds.get_solved(ilias_version_tuple):
+			d[key] = False
+
 	def __init__(self, **kwargs):
 		super().__init__([
 			(

@@ -31,7 +31,7 @@ def get_ilias_version():
 	from splinter import Browser
 	log_path = "tmp/geckodriver.master.log"
 	open(log_path, 'w').close()  # empty log file
-	browser = Browser(headless=True, log_path=log_path, wait_time=5)
+	browser = Browser(headless=True, log_path=log_path, wait_time=15)
 	browser.visit("http://web:80/ILIAS")
 
 	# if this is the first startup of ILIAS, it can take quite some time, until it's available.
@@ -80,6 +80,14 @@ class GlobalState:
 		if self.ilias_version is None:
 			self.ilias_version = get_ilias_version()  # try again
 		return self.ilias_version
+
+	def get_ilias_version_tuple(self):
+		version = self.get_ilias_version()
+		if version:
+			m = re.search("^v(\d+\.\d+\.\d+)", version)
+			if m:
+				return tuple(int(x) for x in m[1].split("."))
+		raise Exception("could not retrieve ILIAS version")
 
 	def set_looping(self, looping):
 		self.looping = looping
@@ -154,8 +162,11 @@ class StartBatchHandler(tornado.web.RequestHandler):
 	def post(self):
 		data = json.loads(self.request.body)
 
+		workarounds_dict = data["workarounds"]
+		Workarounds.disable_solved(workarounds_dict, self.state.get_ilias_version_tuple())
+
 		settings = Settings(from_dict=data["settings"])
-		workarounds = Workarounds(from_dict=data["workarounds"])
+		workarounds = Workarounds(from_dict=workarounds_dict)
 		test_id = data["test"]
 		wait_time = 0
 		batch_id = self.state.start_batch(test_id, settings, workarounds, wait_time)
@@ -222,9 +233,12 @@ class PreferencesHandler(tornado.web.RequestHandler):
 			settings = Settings()
 			workarounds = Workarounds()
 
+		fixed_workarounds = Workarounds.get_solved(
+			self.state.get_ilias_version_tuple())
+
 		self.write(json.dumps(dict(
 			settings=settings.get_catalog(),
-			workarounds=workarounds.get_catalog())))
+			workarounds=workarounds.get_catalog(exclude=fixed_workarounds))))
 		self.finish()
 
 
