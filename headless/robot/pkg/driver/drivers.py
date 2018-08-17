@@ -771,14 +771,14 @@ class TestDriver():
 		wb = load_workbook(filename=io.BytesIO(xls))
 		return xls, wb
 
-	def get_gui_scores(self, usernames):
+	def get_gui_scores(self, user_ids):
+		reached = None
+		login = None
+
 		n_retries = 0
 		while True:
 			with wait_for_page_load(self.driver):
 				self.goto_statistics()
-
-			reached = None
-			login = None
 
 			for index, a in enumerate(self.driver.find_elements_by_css_selector("#tst_eval_all thead th a")):
 				nav = http_get_parameters(a.get_attribute("href"))["tst_eval_all_table_nav"].split(":")
@@ -796,14 +796,35 @@ class TestDriver():
 			with wait_for_page_load(self.driver):
 				self.driver.refresh()
 
+			reached = None
+			login = None
+
+		# configure table to show up to 800 entries.
+		form = self.driver.find_element_by_css_selector("#evaluation_all")
+
+		button = form.find_element_by_css_selector("#ilAdvSelListAnchorText_sellst_rows_tst_eval_all")
+		button.click()
+
+		href_800 = form.find_element_by_css_selector("#sellst_rows_tst_eval_all_800")
+		#span_800 = group.find_element_by_xpath("//span[contains(text(), '800')]")
+		#href_800 = span_800.find_element_by_xpath("..")
+		href_800.click()
+
+		# now read out the scores for all participants.
 		scores = dict()
+		unassigned = dict(("[%s]" % name, name) for name in user_ids)
 
 		for tr in self.driver.find_elements_by_css_selector("#tst_eval_all tbody tr"):
-			tds = list(tr.find_elements_by_css_selector("td"))
-			for username in usernames:
-				if tds[login].text.strip() == ("[%s]" % username):
-					score = re.split("\s+", tds[reached].text)
-					scores[username] = Decimal(score[0])
+			columns = list(tr.find_elements_by_css_selector("td"))
+			key = columns[login].text.strip()
+			user_id = unassigned.get(key)
+			if user_id:
+				del unassigned[key]
+				score = re.split("\s+", columns[reached].text)
+				scores[user_id] = Decimal(score[0])
+
+		if len(unassigned) > 0:
+			raise InteractionException("failed to read out gui scores for %s" % ",".join(unassigned.keys()))
 
 		return scores
 
