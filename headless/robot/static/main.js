@@ -218,34 +218,31 @@ $(function() {
 			$("#message-results-longterm .message-body").show();
 
 			$.getJSON(host + "/results-longterm.json", function(longterm) {
-				var data = [];
-				var counts = {};
+				var counts = {"OK": 0, "FAIL": 0};
 
-				for (var k = 0; k < 2; k++) {
-					var name = ["FAIL", "OK"][k];
-					var values = longterm[name];
+				var x = [];
+				var y = [];
+				var colors = [];
 
-					var x = [];
-					var y = [];
-					var c = 0;
-					for (var i = 0; i < values.length; i++) {
-						x.push(values[i][0]);
-						y.push(values[i][1]);
-						c += values[i][1];
-					}
-					counts[name] = c;
+				for (var i = 0; i < longterm.length; i++) {
+					var r = longterm[i];
+					x.push(r[0]);
+					colors.push(r[1] > 0 ? 'rgb(0, 200, 0)' : 'rgb(200, 0, 0)');
+					y.push(r[2]);
 
-					data.push({
-						x: x,
-						y: y,
-						type: 'bar',
-						showlegend: true,
-						name: name,
-						marker: {
-							color: name == "OK" ? 'rgb(0, 200, 0)' : 'rgb(200, 0, 0)'
-						}
-					});
+					counts[r[1] > 0 ? "OK" : "FAIL"] += r[2];
 				}
+
+				data = [{
+					x: x,
+					y: y,
+					type: 'bar',
+					showlegend: true,
+					name: name,
+					marker: {
+						color: colors
+					}
+				}];
 
 				var layout = {
 				};

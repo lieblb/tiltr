@@ -40,7 +40,7 @@ class DB:
 		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers) VALUES (?, ?, ?, ?, ?, ?)",
 			(now, batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users))
 
-		success_code = dict(OK=1, FAIL=0).get(success, -1)
+		success_code = dict(OK=1, FAIL=0).get(success.split("/")[0], 0)
 		c.execute("INSERT INTO longterm (created, success, nusers) VALUES (?, ?, ?)", (now, success_code, num_users));
 
 		self.db.commit()
@@ -149,24 +149,23 @@ class DB:
 
 	def get_longterm_data(self):
 		c = self.db.cursor()
-		data = dict()
+		c.execute("SELECT created, success, nusers FROM longterm ORDER BY created")
+
 		tz = pytz.timezone('Europe/Berlin')
-		for success in ("OK", "FAIL"):
-			success_code = dict(OK=1, FAIL=0).get(success, -1)
-			c.execute("SELECT created, nusers FROM longterm WHERE success=?", (success_code,))
-			values = []
-			while True:
-				row = c.fetchone()
-				if row is None:
-					break
+		values = []
 
-				timestamp, n_users = row
-				timestamp = timestamp.replace(tzinfo=pytz.utc).astimezone(tz)
+		while True:
+			row = c.fetchone()
+			if row is None:
+				break
 
-				values.append((timestamp.strftime('%d.%m.%Y %H:%M:%S'), n_users))
-			data[success] = values
+			timestamp, success, n_users = row
+			timestamp = timestamp.replace(tzinfo=pytz.utc).astimezone(tz)
+
+			values.append((timestamp.strftime('%d.%m.%Y %H:%M:%S'), success, n_users))
+
 		c.close()
-		return data
+		return values
 
 	def get_protocols(self):
 		c = self.db.cursor()

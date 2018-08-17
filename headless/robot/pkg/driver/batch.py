@@ -490,7 +490,7 @@ class Run:
 			except:
 				self.report("master", "error saving result to db: %s." % traceback.format_exc())
 			finally:
-				self.report("master", "finished with status %s." % self.success)
+				self.report("master", "finished with status %s." % encode_success(self.success))
 
 		return self.success
 
