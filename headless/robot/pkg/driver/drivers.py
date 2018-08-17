@@ -38,6 +38,7 @@ class Login:
 		self.report = report
 		self.username = username
 		self.password = password
+		self.language = None
 
 	def __enter__(self):
 		self.report("opening login page.")
@@ -81,6 +82,12 @@ class Login:
 					new_password_retype=self.password + "_"
 				)
 				driver.find_element_by_css_selector("input[name='cmd[savePassword]']").click()
+
+		# only after login can we determine the user's language setting, that ILIAS properly reports
+		# in the <html> tag. needed for checking exported XLS contents.
+		self.language = driver.find_element_by_css_selector("html").get_attribute("lang")
+
+		return self
 
 	def __exit__(self, *args):
 		try:
@@ -314,26 +321,29 @@ class ExamDriver:
 	def __exit__(self, *args):
 		self.report("finishing test.")
 
-		finish_test_css = 'a[data-nextcmd="finishTest"]'
-		give_up = False
-		with wait_for_page_load(self.driver):
-			while True:
-				try:
-					finish_button = self.driver.find_element_by_css_selector(finish_test_css)
-					finish_button.click()
-					self.confirm_save()
-					break
-				except NoSuchElementException:
-					# try to go to next question
-					if not self.goto_next_question():
-						if give_up:
-							raise InteractionException("failed to finish test.")
-						with wait_for_page_load(self.driver):
-							self.driver.refresh()
-						give_up = True
+		try:
+			finish_test_css = 'a[data-nextcmd="finishTest"]'
+			give_up = False
+			with wait_for_page_load(self.driver):
+				while True:
+					try:
+						finish_button = self.driver.find_element_by_css_selector(finish_test_css)
+						finish_button.click()
+						self.confirm_save()
+						break
+					except NoSuchElementException:
+						# try to go to next question
+						if not self.goto_next_question():
+							if give_up:
+								raise InteractionException("failed to finish test.")
+							with wait_for_page_load(self.driver):
+								self.driver.refresh()
+							give_up = True
 
-		with wait_for_page_load(self.driver):
-			self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
+				with wait_for_page_load(self.driver):
+					self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
+		except WebDriverException:
+			raise InteractionException("failed to properly finish test")
 
 		self.protocol.append((time.time(), "test", "finished test."))
 
@@ -530,7 +540,7 @@ class ExamDriver:
 		protocol = self.protocol[:]
 
 		for sequence_id, answer in self.answers.items():
-			encoded = answer.encode(self.context)
+			encoded = answer.to_dict(self.context, "de")
 			question_title = encoded["title"]
 
 			for t, what in encoded["protocol"]:
@@ -545,7 +555,7 @@ class ExamDriver:
 
 		result.attach_protocol(protocol_lines)
 
-	def get_expected_result(self):
+	def get_expected_result(self, language):
 		def clip_score(score):
 			return max(score, Decimal(0))  # clamp score to >= 0 (FIXME: check test settings)
 
@@ -560,7 +570,7 @@ class ExamDriver:
 		result = Result(origin=Origin.recorded)
 
 		for sequence_id, answer in self.answers.items():
-			encoded = answer.encode(self.context)
+			encoded = answer.to_dict(self.context, language)
 			question_title = encoded["title"]
 			
 			for dimension_title, dimension_value in encoded["answers"].items():

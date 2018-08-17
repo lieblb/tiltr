@@ -104,7 +104,7 @@ class SingleChoiceAnswer:
 			self.protocol.verify(c.label, expected, c.checked, after_crash=after_crash)
 		context.coverage.case_occurred(self.question, "verify", self.current_answer)
 
-	def encode(self, context):
+	def to_dict(self, context, language):
 		answers = dict()
 		for choice in self.question.choices.keys():
 			if choice == self.current_answer:
@@ -167,7 +167,7 @@ class MultipleChoiceAnswer:
 		context.coverage.case_occurred(
 			self.question, "verify", json.dumps(self._get_binary_answers()))
 
-	def encode(self, context):
+	def to_dict(self, context, language):
 		return dict(
 			title=self.question.title,
 			answers=self._get_binary_answers(),
@@ -291,9 +291,6 @@ class ClozeAnswer(object):
 		self.current_score = None
 		self.protocol = AnswerProtocol(self.question.title)
 
-	def _ilias_gap_name(self, gap):
-		return u"Lücke " + str(gap.index)
-
 	def randomize(self, context):
 		answers, valid, score = self.question.get_random_answer(context)
 		self._set_answers(answers, score)
@@ -304,7 +301,7 @@ class ClozeAnswer(object):
 		assert len(answers) == len(ui) and len(ui) == len(self.question.gaps)
 
 		for gap in self.question.gaps.values():
-			self.protocol.choose(gap.get_export_name(), answers[gap.index])
+			self.protocol.choose(gap.get_export_name("de"), answers[gap.index])
 			ui[gap.index].value = answers[gap.index]
 
 		self.current_answers = answers
@@ -332,13 +329,13 @@ class ClozeAnswer(object):
 		for gap in self.question.gaps.values():
 			recorded_value = context.strip_whitespace(self.current_answers[gap.index])
 			self.protocol.verify(
-				gap.get_export_name(),
+				gap.get_export_name("de"),
 				recorded_value,
 				ui[gap.index].value,
 				after_crash=after_crash)
 			gap.add_verify_coverage(context.coverage, recorded_value)
 
-	def encode(self, context):
+	def to_dict(self, context, language):
 		answers = dict()
 		for gap in self.question.gaps.values():
 			value = self.current_answers[gap.index]
@@ -350,7 +347,7 @@ class ClozeAnswer(object):
 				# test, which will become "0" in excel export. not good.
 				value = implicit_text_to_number_xls(context, value)
 
-			answers[gap.get_export_name()] = value
+			answers[gap.get_export_name(language)] = value
 		return dict(
 			title=self.question.title,
 			answers=answers,
@@ -406,7 +403,7 @@ class KPrimAnswer(object):
 		context.coverage.case_occurred(
 			self.question, "verify", json.dumps(self._get_binary_answers()))
 
-	def encode(self, context):
+	def to_dict(self, context, language):
 		return dict(
 			title=self.question.title,
 			answers=self._get_binary_answers(),
@@ -414,6 +411,8 @@ class KPrimAnswer(object):
 
 
 class AbstractLongTextAnswer:
+	_export_names = dict(de="Ergebnis", en="Result")
+
 	def __init__(self, driver, question):
 		assert question.__class__.__name__ == "LongTextQuestion"
 		self.driver = driver
@@ -448,10 +447,12 @@ class AbstractLongTextAnswer:
 
 		self.question.add_verify_coverage(context.coverage, dict(Ergebnis=text))
 
-	def encode(self, context):
+	def to_dict(self, context, language):
+		export_name = AbstractLongTextAnswer._export_names[language]
+		pair = (export_name, self._encoded_current_answer(context))
 		return dict(
 			title=self.question.title,
-			answers=dict(Ergebnis=self._encoded_current_answer(context)),
+			answers=dict((pair,)),
 			protocol=self.protocol.encode())
 
 

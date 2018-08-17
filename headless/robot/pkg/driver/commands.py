@@ -43,6 +43,7 @@ class TakeExamCommand:
 		self.password = data["password"]
 		self.test_id = data["test_id"]
 		self.wait_time = data["wait_time"]
+		self.admin_lang = data["admin_lang"]
 
 	def to_json(self):
 		return json.dumps(dict(
@@ -55,7 +56,8 @@ class TakeExamCommand:
 			questions=base64.b64encode(pickle.dumps(self.questions, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
 			settings=self.settings.to_dict(),
 			workarounds=self.workarounds.to_dict(),
-			wait_time=self.wait_time))
+			wait_time=self.wait_time,
+			admin_lang=self.admin_lang))
 
 	def _simulate_crash(self, exam_driver):
 		if random.random() * 100 < float(self.settings.crash_frequency):
@@ -125,7 +127,7 @@ class TakeExamCommand:
 						self._pass2(exam_driver, report)
 						self._pass3(exam_driver, report)
 
-						result = exam_driver.get_expected_result()
+						result = exam_driver.get_expected_result(self.admin_lang)
 						result.attach_coverage(context.coverage)
 					except TestILIASException as e:
 						traceback.print_exc()

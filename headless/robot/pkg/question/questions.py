@@ -36,12 +36,14 @@ class ClozeComparator(Enum):
 
 
 class ClozeQuestionGap():
+	_export_names = dict(de="Lücke", en="Gap")
+
 	def __init__(self, question, index):
 		self.question = question
 		self.index = index
 
-	def get_export_name(self):
-		return u"Lücke " + str(self.index + 1)
+	def get_export_name(self, language):
+		return ClozeQuestionGap._export_names[language] + " " + str(self.index + 1)
 
 
 class ClozeQuestionTextGap(ClozeQuestionGap):
@@ -310,10 +312,10 @@ class ClozeQuestion():
 		for gap in self.gaps.values():
 			gap.initialize_coverage(coverage, context)
 
-	def add_export_coverage(self, coverage, answers):
+	def add_export_coverage(self, coverage, answers, language):
 		gaps = dict()
 		for gap in self.gaps.values():
-			gaps[gap.get_export_name()] = self.gaps[gap.index]
+			gaps[gap.get_export_name(language)] = self.gaps[gap.index]
 		for gap_name, value in answers.items():
 			print("cloze value %s" % value)
 			gaps[gap_name].add_export_coverage(coverage, str(value))
@@ -430,7 +432,7 @@ class SingleChoiceQuestion:
 			coverage.add_case(self, "verify", choice)
 			coverage.add_case(self, "export", choice)
 
-	def add_export_coverage(self, coverage, answers):
+	def add_export_coverage(self, coverage, answers, language):
 		for choice, checked in answers.items():
 			if checked != 0:
 				coverage.case_occurred(self, "export", str(choice))
@@ -523,7 +525,7 @@ class MultipleChoiceQuestion:
 				coverage.add_case(self, "verify", minimal_good_solution)
 				coverage.add_case(self, "export", minimal_good_solution)
 
-	def add_export_coverage(self, coverage, answers):
+	def add_export_coverage(self, coverage, answers, language):
 		coverage.case_occurred(self, "export", json.dumps(answers))
 
 	def get_random_answer(self, context):
@@ -589,7 +591,7 @@ class KPrimQuestion:
 				coverage.add_case(self, "verify", json.dumps(solution))
 				coverage.add_case(self, "export", json.dumps(solution))
 
-	def add_export_coverage(self, coverage, answers):
+	def add_export_coverage(self, coverage, answers, language):
 		coverage.case_occurred(self, "export", json.dumps(answers))
 
 	def compute_score(self, answers, context):
@@ -644,7 +646,7 @@ class LongTextQuestion:
 			for args in coverage.text_cases_occurred(text):
 				coverage.case_occurred(self, "verify", *args)
 
-	def add_export_coverage(self, coverage, answers):
+	def add_export_coverage(self, coverage, answers, language):
 		for text in answers.values():
 			for args in coverage.text_cases_occurred(text):
 				coverage.case_occurred(self, "export", *args)

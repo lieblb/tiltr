@@ -146,7 +146,8 @@ def in_master(batch, protocol):
 		test_driver = TestDriver(browser.driver, batch.test, batch.workarounds, context.report)
 		context.test_driver = test_driver
 
-		with Login(browser.driver, context.report, "root", "odysseus"):
+		with Login(browser.driver, context.report, "root", "odysseus") as login:
+			context.language = login.language
 			yield context
 
 
@@ -178,6 +179,7 @@ class Run:
 		self.users = []
 		self.protocols = defaultdict(list)
 		self.questions = None
+		self.language = None
 
 		self.batch = batch
 		self.machines = batch.machines
@@ -237,7 +239,7 @@ class Run:
 
 			for question_title, answers in ilias_result.get_answers().items():
 				question = self.questions[question_title]
-				question.add_export_coverage(self.coverage, answers)
+				question.add_export_coverage(self.coverage, answers, self.language)
 
 		return all_assertions_ok
 
@@ -323,6 +325,9 @@ class Run:
 			result.update(("exam", "score", "gui"), score)
 
 	def prepare(self, master):
+		self.language = master.language
+		master.report("running with admin language '%s'" % self.language)
+
 		master.report("running with workarounds:")
 		self.workarounds.print_status(master.report)
 		self.workarounds.print_status(self.protocols["preferences-workarounds"].append)
@@ -376,7 +381,8 @@ class Run:
 						questions=self.questions,
 						settings=self.settings,
 						workarounds=self.workarounds,
-						wait_time=self.wait_time)))
+						wait_time=self.wait_time,
+						admin_lang=self.language)))
 
 		pool = ThreadPool(len(self.users))
 		try:
