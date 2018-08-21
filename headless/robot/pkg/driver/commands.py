@@ -10,6 +10,7 @@ import traceback
 import json
 import random
 import base64
+import http
 import time
 import re
 
@@ -139,6 +140,9 @@ class TakeExamCommand:
 			traceback.print_exc()
 			report("test aborted: %s" % traceback.format_exc())
 			return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
+		except (BrokenPipeError, http.client.RemoteDisconnected):
+			report("test aborted: %s" % traceback.format_exc())
+			return Result.from_error(Origin.recorded, ErrorDomain.interaction, traceback.format_exc())
 		except:
 			traceback.print_exc()
 			report("test aborted with an unexpected error: %s" % traceback.format_exc())
