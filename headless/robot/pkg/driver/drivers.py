@@ -340,8 +340,9 @@ class ExamDriver:
 								self.driver.refresh()
 							give_up = True
 
-				with wait_for_page_load(self.driver):
-					self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
+			with wait_for_page_load(self.driver):
+				self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
+
 		except WebDriverException:
 			raise InteractionException("failed to properly finish test")
 
