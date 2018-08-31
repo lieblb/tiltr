@@ -207,11 +207,8 @@ def verify_admin_settings(driver, workarounds, report):
 		True,
 		log)
 
-	verify_admin_setting(
-		"locking for tests using db tables",
-		driver.find_element_by_id("ass_process_lock_mode_db").is_selected(),
-		True,
-		log)
+	for s in ('ass_process_lock_mode_file', 'ass_process_lock_mode_db'):
+		log.append("%s is %s." % (s, driver.find_element_by_id(s).is_selected()))
 
 	verify_admin_setting(
 		"html export for essay questions",
