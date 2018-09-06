@@ -310,12 +310,12 @@ class ExamDriver:
 		self.answers = dict()
 		self.protocol = []
 		self.dts = []
-
-	def __enter__(self):
 		self.protocol.append((time.time(), "test", "entered test."))
-		return self
 
-	def __exit__(self, *args):
+	def add_protocol(self, s):
+		self.protocol.append((time.time(), "test", s))
+
+	def close(self):
 		self.report("finishing test.")
 
 		try:
@@ -958,8 +958,20 @@ class TestDriver():
 			with wait_for_page_load(self.driver):
 				resume_player.click()
 		else:
-			start_button = driver.find_element_by_css_selector(
-				"input[name='cmd[startPlayer]']")
+			start_button = None
+			for i in range(10):
+				try:
+					start_button = driver.find_element_by_css_selector(
+						"input[name='cmd[startPlayer]']")
+					break
+				except NoSuchElementException:
+					with wait_for_page_load(self.driver):
+						self.driver.refresh()
+				time.sleep(1)
+
+			if not start_button:
+				raise InteractionException("could not detect start button. aborting.")
+
 			try:
 				with wait_for_page_load(self.driver):
 					start_button.click()

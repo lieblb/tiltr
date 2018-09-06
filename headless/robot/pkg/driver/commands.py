@@ -21,7 +21,7 @@ from ..result import Result, Origin
 from .context import RegressionContext, RandomContext
 from ..settings import Settings, Workarounds
 from ..question.answers import Validness
-from ..exceptions import ErrorDomain, TestILIASException
+from ..exceptions import ErrorDomain, TestILIASException, InteractionException
 
 
 class TakeExamCommand:
@@ -105,12 +105,13 @@ class TakeExamCommand:
 				self._simulate_crash(exam_driver)
 			exam_driver.goto_next_or_previous_question()
 
-	def run(self, driver, report):
-		report("running test on machine #%s (%s)." % (self.machine_index, self.machine))
+	def run(self, driver, master_report):
+		machine_info = "running test on machine #%s (%s)." % (self.machine_index, self.machine)
+		master_report(machine_info)
 
 		try:
-			with Login(driver, report, self.username, self.password):
-				test_driver = TestDriver(driver, Test(self.test_id), self.workarounds, report)
+			with Login(driver, master_report, self.username, self.password):
+				test_driver = TestDriver(driver, Test(self.test_id), self.workarounds, master_report)
 				test_driver.goto()
 
 				do_regression_tests = True
@@ -122,31 +123,46 @@ class TakeExamCommand:
 					random.seed()
 					context = RandomContext(self.questions, self.workarounds)
 
-				with test_driver.start(context, self.questions) as exam_driver:
-					try:
-						self._pass1(exam_driver, report)
-						self._pass2(exam_driver, report)
-						self._pass3(exam_driver, report)
+				exam_driver = test_driver.start(context, self.questions)
 
-						result = exam_driver.get_expected_result(self.admin_lang)
-						result.attach_coverage(context.coverage)
-					except TestILIASException as e:
-						traceback.print_exc()
-						report("test aborted: %s" % traceback.format_exc())
-						r = Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
-						exam_driver.copy_protocol(r)
-						return r
+				try:
+					exam_driver.add_protocol(machine_info)
+
+					def report(s):
+						master_report(s)
+						exam_driver.add_protocol(s)
+
+					self._pass1(exam_driver, report)
+					self._pass2(exam_driver, report)
+					self._pass3(exam_driver, report)
+				except TestILIASException as e:
+					traceback.print_exc()
+					master_report("test aborted: %s" % traceback.format_exc())
+					r = Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
+					exam_driver.copy_protocol(r)
+					return r
+
+				exam_driver.close()
+
+				result = exam_driver.get_expected_result(self.admin_lang)
+				result.attach_coverage(context.coverage)
+
 		except TestILIASException as e:
 			traceback.print_exc()
-			report("test aborted: %s" % traceback.format_exc())
+			master_report("test aborted: %s" % traceback.format_exc())
+			return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
+		except WebDriverException as webdriver_error:
+			e = InteractionException(str(webdriver_error))
+			traceback.print_exc()
+			master_report("test aborted: %s" % traceback.format_exc())
 			return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
 		except (BrokenPipeError, http.client.RemoteDisconnected):
-			report("test aborted: %s" % traceback.format_exc())
+			master_report("test aborted: %s" % traceback.format_exc())
 			return Result.from_error(Origin.recorded, ErrorDomain.interaction, traceback.format_exc())
 		except:
 			traceback.print_exc()
-			report("test aborted with an unexpected error: %s" % traceback.format_exc())
+			master_report("test aborted with an unexpected error: %s" % traceback.format_exc())
 			return None
 
-		report("done running test.")
+		master_report("done running test.")
 		return result
