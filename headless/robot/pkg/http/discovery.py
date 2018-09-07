@@ -25,11 +25,13 @@ def verify_hello(machine):
 	return False
 
 
-def detect_machines():
+def detect_machines(max_wait_time=15):
 	base = os.path.dirname(__file__)
-	machines_path = os.path.join(base, "..", "..", "tmp", "machines.json")
+	machines_path = os.path.realpath(os.path.join(base, "..", "..", "tmp", "machines.json"))
+	t0 = time.time()
 	while not os.path.isfile(machines_path):
-		print("machines.json not found. waiting 1s.")
+		if time.time() - t0 > max_wait_time:
+			raise Exception("could not find %s. giving up." % machines_path)
 		time.sleep(1)
 	with open(machines_path, "r") as f:
 		machines = json.loads(f.read())

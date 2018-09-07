@@ -556,14 +556,15 @@ class Batch(threading.Thread):
 		return self._is_done
 
 	def report(self, origin, message):
-		self.print_mutex.acquire()
-		try:
-			print("[%s] %s" % (origin, message))
-		except UnicodeEncodeError:
-			# this should not happen, as our docker-compose file sets PYTHONIOENCODING
-			traceback.print_exc()
-		finally:
-			self.print_mutex.release()
+		if False:  # don't dump to console, this only makes Docker logs big over time.
+			self.print_mutex.acquire()
+			try:
+				print("[%s] %s" % (origin, message))
+			except UnicodeEncodeError:
+				# this should not happen, as our docker-compose file sets PYTHONIOENCODING
+				traceback.print_exc()
+			finally:
+				self.print_mutex.release()
 
 		encoded = json.dumps(dict(
 			command="report",

@@ -14,6 +14,7 @@ import threading
 import time
 import humanize
 import shutil
+import traceback
 
 import tornado.ioloop
 import tornado.web
@@ -37,7 +38,7 @@ def get_ilias_version():
 	# if this is the first startup of ILIAS, it can take quite some time, until it's available.
 	bdo = browser.find_by_css("footer bdo")
 	if bdo and len(bdo) == 1:
-		print(bdo.text)
+		print("found ILIAS version text '%s'" % bdo.text)
 		s = re.split("\(|\)", bdo.text)
 		if len(s) >= 2:
 			return s[1]
@@ -57,11 +58,14 @@ class Looper(threading.Thread):
 
 	def run(self):
 		while self.state.looping:
-			if self.state.batch and self.state.batch.is_done():
-				self.state.batch = None
+			try:
+				if self.state.batch and self.state.batch.is_done():
+					self.state.batch = None
 
-			if self.state.batch is None:
-				self.state.start_batch(self.test_name, self.settings, self.workarounds, self.wait_time)
+				if self.state.batch is None:
+					self.state.start_batch(self.test_name, self.settings, self.workarounds, self.wait_time)
+			except:
+				traceback.print_exc()
 
 			time.sleep(1)
 

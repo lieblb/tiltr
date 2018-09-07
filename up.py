@@ -23,6 +23,8 @@ parser.add_argument('--verbose', help='verbose info with docker compose logs', a
 parser.add_argument('--n', nargs='?', const=2, type=int)
 args = parser.parse_args()
 
+verbose = False
+
 base = os.path.dirname(os.path.realpath(__file__))
 os.chdir(base)  # important for docker-compose later
 _, docker_compose_name = os.path.split(base)
@@ -67,13 +69,16 @@ if not args.verbose:
 else:
 	log = sys.stdout
 
+
 def escape_ansi(line):
-    ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]')
-    return ansi_escape.sub('', line)
+	ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]')
+	return ansi_escape.sub('', line)
+
 
 def filter_log(s):
 	s = escape_ansi(s)
 	return s.startswith("machine_")
+
 
 try:
 	while True:
@@ -81,14 +86,17 @@ try:
 		if py3:
 			line = line.decode("utf-8")
 		if line != '':
+			if verbose:
+				print(line)
 			if filter_log(line):
 				log.write(line)
 			if "apache2 -D FOREGROUND" in line:  # web server running?
-				subprocess.call(["docker-compose", "exec", "web", "ilias-startup.sh"])
 				break
 
 	machines = dict()
 	for i in range(args.n):
+		if verbose:
+			print("looking for machine %d." % (i + 1))
 		while True:
 			try:
 				machine_ip = subprocess.check_output([
@@ -103,8 +111,13 @@ try:
 		if py3:
 			machine_ip = machine_ip.decode("utf-8")
 		machines["machine_%d" % (1 + i)] = machine_ip
+		if verbose:
+			print("detected machine %d at %s." % ((i + 1), machine_ip))
 
 	publish_machines(machines)
+
+	print("preparing ILIAS...")
+	subprocess.call(["docker-compose", "exec", "web", "ilias-startup.sh"])
 
 	print("TestILIAS is at http://%s:11150" % socket.gethostname())
 

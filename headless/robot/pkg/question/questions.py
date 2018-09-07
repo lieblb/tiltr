@@ -317,7 +317,6 @@ class ClozeQuestion():
 		for gap in self.gaps.values():
 			gaps[gap.get_export_name(language)] = self.gaps[gap.index]
 		for gap_name, value in answers.items():
-			print("cloze value %s" % value)
 			gaps[gap_name].add_export_coverage(coverage, str(value))
 
 	def get_gap_definition(self, index):
