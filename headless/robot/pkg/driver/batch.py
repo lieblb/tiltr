@@ -96,6 +96,14 @@ def take_exam(args):
 
 			index += len(messages)
 
+	except TestILIASException as e:
+		traceback.print_exc()
+		try:
+			report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+		except:
+			print("report failed.")
+		return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
+
 	except:
 		traceback.print_exc()
 		try:
