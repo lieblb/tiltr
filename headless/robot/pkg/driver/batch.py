@@ -17,7 +17,7 @@ from ..result import open_results
 from ..result.workbook import workbook_to_result, check_workbook_consistency
 
 from .commands import TakeExamCommand
-from .drivers import Login, TemporaryUser, TestDriver, Test, verify_admin_settings
+from .drivers import Login, TemporaryUsers, TestDriver, Test, verify_admin_settings
 from .utils import wait_for_page_load
 from .context import RandomContext
 from ..question.coverage import Coverage
@@ -185,6 +185,7 @@ class Run:
 		self.performance_data = []
 		self.coverage = Coverage()
 		self.users = []
+		self.temporary_users = TemporaryUsers()
 		self.protocols = defaultdict(list)
 		self.questions = None
 		self.language = None
@@ -353,11 +354,7 @@ class Run:
 			verify_admin_settings(master.driver, self.workarounds, master.report))
 
 		master.report("creating users.")
-		# create users for test.
-		for i in range(len(self.machines)):
-			user = TemporaryUser()
-			user.create(master.driver, master.report, i)
-			self.users.append(user)
+		self.users = self.temporary_users.get_instance(master.driver, master.report).create(len(self.machines))
 		master.report("done creating users.")
 
 		# print('switching to test "%s".' % test.get_title())
@@ -451,14 +448,18 @@ class Run:
 
 	def store(self):
 		with open_results() as db:
-			db.put(batch_id=self.batch_id, success=encode_success(self.success), xls=self.xls,
-				protocol=self._make_protocol(self.users), num_users=len(self.users))
+			db.put(
+				batch_id=self.batch_id,
+				success=encode_success(self.success),
+				xls=self.xls,
+				protocol=self._make_protocol(self.users),
+				num_users=len(self.users))
 			db.put_performance_data(self.performance_data)
 			db.put_coverage_data(self.coverage)
 
 	def cleanup(self, master):
-		for user in self.users:
-			user.destroy(master.driver, master.report)
+		self.temporary_users.get_instance(master.driver, master.report).destroy(self.users)
+		# keep self.users for storing some information on them later.
 
 	def run(self):
 		try:
@@ -522,6 +523,7 @@ class Batch(threading.Thread):
 		self.settings = settings
 		self.workarounds = workarounds
 		self.wait_time = wait_time
+		self.debug = False
 
 		self.machines_lookup = dict((v, k) for k, v in machines.items())
 		self.machines_lookup["master"] = "master"
@@ -534,6 +536,9 @@ class Batch(threading.Thread):
 
 	def get_id(self):
 		return self.batch_id
+
+	def configure(self, args):
+		self.debug = args.debug
 
 	def run(self):
 		#import cProfile
@@ -564,7 +569,7 @@ class Batch(threading.Thread):
 		return self._is_done
 
 	def report(self, origin, message):
-		if False:  # don't dump to console, this only makes Docker logs big over time.
+		if self.debug:  # don't dump to console, this only makes Docker logs big over time.
 			self.print_mutex.acquire()
 			try:
 				print("[%s] %s" % (origin, message))

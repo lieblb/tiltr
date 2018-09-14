@@ -24,6 +24,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
+import urllib
+from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .utils import wait_for_page_load, http_get_parameters, set_inputs,\
 	wait_for_css, wait_for_css_visible, set_element_value_by_css, set_element_value, is_driver_alive
@@ -162,31 +164,43 @@ def add_user(driver, username, password):
 		driver.find_element_by_css_selector("input[name='cmd[save]']").click()
 
 
-def delete_user(driver, username):
-	try:
-		activator = driver.find_element_by_css_selector(".ilTableFilterActivator")
-		activator.click()
-	except WebDriverException:
-		pass
+def delete_users(driver, username_prefix, n):
+	n_clicked = 0
 
-	apply_filter = "input[name='cmd[applyFilter]']"
-	wait_for_css_visible(driver, apply_filter)
+	while n_clicked < n:
+		goto_user_administration(driver)
 
-	set_element_value_by_css(driver, "input[name='query']", username)
-	driver.find_element_by_css_selector(apply_filter).click()
+		try:
+			activator = driver.find_element_by_css_selector(".ilTableFilterActivator")
+			activator.click()
+		except WebDriverException:
+			pass
 
-	for tr in driver.find_elements_by_css_selector("table tr"):
-		for a in tr.find_elements_by_css_selector("td a"):
-			if a.text.strip() == username:
-				for checkbox in tr.find_elements_by_css_selector("input[type='checkbox']"):
-					checkbox.click()
+		apply_filter = "input[name='cmd[applyFilter]']"
+		wait_for_css_visible(driver, apply_filter)
 
-	Select(driver.find_element_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
-	with wait_for_page_load(driver):
-		driver.find_element_by_css_selector('input[name="select_cmd"]').click()
+		set_element_value_by_css(driver, "input[name='query']", username_prefix)
+		driver.find_element_by_css_selector(apply_filter).click()
+		n_clicked_old = n_clicked
 
-	with wait_for_page_load(driver):
-		driver.find_element_by_name('cmd[confirmdelete]').click()
+		for tr in driver.find_elements_by_css_selector("table tr"):
+			for a in tr.find_elements_by_css_selector("td a"):
+				if a.text.strip().startswith(username_prefix):
+					for checkbox in tr.find_elements_by_css_selector("input[type='checkbox']"):
+						checkbox.click()
+						n_clicked += 1
+
+		if n_clicked_old == n_clicked:  # error - not all users found.
+			break
+
+		Select(driver.find_element_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
+		with wait_for_page_load(driver):
+			driver.find_element_by_css_selector('input[name="select_cmd"]').click()
+
+		with wait_for_page_load(driver):
+			driver.find_element_by_name('cmd[confirmdelete]').click()
+
+	return n_clicked
 
 
 def verify_admin_setting(name, value, expected, log):
@@ -251,38 +265,152 @@ class TemporaryUser:
 		self.username = None
 		self.password = None
 
-	def create(self, driver, report, unique_id):
+	def get_username(self):
+		return self.username
+
+	def get_password(self):
+		return self.password
+
+
+def create_users_xml(base_url, tmp_users):
+	users = Element('Users')
+	SubElement(users, 'UDFDefinitions')
+
+	children = []
+	for tmp_user in tmp_users:
+		user = Element('User', Language='de', Action='Update')
+		children.append(user)
+
+		SubElement(user, 'Login').text = tmp_user.get_username()
+		SubElement(user, 'Password', Type='PLAIN').text = tmp_user.get_password()
+
+		SubElement(user, 'Firstname').text = tmp_user.get_username()
+		SubElement(user, 'Lastname').text = 'user'
+		SubElement(user, 'Gender').text = 'm'
+		SubElement(user, 'Email').text = 'ilias@localhost'
+
+		SubElement(user, 'Role', Id='il_0_role_4', Type='Global').text = 'User'
+		SubElement(user, 'Active').text = 'true'
+		SubElement(user, 'TimeLimitOwner').text = '7'
+		SubElement(user, 'TimeLimitUnlimited').text = '1'
+		SubElement(user, 'TimeLimitMessage').text = '0'
+		SubElement(user, 'AuthMode', type='default')
+		SubElement(user, 'ApproveDate').text = '2018-01-31 00:00:00'
+
+	users.extend(children)
+
+	return ''.join([
+		'<?xml version="1.0" encoding="utf-8"?>',
+		'<!DOCTYPE Users PUBLIC "-//ILIAS//DTD UserImport//EN" "%s/xml/ilias_user_5_1.dtd">' % base_url,
+		tostring(users).decode("utf8")
+	])
+
+
+class TemporaryUsersBackend:
+	def __init__(self, prefix, driver, report):
+		self.prefix = prefix
+		self.driver = driver
+		self.report = report
+		self.batch = True
+
+	def create(self, n):
+		if self.batch:
+			return self._create_n_users(n)
+		else:
+			users = []
+			for i in range(n):
+				users.append(self._create_1_user(i))
+			return users
+
+	def destroy(self, users):
+		if self.batch:
+			self._delete_n_users(users)
+		else:
+			for user in users:
+				self._delete_1_user(user)
+
+	def _create_temporary_user(self, unique_id):
+		user = TemporaryUser()
+
 		# note: self.username must always stay <= 31 chars, as Excel tab names are limited to that
 		# size and we fail to match names if names are longer here.
-		self.username = datetime.datetime.today().strftime('tu_%Y%m%d%H%M%S') + ("_%s" % unique_id)
-		self.password = "dev1234"
+		user.username = self.prefix + str(unique_id)
+		user.password = "dev1234"
+
+		return user
+
+	def _create_n_users(self, n):
+		parsed = urllib.parse.urlparse(self.driver.current_url)
+		base_url = parsed.scheme + "://" + parsed.netloc + '/'.join(parsed.path.split('/')[:-1])
+
+		xml_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "users.xml"))
+
+		users = []
+		for i in range(n):
+			users.append(self._create_temporary_user(i))
+		xml = create_users_xml(base_url, users)
+
+		with open(xml_path, "w") as f:
+			f.write(xml)
+
+		goto_user_administration(self.driver)
+
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_xpath("//a[contains(@href, 'cmd=importUserForm')]").click()
+
+		import_button = self.driver.find_element_by_name('cmd[importUserRoleAssignment]')
+
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_css_selector("#il_prop_cont_importFile input").send_keys(xml_path)
+			import_button.click()
+
+		self.driver.find_element_by_css_selector("option[value='update_on_conflict']").click()
+
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_name('cmd[importUsers]').click()
+
+		return users
+
+	def _delete_n_users(self, users):
+		try:
+			n = delete_users(self.driver, self.prefix, len(users))
+			self.report("deleted %d user(s)." % n)
+		except:
+			self.report("deletion of user failed.")
+			self.report(traceback.format_exc())
+
+	def _create_1_user(self, unique_id):
+		user = self._create_temporary_user(unique_id)
 
 		retries = 0
 		while True:
 			try:
-				goto_user_administration(driver)
-				report("creating user %s." % self.username)
-				add_user(driver, self.username, self.password)
+				goto_user_administration(self.driver)
+				self.report("creating user %s." % user.username)
+				add_user(self.driver, user.username, user.password)
 				break
 			except WebDriverException:
 				retries += 1
 				if retries >= 3:
 					raise
 
-	def destroy(self, driver, report):
+		return user
+
+	def _delete_1_user(self, user):
 		try:
-			report("deleting user %s." % self.username)
-			goto_user_administration(driver)
-			delete_user(driver, self.username)
+			n = delete_users(self.driver, user.username, 1)
+			self.report("deleted %d user(s)." % n)
 		except:
-			report("deletion of user failed.")
-			report(traceback.format_exc())
+			self.report("deletion of user failed.")
+			self.report(traceback.format_exc())
 
-	def get_username(self):
-		return self.username
 
-	def get_password(self):
-		return self.password
+class TemporaryUsers:
+	def __init__(self):
+		self.prefix = datetime.datetime.today().strftime('tu_%Y%m%d%H%M%S') + '_'
+
+	def get_instance(self, driver, report):
+		return TemporaryUsersBackend(self.prefix, driver, report)
 
 
 class MeasureTime:
