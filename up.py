@@ -19,9 +19,12 @@ import socket
 py3 = sys.version_info >= (3, 0)
 
 parser = argparse.ArgumentParser(description='Starts up ILIAS robot test environment.')
-parser.add_argument('--verbose', help='verbose info with docker compose logs', action='store_true')
+parser.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
+parser.add_argument('--debug', help='output debugging information', action='store_true')
 parser.add_argument('--n', nargs='?', const=2, type=int)
 args = parser.parse_args()
+
+os.environ['ILIASTEST_ARGUMENTS'] = '--debug' if args.debug else ''
 
 verbose = False
 
@@ -37,10 +40,12 @@ machines_path = os.path.join(tmp_path, "machines.json")
 if os.path.isfile(machines_path):
 	os.remove(machines_path)
 
+
 def publish_machines(machines):
 	with open(machines_path + ".tmp", "w") as f:
 		f.write(json.dumps(machines))
 	os.rename(machines_path + ".tmp", machines_path)  # hopefully atomic
+
 
 ilias_path = os.path.realpath(os.path.join(base, "web", "ILIAS"))
 if not os.path.isdir(ilias_path) or not os.path.exists(os.path.join(ilias_path, "ilias.php")):

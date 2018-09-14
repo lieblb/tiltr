@@ -15,6 +15,7 @@ import time
 import humanize
 import shutil
 import traceback
+import argparse
 
 import tornado.ioloop
 import tornado.web
@@ -73,12 +74,13 @@ class Looper(threading.Thread):
 
 
 class GlobalState:
-	def __init__(self, machines):
+	def __init__(self, machines, args):
 		self.machines = machines
 		self.batch = None
 		self.ilias_version = None
 		self.looper = None
 		self.looping = False
+		self.args = args
 
 	def get_ilias_version(self):
 		if self.ilias_version is None:
@@ -112,6 +114,7 @@ class GlobalState:
 		if self.batch is None:
 			clear_tmp()
 			self.batch = Batch(self.machines, ilias_version, test_name, settings, workarounds, wait_time)
+			self.batch.configure(self.args)
 			self.batch.start()
 
 		if self.looping:
@@ -335,8 +338,9 @@ class ReportHandler(tornado.web.RequestHandler):
 				results=db.get_results(),
 				protocols=nprotocols)
 
-def make_app(machines):
-	state = GlobalState(machines)
+
+def make_app(machines, args):
+	state = GlobalState(machines, args)
 
 	node_modules = "/usr/local/lib/node_modules/"
 
@@ -372,11 +376,19 @@ def make_app(machines):
 			"path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "static")}),
 	])
 
+
 def run_master():
-	print("starting master.")
+	parser = argparse.ArgumentParser(description='iliastest-master')
+	parser.add_argument('--master', action='store_true')
+	parser.add_argument('--debug', action='store_true')
+	args = parser.parse_args()
+
+	print("starting master with arguments:")
+	for k, v in vars(args).items():
+		print('%s: %s' % (k, v))
 	with connect_machines() as machines:
 		print("found %d machines." % len(machines))
-		app = make_app(machines)
+		app = make_app(machines, args)
 		app.listen(80)
 		print("now available at localhost:80/app.")
 		tornado.ioloop.IOLoop.current().start()
