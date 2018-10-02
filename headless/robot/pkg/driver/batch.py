@@ -471,6 +471,12 @@ class Run:
 			with in_master(self.batch, self.protocol_master) as master:
 				self.analyze(master, all_recorded_results)
 
+		except selenium.common.exceptions.WebDriverException as e:
+			self.success = ("FAIL", "interaction")
+			traceback.print_exc()
+			self.report("master", "exception received: %s." % traceback.format_exc())
+			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
+
 		except TestILIASException as e:
 			self.success = ("FAIL", e.get_error_domain_name())
 			traceback.print_exc()
