@@ -274,7 +274,7 @@ def implicit_text_to_number_xls(context, value):
 			# e.g. .94853 -> .948530
 			value += "0"
 
-		if value == "0.0":
+		if value == "0.0" or value == "-0.0" or value == "-0":
 			# e.g. "0.0" -> "0".  note that other conversions, e.g. 597.0 -> 597, don't
 			# take place!
 			value = "0"
