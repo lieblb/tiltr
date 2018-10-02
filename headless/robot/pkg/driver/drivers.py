@@ -651,7 +651,9 @@ class ExamDriver:
 			self.create_answer()
 		answer = self.answers[sequence_id]
 		self.report('answering question "%s".' % answer.question.title)
-		return answer.randomize(self.context)
+		valid = answer.randomize(self.context)
+		answer.verify(self.context, after_crash=False)
+		return valid
 
 	def verify_answer(self, after_crash=False):
 		sequence_id = self.get_sequence_id()
