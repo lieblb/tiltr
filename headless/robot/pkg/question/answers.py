@@ -362,6 +362,7 @@ class KPrimAnswer(object):
 		self.current_answers = None
 		self.current_score = None
 		self.protocol = AnswerProtocol(self.question.title)
+		self.n_rows = 4
 
 	def randomize(self, context):
 		self._set_answers(*self.question.get_random_answer(context))
@@ -370,8 +371,9 @@ class KPrimAnswer(object):
 	def _set_answers(self, answers, score):
 		ui = self._parse_ui()
 
-		assert len(answers) == 4
-		for radios, answer in zip(ui, answers):
+		assert len(answers) == self.n_rows
+		for index, radios, answer in zip(range(self.n_rows), ui, answers):
+			self.protocol.choose(index, answer)
 			radios[answer].click()
 
 		self.current_answers = answers
@@ -380,7 +382,7 @@ class KPrimAnswer(object):
 	def _parse_ui(self):
 		root = self.driver.find_element_by_css_selector(".ilc_question_KprimChoice")
 		ui = []
-		for i in range(4):
+		for i in range(self.n_rows):
 			radios = dict()
 			for radio in root.find_elements_by_name("kprim_choice_result_%d" % i):
 				radios[bool(int(radio.get_attribute("value")))] = radio
@@ -393,7 +395,7 @@ class KPrimAnswer(object):
 	def verify(self, context, after_crash=False):
 		ui = self._parse_ui()
 
-		for i in range(4):
+		for i in range(self.n_rows):
 			self.protocol.verify(
 				str(i),
 				self.current_answers[i],
