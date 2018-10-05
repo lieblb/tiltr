@@ -20,8 +20,9 @@ class ErrorDomain(Enum):
 	none = 0
 	not_implemented = 1
 	interaction = 2
-	auto_save = 3
-	integrity = 4
+	unexpected = 3
+	auto_save = 4
+	integrity = 5
 
 
 def most_severe(domains):
@@ -70,6 +71,17 @@ class NotImplementedException(TestILIASException):
 class InteractionException(TestILIASException):
 	def __init__(self, *args):
 		super().__init__(ErrorDomain.interaction, *args)
+
+
+# UnexpectedErrorException:
+
+# Indicates that an error occured in ILIAS, even though it shouldn't have. While the data
+# consistency is ok, the current operation was aborted.
+
+
+class UnexpectedErrorException(TestILIASException):
+	def __init__(self, *args):
+		super().__init__(ErrorDomain.unexpected, *args)
 
 
 # AutoSaveException:
