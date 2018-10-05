@@ -221,8 +221,16 @@ def verify_admin_settings(driver, workarounds, report):
 		True,
 		log)
 
+	lock_mode = dict()
 	for s in ('ass_process_lock_mode_file', 'ass_process_lock_mode_db'):
-		log.append("%s is %s." % (s, driver.find_element_by_id(s).is_selected()))
+		lock_mode[s] = driver.find_element_by_id(s).is_selected()
+		log.append("%s is %s." % (s, lock_mode[s]))
+
+	# only ass_process_lock_mode_db is safe, as only ilAssQuestionProcessLockerDb
+	# uses ilAtomQuery to build an atomic write using a DB transaction.
+
+	if not lock_mode['ass_process_lock_mode_db']:
+		raise Exception("need lock mode to be db")
 
 	verify_admin_setting(
 		"html export for essay questions",
