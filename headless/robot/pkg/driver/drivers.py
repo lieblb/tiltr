@@ -621,7 +621,10 @@ class ExamDriver:
 		try:
 			return int(http_get_parameters(url)["sequence"])
 		except KeyError:
-			raise InteractionException("could not find sequence in URL %s" % url)
+			if '/error.php' in url:
+				raise UnexpectedErrorException()
+			else:
+				raise InteractionException("could not find sequence in URL %s" % url)
 
 	def create_answer(self):
 		try:
