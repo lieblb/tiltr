@@ -70,6 +70,7 @@ class Looper(threading.Thread):
 
 			time.sleep(1)
 
+		self.state.looper = None
 		print("looper has exited.")
 
 
@@ -102,6 +103,8 @@ class GlobalState:
 			batch = self.batch
 			self.looper = Looper(self, batch.test_name, batch.settings, batch.workarounds, batch.wait_time)
 			self.looper.start()
+		if not self.looping:
+			self.looper = None
 
 	def start_batch(self, test_name, settings, workarounds, wait_time):
 		if self.batch and self.batch.is_done():
@@ -119,11 +122,14 @@ class GlobalState:
 
 		if self.looping:
 			if self.looper is None:
+				print("creating new looper.")
 				self.looper = Looper(self, test_name, settings, workarounds, wait_time)
 				self.looper.start()
 			else:
+				print("reusing existing looper.")
 				self.looper.workarounds = workarounds
 		elif self.looper:
+			print("removing looper.")
 			self.looper = None
 
 		return self.batch.get_id()
