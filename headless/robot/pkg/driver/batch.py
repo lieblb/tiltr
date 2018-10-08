@@ -104,6 +104,14 @@ def take_exam(args):
 			print("report failed.")
 		return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
 
+	except requests.exceptions.ConnectionError:
+		traceback.print_exc()
+		try:
+			report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+		except:
+			print("report failed.")
+		return Result.from_error(Origin.recorded, ErrorDomain.interaction, traceback.format_exc())
+
 	except:
 		traceback.print_exc()
 		try:
