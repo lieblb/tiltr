@@ -22,7 +22,7 @@ class DB:
 		db_path = os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "results.db")
 		self.db = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
 		c = self.db.cursor()
-		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT, nusers INTEGER)")
+		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT, nusers INTEGER, elapsed INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
@@ -34,11 +34,11 @@ class DB:
 	def __exit__(self, *args):
 		self.db.close()
 
-	def put(self, batch_id, success, xls, protocol, num_users):
+	def put(self, batch_id, success, xls, protocol, num_users, elapsed_time):
 		c = self.db.cursor()
 		now = datetime.datetime.now()
-		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers) VALUES (?, ?, ?, ?, ?, ?)",
-			(now, batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users))
+		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers, elapsed) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			(now, batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users, elapsed_time))
 
 		success_code = dict(OK=1, FAIL=0).get(success.split("/")[0], 0)
 		c.execute("INSERT INTO longterm (created, success, nusers) VALUES (?, ?, ?)", (now, success_code, num_users));
@@ -115,7 +115,7 @@ class DB:
 	def get_details(self):
 		c = self.db.cursor()
 
-		c.execute("SELECT created, batch, success FROM results ORDER BY created")
+		c.execute("SELECT created, elapsed, batch, success FROM results ORDER BY created")
 
 		entries = []
 		tz = pytz.timezone('Europe/Berlin')
@@ -124,11 +124,12 @@ class DB:
 			if r is None:
 				break
 
-			timestamp, batch, success = r
+			timestamp, elapsed, batch, success = r
 
 			timestamp = timestamp.replace(tzinfo=pytz.utc).astimezone(tz)
 			entries.append(dict(
 				time=timestamp.strftime('%d.%m.%Y %H:%M:%S'),
+				elapsed=int(elapsed) or 0,
 				batch=batch.decode("utf-8"),
 				success=success.decode("utf-8")
 			))

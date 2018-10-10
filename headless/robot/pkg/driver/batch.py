@@ -454,14 +454,15 @@ class Run:
 	def protocol_master(self, text):
 		self.add_to_protocol("master", text)
 
-	def store(self):
+	def store(self, elapsed_time):
 		with open_results() as db:
 			db.put(
 				batch_id=self.batch_id,
 				success=encode_success(self.success),
 				xls=self.xls,
 				protocol=self._make_protocol(self.users),
-				num_users=len(self.users))
+				num_users=len(self.users),
+				elapsed_time=elapsed_time)
 			db.put_performance_data(self.performance_data)
 			db.put_coverage_data(self.coverage)
 
@@ -470,6 +471,8 @@ class Run:
 		# keep self.users for storing some information on them later.
 
 	def run(self):
+		t0 = time.time()
+
 		try:
 			with in_master(self.batch, self.protocol_master) as master:
 				self.prepare(master)
@@ -509,7 +512,7 @@ class Run:
 				traceback.print_exc()
 
 			try:
-				self.store()
+				self.store(time.time() - t0)
 			except:
 				self.report("master", "error saving result to db: %s." % traceback.format_exc())
 			finally:

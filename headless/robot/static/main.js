@@ -180,6 +180,8 @@ $(function() {
 					var tr = $("<tr></tr>");
 					tr.append($("<td>" + entries[i].time + "</td>"));
 
+					tr.append($("<td>" + entries[i].elapsed + "s</td>"));
+
 					var success = entries[i].success;
 
 					var td = $("<td></td>");
