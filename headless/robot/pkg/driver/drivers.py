@@ -372,9 +372,8 @@ class TemporaryUsersBackend:
 			self.driver.find_element_by_css_selector("#il_prop_cont_importFile input").send_keys(xml_path)
 			import_button.click()
 
-		self.driver.find_element_by_css_selector("option[value='update_on_conflict']").click()
-
 		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_css_selector("option[value='update_on_conflict']").click()
 			self.driver.find_element_by_name('cmd[importUsers]').click()
 
 		return users
