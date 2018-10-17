@@ -338,7 +338,7 @@ class ClozeAnswer(object):
 			self.protocol.verify(
 				gap.get_export_name("de"),
 				implicit_text_to_number(context, recorded_value),
-				context.strip_whitespace(ui[gap.index].value),
+				implicit_text_to_number(context, context.strip_whitespace(ui[gap.index].value)),
 				after_crash=after_crash)
 			gap.add_verify_coverage(context.coverage, recorded_value)
 
