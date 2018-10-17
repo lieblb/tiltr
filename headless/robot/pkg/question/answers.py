@@ -227,8 +227,15 @@ class SelectAnswerGap(ClozeAnswerGap):
 		self._value = new_value
 
 
+def looks_like_an_unsigned_number(x):
+	return len(x) >= 1 and x.count('.') <= 1 and all(y.isdigit() or len(y) < 1 for y in x.split('.'))
+
+
 def looks_like_a_number(x):
-	return x.count('.') <= 1 and all(y.isdigit() or len(y) < 1 for y in x.split('.'))
+	if x and x[0] in ("-", "+"):
+		return looks_like_an_unsigned_number(x[1:])
+	else:
+		return looks_like_an_unsigned_number(x)
 
 
 def implicit_text_to_number(context, value):
@@ -330,7 +337,7 @@ class ClozeAnswer(object):
 			recorded_value = context.strip_whitespace(self.current_answers[gap.index])
 			self.protocol.verify(
 				gap.get_export_name("de"),
-				recorded_value,
+				implicit_text_to_number(context, recorded_value),
 				context.strip_whitespace(ui[gap.index].value),
 				after_crash=after_crash)
 			gap.add_verify_coverage(context.coverage, recorded_value)
