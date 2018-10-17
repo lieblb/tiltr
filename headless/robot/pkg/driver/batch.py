@@ -447,6 +447,8 @@ class Run:
 
 		if all_assertions_ok:
 			self.success = ("OK",)
+		else:
+			raise IntegrityException("integrity assertions failed")
 
 	def add_to_protocol(self, type, text):
 		self.protocols[type].append(text)
