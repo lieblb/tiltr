@@ -1055,6 +1055,8 @@ class TestDriver():
 			#self.browser.visit("http://web:80/ILIAS/ilias.php?baseClass=ilSearchController")
 			self.report('searching for test "%s".' % self.test.get_title())
 
+			search_input = None
+
 			try:
 				wait_for_css(driver, ".ilTabsContentOuter div form input[name='term']")
 
