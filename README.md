@@ -138,3 +138,18 @@ docker exec -it iliasdocker_db_1 /bin/bash
 ```
 
 Now zip `ilias.sql` and update in your version control.
+
+## Notes on the implementation
+
+The "master" container (see `docker-compose.yml`) provides the GUI for running tests and
+evaluating test runs; the frontend is just one big Javascript hack, which is not great.
+
+The "web" and "db" container are the ILIAS web server and the ILIAS database.
+
+Each test client runs in a dedicated Docker container, that can control one standalone
+Firefox through a Selenium driver  (see "machine" in `docker-compose.yml`). The "one browser
+per container" limit comes through Selenium.
+
+An overall neater and probably faster alternative for similar projects would be running
+Chrome through CEF and https://github.com/cztomczak/cefpython (which means several or all
+clients could run in one Docker container).
