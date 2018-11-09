@@ -38,6 +38,7 @@ class TakeExamCommand:
 			self.settings = kwargs["settings"]
 			self.workarounds = kwargs["workarounds"]
 
+		self.ilias_url = data["ilias_url"]
 		self.machine = data["machine"]
 		self.machine_index = data["machine_index"]
 		self.username = data["username"]
@@ -49,6 +50,7 @@ class TakeExamCommand:
 	def to_json(self):
 		return json.dumps(dict(
 			command="take_exam",
+			ilias_url=self.ilias_url,
 			machine=self.machine,
 			machine_index=self.machine_index,
 			username=self.username,
@@ -110,8 +112,8 @@ class TakeExamCommand:
 		master_report(machine_info)
 
 		try:
-			with Login(driver, master_report, self.username, self.password):
-				test_driver = TestDriver(driver, Test(self.test_id), self.workarounds, master_report)
+			with Login(driver, master_report, self.ilias_url, self.username, self.password):
+				test_driver = TestDriver(driver, Test(self.test_id), self.workarounds, self.ilias_url, master_report)
 				test_driver.goto()
 
 				do_regression_tests = True

@@ -22,11 +22,49 @@ parser = argparse.ArgumentParser(description='Starts up ILIAS robot test environ
 parser.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
 parser.add_argument('--debug', help='output debugging information', action='store_true')
 parser.add_argument('--n', nargs='?', const=2, type=int)
+parser.add_argument('--ilias', help='YAML file that specifies an external ILIAS installation to test against')
 args = parser.parse_args()
 
-os.environ['ILIASTEST_ARGUMENTS'] = '--debug' if args.debug else ''
 
-verbose = False
+def set_argument_environ(args):
+	entrypoint_args = []
+	if args.debug:
+		entrypoint_args.append('--debug')
+
+	if args.ilias:
+		embedded_ilias = False
+
+		dir_path = os.path.dirname(os.path.realpath(__file__))
+		if os.path.isabs(args.ilias):
+			yaml_path = args.ilias
+		else:
+			yaml_path = os.path.join(dir_path, args.ilias)
+
+		import yaml  # pip install pyyaml
+		with open(yaml_path, "r") as f:
+			ilias_config = yaml.load(f)
+
+		entrypoint_args.extend([
+			'--ilias-url', ilias_config['url'],
+			'--ilias-admin-user', ilias_config['admin']['user'],
+			'--ilias-admin-password', ilias_config['admin']['password']])
+
+		print("Testing against external ILIAS at %s." % ilias_config['url'])
+	else:
+		# use our default embedded ILIAS.
+		print("Testing against embedded ILIAS.")
+		embedded_ilias = True
+		entrypoint_args.extend([
+			'--ilias-url', 'http://web:80/ILIAS',
+			'--ilias-admin-user', 'root',
+			'--ilias-admin-password', 'odysseus'])
+
+	os.environ['ILIASTEST_ARGUMENTS'] = ' '.join(entrypoint_args)
+
+	return embedded_ilias
+
+
+embedded_ilias = set_argument_environ(args)
 
 base = os.path.dirname(os.path.realpath(__file__))
 os.chdir(base)  # important for docker-compose later
@@ -47,22 +85,23 @@ def publish_machines(machines):
 	os.rename(machines_path + ".tmp", machines_path)  # hopefully atomic
 
 
-ilias_path = os.path.realpath(os.path.join(base, "web", "ILIAS"))
-if not os.path.isdir(ilias_path) or not os.path.exists(os.path.join(ilias_path, "ilias.php")):
-	print("please put the ILIAS source code you want to test against under %s." % ilias_path)
-	print("note that the code you put there will get modified into a default test client.")
-	print("aborting.")
-	sys.exit(1)
+if embedded_ilias:
+	ilias_path = os.path.realpath(os.path.join(base, "web", "ILIAS"))
+	if not os.path.isdir(ilias_path) or not os.path.exists(os.path.join(ilias_path, "ilias.php")):
+		print("please put the ILIAS source code you want to test against under %s." % ilias_path)
+		print("note that the code you put there will get modified into a default test client.")
+		print("aborting.")
+		sys.exit(1)
 
-# instrument ILIAS source code for test runner.
+	# instrument ILIAS source code for test runner.
 
-shutil.copyfile(
-	os.path.join(base, "web", "custom", "ilias.ini.php"),
-	os.path.join(base, "web", "ILIAS", "ilias.ini.php"))
+	shutil.copyfile(
+		os.path.join(base, "web", "custom", "ilias.ini.php"),
+		os.path.join(base, "web", "ILIAS", "ilias.ini.php"))
 
-client_zip = zipfile.ZipFile(os.path.join(base, "web", "custom", "data.zip"), 'r')
-client_zip.extractall(os.path.join(base, "web", "ILIAS"))
-client_zip.close()
+	client_zip = zipfile.ZipFile(os.path.join(base, "web", "custom", "data.zip"), 'r')
+	client_zip.extractall(os.path.join(base, "web", "ILIAS"))
+	client_zip.close()
 
 # start up docker.
 compose = subprocess.Popen(["docker-compose", "up", "--scale", "machine=%d" % args.n], stdout=subprocess.PIPE)
@@ -91,7 +130,7 @@ try:
 		if py3:
 			line = line.decode("utf-8")
 		if line != '':
-			if verbose:
+			if args.verbose:
 				print(line)
 			if filter_log(line):
 				log.write(line)
@@ -100,12 +139,14 @@ try:
 
 	machines = dict()
 	for i in range(args.n):
-		if verbose:
+		if args.verbose:
 			print("looking for machine %d." % (i + 1))
 		while True:
 			try:
 				machine_ip = subprocess.check_output([
-					"docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "%s_machine_%d" % (docker_compose_name, (i + 1))]).strip()
+					"docker", "inspect", "-f",
+					"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+					"%s_machine_%d" % (docker_compose_name, (i + 1))]).strip()
 				if len(str(machine_ip)) == 0:
 					print("failed to lookup machine %d. shutting down." % i)
 					subprocess.call(["docker-compose", "stop"])
@@ -116,18 +157,20 @@ try:
 		if py3:
 			machine_ip = machine_ip.decode("utf-8")
 		machines["machine_%d" % (1 + i)] = machine_ip
-		if verbose:
+		if args.verbose:
 			print("detected machine %d at %s." % ((i + 1), machine_ip))
 
 	publish_machines(machines)
 
-	print("preparing ILIAS...")
-	subprocess.call(["docker-compose", "exec", "web", "ilias-startup.sh"])
+	if embedded_ilias:
+		print("Preparing ILIAS. This might take a while...")
+		subprocess.call(["docker-compose", "exec", "web", "ilias-startup.sh"])
 
 	print("TestILIAS is at http://%s:11150" % socket.gethostname())
 
 	def check_alive():
-		status = subprocess.check_output(["docker", "inspect", "-f", "{{.State.Status}}", "%s_master_1" % docker_compose_name]).strip()
+		status = subprocess.check_output([
+			"docker", "inspect", "-f", "{{.State.Status}}", "%s_master_1" % docker_compose_name]).strip()
 		if py3:
 			status = status.decode("utf-8")
 		return status != "exited"

@@ -35,7 +35,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'
-      - ILIASTEST_ARGUMENTS=${ILIASTEST_ARGUMENTS}
     networks:
       - net
   
@@ -44,7 +43,7 @@ services:
     volumes:
       - ./headless/robot:/robot
     working_dir: /robot
-    entrypoint: python3 -m pkg --machine
+    entrypoint: python3 -m pkg --machine $ILIASTEST_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'

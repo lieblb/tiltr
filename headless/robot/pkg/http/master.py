@@ -27,24 +27,7 @@ from ..driver.drivers import Test
 from ..result import open_results
 from ..settings import Settings, Workarounds
 from .utils import clear_tmp
-
-
-def get_ilias_version():
-	from splinter import Browser
-	log_path = "tmp/geckodriver.master.log"
-	open(log_path, 'w').close()  # empty log file
-	browser = Browser(headless=True, log_path=log_path, wait_time=15)
-	browser.visit("http://web:80/ILIAS")
-
-	# if this is the first startup of ILIAS, it can take quite some time, until it's available.
-	bdo = browser.find_by_css("footer bdo")
-	if bdo and len(bdo) == 1:
-		print("found ILIAS version text '%s'" % bdo.text)
-		s = re.split("\(|\)", bdo.text)
-		if len(s) >= 2:
-			return s[1]
-
-	return None
+from .args import parse_args
 
 
 class Looper(threading.Thread):
@@ -82,10 +65,37 @@ class GlobalState:
 		self.looper = None
 		self.looping = False
 		self.args = args
+		self.ilias_url = args.ilias_url
+
+	def get_ilias_url(self):
+		return self.ilias_url
+
+	def _fetch_ilias_version(self):
+		from splinter import Browser
+		from selenium.common.exceptions import WebDriverException
+
+		try:
+			log_path = "tmp/geckodriver.master.log"
+			open(log_path, 'w').close()  # empty log file
+			browser = Browser(headless=True, log_path=log_path, wait_time=15)
+			browser.visit(self.ilias_url)
+
+			# if this is the first startup of ILIAS, it can take quite some time, until it's available.
+			bdo = browser.find_by_css("footer bdo")
+			if bdo and len(bdo) == 1:
+				print("found ILIAS version text '%s'" % bdo.text)
+				s = re.split("\(|\)", bdo.text)
+				if len(s) >= 2:
+					return s[1]
+		except WebDriverException as e:
+			print("could not fetch ILIAS version", e)
+			return None
+
+		return None
 
 	def get_ilias_version(self):
 		if self.ilias_version is None:
-			self.ilias_version = get_ilias_version()  # try again
+			self.ilias_version = self._fetch_ilias_version()  # try again
 		return self.ilias_version
 
 	def get_ilias_version_tuple(self):
@@ -140,9 +150,14 @@ class AppHandler(tornado.web.RequestHandler):
 		self.state = state
 
 	def get(self):
+		ilias_url = self.state.ilias_url
+		# differentiate between internal ILIAS docker container which
+		# we expose via :11145 and external ILIAS installation.
+		if ilias_url.startswith('http://web:80/'):
+			ilias_url = 'http://' + self.request.host.replace("11150", "11145") + '/ILIAS'
 		self.render("master.html",
 			num_machines=len(self.state.machines),
-			ilias_url=self.request.host.replace("11150", "11145"),
+			ilias_url=ilias_url,
 			ilias_version=self.state.get_ilias_version() or "unavailable")
 
 
@@ -384,14 +399,13 @@ def make_app(machines, args):
 
 
 def run_master():
-	parser = argparse.ArgumentParser(description='iliastest-master')
-	parser.add_argument('--master', action='store_true')
-	parser.add_argument('--debug', action='store_true')
-	args = parser.parse_args()
-
+	args = parse_args()
 	print("starting master with arguments:")
 	for k, v in vars(args).items():
-		print('%s: %s' % (k, v))
+		if 'password' not in k:
+			print('%s: %s' % (k, v))
+		else:
+			print('%s: ***' % k)
 	with connect_machines() as machines:
 		print("found %d machines." % len(machines))
 		app = make_app(machines, args)

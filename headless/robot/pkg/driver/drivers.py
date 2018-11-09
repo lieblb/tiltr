@@ -35,9 +35,10 @@ from ..result import *
 
 
 class Login:
-	def __init__(self, driver, report, username, password):
+	def __init__(self, driver, report, url, username, password):
 		self.driver = driver
 		self.report = report
+		self.url = url
 		self.username = username
 		self.password = password
 		self.language = None
@@ -46,7 +47,7 @@ class Login:
 		self.report("opening login page.")
 
 		with wait_for_page_load(self.driver):
-			self.driver.get("http://web:80/ILIAS/")
+			self.driver.get(self.url)
 
 		driver = self.driver
 
@@ -115,34 +116,34 @@ class Login:
 			self.report(traceback.format_exc())
 
 
-def goto_administration_page(driver, id):
+def goto_administration_page(driver, ilias_url, panel_id):
 	for i in range(2):
 		try:
 			wait_for_css(driver, "#mm_adm_tr", 1)
 			driver.find_element_by_css_selector("#mm_adm_tr").click()
 
-			wait_for_css(driver, "#%s" % id)
+			wait_for_css(driver, "#%s" % panel_id)
 			with wait_for_page_load(driver):
-				driver.find_element_by_css_selector("#%s" % id).click()
+				driver.find_element_by_css_selector("#%s" % panel_id).click()
 
 			return
 		except:
 			with wait_for_page_load(driver):
-				driver.get("http://web:80/ILIAS")
+				driver.get(ilias_url)
 
-	raise InteractionException("going to admin page %s failed." % id)
-
-
-def goto_test_administration(driver):
-	goto_administration_page(driver, "mm_adm_assf")
+	raise InteractionException("going to admin page %s failed." % panel_id)
 
 
-def goto_user_administration(driver):
-	goto_administration_page(driver, "mm_adm_usrf")
+def goto_test_administration(driver, ilias_url):
+	goto_administration_page(driver, ilias_url, "mm_adm_assf")
 
 
-def goto_editor_administration(driver):
-	goto_administration_page(driver, "mm_adm_adve")
+def goto_user_administration(driver, ilias_url):
+	goto_administration_page(driver, ilias_url, "mm_adm_usrf")
+
+
+def goto_editor_administration(driver, ilias_url):
+	goto_administration_page(driver, ilias_url, "mm_adm_adve")
 
 
 def add_user(driver, username, password):
@@ -164,11 +165,11 @@ def add_user(driver, username, password):
 		driver.find_element_by_css_selector("input[name='cmd[save]']").click()
 
 
-def delete_users(driver, username_prefix, n):
+def delete_users(driver, ilias_url, username_prefix, n):
 	n_clicked = 0
 
 	while n_clicked < n:
-		goto_user_administration(driver)
+		goto_user_administration(driver, ilias_url)
 
 		try:
 			activator = driver.find_element_by_css_selector(".ilTableFilterActivator")
@@ -209,10 +210,10 @@ def verify_admin_setting(name, value, expected, log):
 	log.append("%s is %s." % (name, expected))
 
 
-def verify_admin_settings(driver, workarounds, report):
+def verify_admin_settings(driver, workarounds, ilias_url, report):
 	log = []
 
-	goto_test_administration(driver)
+	goto_test_administration(driver, ilias_url)
 	report("verifying test admin settings.")
 
 	verify_admin_setting(
@@ -238,7 +239,7 @@ def verify_admin_settings(driver, workarounds, report):
 		True,
 		log)
 
-	goto_editor_administration(driver)
+	goto_editor_administration(driver, ilias_url)
 	report("verifying editor admin settings.")
 
 	driver.find_element_by_css_selector("#tab_adve_rte_settings a").click()
@@ -315,9 +316,10 @@ def create_users_xml(base_url, tmp_users):
 
 
 class TemporaryUsersBackend:
-	def __init__(self, prefix, driver, report):
+	def __init__(self, prefix, driver, ilias_url, report):
 		self.prefix = prefix
 		self.driver = driver
+		self.ilias_url = ilias_url
 		self.report = report
 		self.batch = True
 
@@ -361,7 +363,7 @@ class TemporaryUsersBackend:
 		with open(xml_path, "w") as f:
 			f.write(xml)
 
-		goto_user_administration(self.driver)
+		goto_user_administration(self.driver, self.ilias_url)
 
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_xpath("//a[contains(@href, 'cmd=importUserForm')]").click()
@@ -383,7 +385,7 @@ class TemporaryUsersBackend:
 
 	def _delete_n_users(self, users):
 		try:
-			n = delete_users(self.driver, self.prefix, len(users))
+			n = delete_users(self.driver, self.ilias_url, self.prefix, len(users))
 			self.report("deleted %d user(s)." % n)
 		except:
 			self.report("deletion of user failed.")
@@ -395,7 +397,7 @@ class TemporaryUsersBackend:
 		retries = 0
 		while True:
 			try:
-				goto_user_administration(self.driver)
+				goto_user_administration(self.driver, self.ilias_url)
 				self.report("creating user %s." % user.username)
 				add_user(self.driver, user.username, user.password)
 				break
@@ -408,7 +410,7 @@ class TemporaryUsersBackend:
 
 	def _delete_1_user(self, user):
 		try:
-			n = delete_users(self.driver, user.username, 1)
+			n = delete_users(self.driver, self.ilias_url, user.username, 1)
 			self.report("deleted %d user(s)." % n)
 		except:
 			self.report("deletion of user failed.")
@@ -419,8 +421,8 @@ class TemporaryUsers:
 	def __init__(self):
 		self.prefix = datetime.datetime.today().strftime('tu_%Y%m%d%H%M%S') + '_'
 
-	def get_instance(self, driver, report):
-		return TemporaryUsersBackend(self.prefix, driver, report)
+	def get_instance(self, driver, ilias_url, report):
+		return TemporaryUsersBackend(self.prefix, driver, ilias_url, report)
 
 
 class MeasureTime:
@@ -758,11 +760,12 @@ class Test:
 		return tests
 
 
-class TestDriver():
-	def __init__(self, driver, test, workarounds, report):
+class TestDriver:
+	def __init__(self, driver, test, workarounds, ilias_url, report):
 		self.driver = driver
 		self.test = test
 		self.workarounds = workarounds
+		self.ilias_url = ilias_url
 		self.report = report
 		self.cached_link = None
 		self.autosave_time = 5
@@ -773,7 +776,7 @@ class TestDriver():
 		self.report("importing test.")
 
 		# goto Magazin.
-		driver.get("http://web:80/ILIAS/goto.php?target=root_1&client_id=ilias")
+		driver.get(self.ilias_url + "/goto.php?target=root_1&client_id=ilias")
 
 		# add new item: Test.
 		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
@@ -1046,13 +1049,13 @@ class TestDriver():
 
 		for i in range(5):
 			with wait_for_page_load(driver):
-				driver.get("http://web:80/ILIAS/")
+				driver.get(self.ilias_url)
 
 			driver.find_element_by_css_selector(".glyphicon-search").click()
 			with wait_for_page_load(driver):
 				driver.find_element_by_css_selector('#mm_search_form input[type="submit"]').click()
 
-			#self.browser.visit("http://web:80/ILIAS/ilias.php?baseClass=ilSearchController")
+			#self.browser.visit(self.ilias_url + "/ilias.php?baseClass=ilSearchController")
 			self.report('searching for test "%s".' % self.test.get_title())
 
 			search_input = None

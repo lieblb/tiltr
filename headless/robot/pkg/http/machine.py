@@ -19,6 +19,7 @@ from splinter import Browser
 
 from ..driver import TakeExamCommand
 from .utils import clear_tmp
+from .args import parse_args
 
 
 class GlobalState:
@@ -153,6 +154,7 @@ def make_app():
 
 def run_machine():
 	print("starting machine.")
+	parse_args()  # ignored right now
 
 	app = make_app()
 	app.listen(8888)

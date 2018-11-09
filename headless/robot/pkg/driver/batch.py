@@ -159,10 +159,10 @@ def in_master(batch, protocol):
 	with Browser(headless=True, capabilities=capabilities, log_path=log_path, wait_time=batch.wait_time) as browser:
 		context.driver = browser.driver
 
-		test_driver = TestDriver(browser.driver, batch.test, batch.workarounds, context.report)
+		test_driver = TestDriver(browser.driver, batch.test, batch.workarounds, batch.ilias_url, context.report)
 		context.test_driver = test_driver
 
-		with Login(browser.driver, context.report, "root", "odysseus") as login:
+		with Login(browser.driver, context.report, batch.ilias_url, batch.ilias_admin_user, batch.ilias_admin_password) as login:
 			context.language = login.language
 			yield context
 
@@ -359,10 +359,11 @@ class Run:
 		header.append("")
 
 		self.protocols["settings"].extend(
-			verify_admin_settings(master.driver, self.workarounds, master.report))
+			verify_admin_settings(master.driver, self.workarounds, self.batch.ilias_url, master.report))
 
 		master.report("creating users.")
-		self.users = self.temporary_users.get_instance(master.driver, master.report).create(len(self.machines))
+		self.users = self.temporary_users.get_instance(
+			master.driver, self.batch.ilias_url, master.report).create(len(self.machines))
 		master.report("done creating users.")
 
 		# print('switching to test "%s".' % test.get_title())
@@ -386,6 +387,7 @@ class Run:
 					batch_id=self.batch_id,
 					report=self.report,
 					command=TakeExamCommand(
+						ilias_url=self.batch.ilias_url,
 						machine=machine,
 						machine_index=i + 1,
 						username=user.get_username(),
@@ -469,7 +471,8 @@ class Run:
 			db.put_coverage_data(self.coverage)
 
 	def cleanup(self, master):
-		self.temporary_users.get_instance(master.driver, master.report).destroy(self.users)
+		self.temporary_users.get_instance(
+			master.driver, self.batch.ilias_url, master.report).destroy(self.users)
 		# keep self.users for storing some information on them later.
 
 	def run(self):
@@ -542,7 +545,6 @@ class Batch(threading.Thread):
 		self.settings = settings
 		self.workarounds = workarounds
 		self.wait_time = wait_time
-		self.debug = False
 
 		self.machines_lookup = dict((v, k) for k, v in machines.items())
 		self.machines_lookup["master"] = "master"
@@ -553,11 +555,19 @@ class Batch(threading.Thread):
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())
 		self._is_done = False
 
+		self.debug = False
+		self.ilias_url = None
+		self.ilias_admin_user = None
+		self.ilias_admin_password = None
+
 	def get_id(self):
 		return self.batch_id
 
 	def configure(self, args):
 		self.debug = args.debug
+		self.ilias_url = args.ilias_url
+		self.ilias_admin_user = args.ilias_admin_user
+		self.ilias_admin_password = args.ilias_admin_password
 
 	def run(self):
 		#import cProfile
