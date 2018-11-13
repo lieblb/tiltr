@@ -28,7 +28,8 @@ import urllib
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .utils import wait_for_page_load, http_get_parameters, set_inputs,\
-	wait_for_css, wait_for_css_visible, set_element_value_by_css, set_element_value, is_driver_alive
+	wait_for_css, wait_for_css_visible, set_element_value_by_css,\
+	set_element_value, is_driver_alive, get_driver_error_details
 
 from ..question import *
 from ..result import *
@@ -624,11 +625,9 @@ class ExamDriver:
 		url = self.driver.current_url
 		try:
 			return int(http_get_parameters(url)["sequence"])
-		except KeyError:
-			if '/error.php' in url:
-				raise UnexpectedErrorException()
-			else:
-				raise InteractionException("could not find sequence in URL %s" % url)
+		except:
+			pass
+		raise get_driver_error_details(self.driver)
 
 	def create_answer(self):
 		try:

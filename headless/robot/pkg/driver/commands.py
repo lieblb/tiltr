@@ -22,6 +22,7 @@ from .context import RegressionContext, RandomContext
 from ..settings import Settings, Workarounds
 from ..question.answers import Validness
 from ..exceptions import ErrorDomain, TestILIASException, InteractionException
+from .utils import get_driver_error_details
 
 
 class TakeExamCommand:
@@ -107,6 +108,13 @@ class TakeExamCommand:
 				self._simulate_crash(exam_driver)
 			exam_driver.goto_next_or_previous_question()
 
+	def _error_details(self, driver, trace):
+		more_info = str(get_driver_error_details(driver))
+		if more_info:
+			return "TEST ABORTED:\n%s\nORIGINAL EXCEPTION:\n%s" % (more_info, trace)
+		else:
+			return "TEST ABORTED:\n%s" % trace
+
 	def run(self, driver, master_report):
 		machine_info = "running test on machine #%s (%s)." % (self.machine_index, self.machine)
 		master_report(machine_info)
@@ -138,9 +146,10 @@ class TakeExamCommand:
 					self._pass2(exam_driver, report)
 					self._pass3(exam_driver, report)
 				except TestILIASException as e:
+					info = self._error_details(driver, traceback.format_exc())
 					traceback.print_exc()
-					master_report("test aborted: %s" % traceback.format_exc())
-					r = Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
+					master_report(info)
+					r = Result.from_error(Origin.recorded, e.get_error_domain(), info)
 					exam_driver.copy_protocol(r)
 					return r
 
@@ -150,9 +159,10 @@ class TakeExamCommand:
 				result.attach_coverage(context.coverage)
 
 		except TestILIASException as e:
+			info = self._error_details(driver, traceback.format_exc())
 			traceback.print_exc()
-			master_report("test aborted: %s" % traceback.format_exc())
-			return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
+			master_report(info)
+			return Result.from_error(Origin.recorded, e.get_error_domain(), info)
 		except WebDriverException as webdriver_error:
 			e = InteractionException(str(webdriver_error))
 			traceback.print_exc()

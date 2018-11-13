@@ -18,6 +18,8 @@ from selenium.webdriver.remote.command import Command
 import time
 import itertools
 
+from ..exceptions import *
+
 
 def is_loaded(driver):
 	return driver.execute_script("return document.readyState") == "complete"
@@ -156,3 +158,28 @@ def http_get_parameters(url):
 	for key, values in parse_qs(url.query).items():
 		parameters[key] = values[0]
 	return parameters
+
+
+def get_driver_error_details(driver):
+	try:
+		url = driver.url
+	except:
+		url = None
+
+	error_class = InteractionException
+	if url is None or '/error.php' in url:
+		error_class = UnexpectedErrorException
+		try:
+			alert_text = driver.find_element_by_css_selector(".alert").text
+			return error_class("ILIAS aborted with: %s" % alert_text)
+		except:
+			pass
+
+	if url is None:
+		url = "[unknown url]"
+
+	try:
+		return error_class("failed on loading " + url + " with html:\n" +
+			driver.find_element_by_css_selector("body").get_attribute('innerHTML'))
+	except:
+		return error_class("unknown error on url %s (driver no longer functional)" % url)
