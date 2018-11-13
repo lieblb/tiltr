@@ -26,7 +26,7 @@ class DB:
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
-		c.execute("CREATE TABLE IF NOT EXISTS longterm (created TIMESTAMP, success INTEGER, nusers INTEGER)")
+		c.execute("CREATE TABLE IF NOT EXISTS longterm (created TIMESTAMP, success INTEGER, detail TEXT, nusers INTEGER)")
 		self.db.commit()
 		c.close()
 		return self
@@ -41,7 +41,7 @@ class DB:
 			(now, batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users, elapsed_time))
 
 		success_code = dict(OK=1, FAIL=0).get(success.split("/")[0], 0)
-		c.execute("INSERT INTO longterm (created, success, nusers) VALUES (?, ?, ?)", (now, success_code, num_users));
+		c.execute("INSERT INTO longterm (created, success, detail, nusers) VALUES (?, ?, ?, ?)", (now, success_code, success, num_users));
 
 		self.db.commit()
 		c.close()
