@@ -45,6 +45,7 @@ class TakeExamCommand:
 		self.username = data["username"]
 		self.password = data["password"]
 		self.test_id = data["test_id"]
+		self.test_url = data["test_url"]
 		self.wait_time = data["wait_time"]
 		self.admin_lang = data["admin_lang"]
 
@@ -57,6 +58,7 @@ class TakeExamCommand:
 			username=self.username,
 			password=self.password,
 			test_id=self.test_id,
+			test_url=self.test_url,
 			questions=base64.b64encode(pickle.dumps(self.questions, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
 			settings=self.settings.to_dict(),
 			workarounds=self.workarounds.to_dict(),
@@ -122,7 +124,7 @@ class TakeExamCommand:
 		try:
 			with Login(driver, master_report, self.ilias_url, self.username, self.password):
 				test_driver = TestDriver(driver, Test(self.test_id), self.workarounds, self.ilias_url, master_report)
-				test_driver.goto()
+				test_driver.goto(self.test_url)
 
 				do_regression_tests = True
 

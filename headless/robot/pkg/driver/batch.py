@@ -196,6 +196,7 @@ class Run:
 		self.temporary_users = TemporaryUsers()
 		self.protocols = defaultdict(list)
 		self.questions = None
+		self.test_url = None
 		self.language = None
 
 		self.batch = batch
@@ -378,6 +379,9 @@ class Run:
 		# grab question definitions from UI.
 		self.questions = master.test_driver.get_question_definitions()
 
+		# find URL of test, since this saves us a lot of time in the clients.
+		self.test_url = master.test_driver.get_test_url()
+
 	def run_exams(self):
 		# now run exams.
 		take_exam_args = []
@@ -393,6 +397,7 @@ class Run:
 						username=user.get_username(),
 						password=user.get_password(),
 						test_id=self.test.get_id(),
+						test_url=self.test_url,
 						questions=self.questions,
 						settings=self.settings,
 						workarounds=self.workarounds,

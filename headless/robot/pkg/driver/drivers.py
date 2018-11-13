@@ -1036,12 +1036,20 @@ class TestDriver:
 				found = True
 				break
 
-		if not found: # no participants in test
+		if not found:  # no participants in test
 			return
 
 		self.driver.find_element_by_css_selector('input[name="cmd[confirmDeleteAllUserResults]"]').click()
 
-	def goto(self):
+	def get_test_url(self):
+		if not self.cached_link:
+			self.goto()
+		return self.cached_link
+
+	def goto(self, url=None):
+		if self.cached_link is None and url:
+			self.cached_link = url
+
 		if self.cached_link is not None:
 			with wait_for_page_load(self.driver):
 				self.driver.get(self.cached_link)
@@ -1080,7 +1088,7 @@ class TestDriver:
 		self.report("performing search.")
 		with wait_for_page_load(driver):
 			driver.find_element_by_css_selector("input[name='cmd[performSearch]']").click()
-		for i in range(5):
+		for i in range(10):
 			for link in driver.find_elements_by_partial_link_text(self.test.get_title()):
 				if link.is_displayed():
 					with wait_for_page_load(driver):
@@ -1089,7 +1097,7 @@ class TestDriver:
 					return True
 			time.sleep(1)
 
-		return False
+		raise InteractionException("test was not found in ILIAS")
 
 	def start(self, context, questions, allow_resume=False):
 		driver = self.driver
