@@ -183,3 +183,14 @@ def get_driver_error_details(driver):
 			driver.find_element_by_css_selector("body").get_attribute('innerHTML'))
 	except:
 		return error_class("unknown error on url %s (driver no longer functional)" % url)
+
+
+def try_submit(driver, f, n_tries = 5):
+	for i in range(n_tries):
+		try:
+			with wait_for_page_load(driver):
+				f()
+			break
+		except TimeoutException as e:
+			if i >= n_tries - 1:
+				raise e

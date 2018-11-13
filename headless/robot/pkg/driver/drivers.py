@@ -29,7 +29,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .utils import wait_for_page_load, http_get_parameters, set_inputs,\
 	wait_for_css, wait_for_css_visible, set_element_value_by_css,\
-	set_element_value, is_driver_alive, get_driver_error_details
+	set_element_value, is_driver_alive, get_driver_error_details, try_submit
 
 from ..question import *
 from ..result import *
@@ -78,7 +78,8 @@ class Login:
 
 		if change_password:
 			self.report("changing password.")
-			with wait_for_page_load(self.driver):
+
+			def do_change_password():
 				set_inputs(
 					driver,
 					current_password=self.password,
@@ -86,6 +87,8 @@ class Login:
 					new_password_retype=self.password + "_"
 				)
 				driver.find_element_by_css_selector("input[name='cmd[savePassword]']").click()
+
+			try_submit(self.driver, do_change_password)
 
 		# only after login can we determine the user's language setting, that ILIAS properly reports
 		# in the <html> tag. needed for checking exported XLS contents.
@@ -511,6 +514,14 @@ class ExamDriver:
 
 		self.verify_answer(after_crash=True)
 
+	def _click_save(self, button, n_tries=5):
+		def click_to_save():
+			button.click()
+			self.confirm_save()
+
+		with measure_time(self.dts):
+			try_submit(self.driver, click_to_save, n_tries=n_tries)
+
 	def goto_first_question(self):
 		while True:
 			try:
@@ -519,10 +530,7 @@ class ExamDriver:
 			except NoSuchElementException:
 				return  # done
 			self.report("goto previous question.")
-			with measure_time(self.dts):
-				with wait_for_page_load(self.driver):
-					button.click()
-					self.confirm_save()
+			self._click_save(button)
 
 	def goto_next_question(self):
 		self.protocol.append((time.time(), "test", "goto next question."))
@@ -534,10 +542,7 @@ class ExamDriver:
 			return False
 
 		self.report("goto next question.")
-		with measure_time(self.dts):
-			with wait_for_page_load(self.driver):
-				button.click()
-				self.confirm_save()
+		self._click_save(button)
 
 		return True
 
@@ -556,10 +561,8 @@ class ExamDriver:
 				continue
 
 			self.report("goto %s question." % what)
-			with measure_time(self.dts):
-				with wait_for_page_load(self.driver):
-					button.click()
-					self.confirm_save()
+			self._click_save(button)
+
 			return True
 
 		return False
