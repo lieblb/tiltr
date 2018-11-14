@@ -523,7 +523,7 @@ class ExamDriver:
 			self.confirm_save()
 
 		with measure_time(self.dts):
-			try_submit(self.driver, click_to_save, n_tries=n_tries)
+			try_submit(self.driver, click_to_save, allow_reload=False, n_tries=n_tries)
 
 	def goto_first_question(self):
 		while True:
