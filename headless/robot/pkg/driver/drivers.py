@@ -54,14 +54,17 @@ class Login:
 
 		wait_for_css(driver, "form[name='formlogin']")
 
-		with wait_for_page_load(self.driver):
+		def do_login():
 			set_inputs(
 				driver,
 				username=self.username,
 				password=self.password)
 
-			self.report("logging in as " + self.username + "/" + self.password + ".")
-			driver.find_element_by_css_selector("input[name='cmd[doStandardAuthentication]']").click()
+			driver.find_element_by_css_selector(
+				"input[name='cmd[doStandardAuthentication]']").click()
+
+		self.report("logging in as " + self.username + "/" + self.password + ".")
+		try_submit(driver, do_login)
 
 		try:
 			driver.find_element_by_css_selector("form[name='formlogin']")
