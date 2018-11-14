@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 # Copyright (c) 2018 Rechenzentrum, Universitaet Regensburg
@@ -15,6 +15,9 @@ import re
 import time
 import json
 import socket
+import fcntl
+from threading import Thread
+from collections import defaultdict
 
 py3 = sys.version_info >= (3, 0)
 
@@ -24,6 +27,61 @@ parser.add_argument('--debug', help='output debugging information', action='stor
 parser.add_argument('--n', nargs='?', const=2, type=int)
 parser.add_argument('--ilias', help='YAML file that specifies an external ILIAS installation to test against')
 args = parser.parse_args()
+
+
+def monitor_docker_stats(tmp_path, docker_compose_name):
+	stream = subprocess.Popen(["docker", "stats"], stdout=subprocess.PIPE)
+
+	name_index = None
+	cpu_index = None
+	mem_index = None
+	stats = defaultdict(lambda: dict(cpu=0, mem=0))
+
+	stats_lock_path = os.path.join(tmp_path, "stats.lock")
+	stats_path = os.path.join(tmp_path, "stats.json")
+
+	while True:
+		line = stream.stdout.readline()
+		if py3:
+			line = line.decode("utf-8")
+
+		if not line:
+			break
+
+		row = re.split('\s\s+', line.strip())
+		is_header = False
+
+		for i, k in enumerate(row):
+			k = k.replace(' ', '')
+			if k == 'NAME':
+				name_index = i
+				is_header = True
+			elif k == 'CPU%':
+				cpu_index = i
+				is_header = True
+			elif k == 'MEM%':
+				mem_index = i
+				is_header = True
+
+		if is_header:
+			with open(stats_lock_path, "w") as lock_file:
+				fcntl.lockf(lock_file, fcntl.LOCK_EX)
+				with open(stats_path, "w") as f:
+					f.write(json.dumps(stats))
+			stats.clear()
+		elif name_index and cpu_index and mem_index:
+			name = row[name_index].split("_")
+			if name and name[0] == docker_compose_name:
+				if name[1] in ('web', 'db'):
+					bin = 'ilias-' + name[1]
+				elif name[1] == 'master' or name[1] == 'machine':
+					bin = 'robot'
+				else:
+					bin = None
+
+				if bin:
+					stats[bin]['cpu'] += float(row[cpu_index].replace('%', ''))
+					stats[bin]['mem'] += float(row[mem_index].replace('%', ''))
 
 
 def set_argument_environ(args):
@@ -104,7 +162,8 @@ if embedded_ilias:
 	client_zip.close()
 
 # start up docker.
-compose = subprocess.Popen(["docker-compose", "up", "--scale", "machine=%d" % args.n], stdout=subprocess.PIPE)
+compose = subprocess.Popen(["docker-compose", "up", "--scale", "machine=%d" % args.n],
+	stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 print("Waiting for docker-compose to start up.")
 
 if not args.verbose:
@@ -125,17 +184,20 @@ def filter_log(s):
 
 
 try:
-	while True:
-		line = compose.stdout.readline()
-		if py3:
-			line = line.decode("utf-8")
-		if line != '':
-			if args.verbose:
-				print(line)
-			if filter_log(line):
-				log.write(line)
-			if "apache2 -D FOREGROUND" in line:  # web server running?
-				break
+	def wait_for_apache():
+		while True:
+			line = compose.stdout.readline()
+			if py3:
+				line = line.decode("utf-8")
+			if line != '':
+				if args.verbose:
+					print(line)
+				if filter_log(line):
+					log.write(line)
+				if "apache2 -D FOREGROUND" in line:  # web server running?
+					break
+
+	wait_for_apache()
 
 	machines = dict()
 	for i in range(args.n):
@@ -175,21 +237,29 @@ try:
 			status = status.decode("utf-8")
 		return status != "exited"
 
-	while True:
-		if not check_alive():
-			print("master has shut down unexpectedly. try a docker logs %s_master_1" % docker_compose_name)
-			subprocess.call(["docker-compose", "stop"])
-			sys.exit()
-		line = compose.stdout.readline()
-		if py3:
-			line = line.decode("utf-8")
-		if line != '':
-			if filter_log(line):
-				log.write(line)
+	def print_docker_logs():
+		while True:
+			if not check_alive():
+				print("master has shut down unexpectedly. try a docker logs %s_master_1" % docker_compose_name)
+				subprocess.call(["docker-compose", "stop"])
+				sys.exit()
+			line = compose.stdout.readline()
+			if py3:
+				line = line.decode("utf-8")
+			if line != '':
+				if filter_log(line):
+					log.write(line)
+
+	monitor_thread = Thread(target=monitor_docker_stats, args=(tmp_path, docker_compose_name,))
+	monitor_thread.start()
+
+	print_docker_logs()
 
 except KeyboardInterrupt:
+	print("")
 	print("Please wait while docker-compose is shutting down.")
 	subprocess.call(["docker-compose", "stop"])
+	monitor_thread.join()
 	sys.exit()
 finally:
 	if not args.verbose:
