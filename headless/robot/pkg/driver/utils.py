@@ -169,12 +169,17 @@ def get_driver_error_details(driver):
 	except:
 		url = None
 
+	try:
+		html = driver.find_element_by_css_selector("body").get_attribute('innerHTML')
+	except:
+		html = "[unknown html]"
+
 	error_class = InteractionException
 	if url is None or '/error.php' in url:
 		error_class = UnexpectedErrorException
 		try:
 			alert_text = driver.find_element_by_css_selector(".alert").text
-			return error_class("ILIAS aborted with: %s" % alert_text)
+			return error_class("ILIAS aborted with: %s.\nFULL HTML: %s" % (alert_text, html))
 		except:
 			pass
 
@@ -182,23 +187,32 @@ def get_driver_error_details(driver):
 		url = "[unknown url]"
 
 	try:
-		return error_class("failed on loading " + url + " with html:\n" +
-			driver.find_element_by_css_selector("body").get_attribute('innerHTML'))
+		return error_class("failed on loading " + url + " with html:\n" + html)
 	except:
 		return error_class("unknown error on url %s (driver no longer functional)" % url)
 
 
-def try_submit(driver, f, allow_reload=True, n_tries=5):
+def try_submit(driver, f, allow_reload=True, n_tries=7):
 	for i in range(n_tries):
+		try:
+			url = driver.url
+		except:
+			url = "[unknown url]"
+
+		if '/error.php' in url:
+			raise get_driver_error_details(driver)
+
 		try:
 			with wait_for_page_load(driver):
 				f()
 			break
 		except TimeoutException as e:
 			if i >= n_tries - 1:
-				raise e
+				raise get_driver_error_details(driver) from e
+			time.sleep(1)
 		except NoSuchElementException as e:
 			if i >= n_tries - 1:
-				raise e
+				raise get_driver_error_details(driver) from e
 			if allow_reload:
 				driver.refresh()
+			time.sleep(1)

@@ -465,27 +465,20 @@ class ExamDriver:
 	def close(self):
 		self.report("finishing test.")
 
-		try:
-			finish_test_css = 'a[data-nextcmd="finishTest"]'
-			give_up = False
-			with wait_for_page_load(self.driver):
-				while True:
-					try:
-						finish_button = self.driver.find_element_by_css_selector(finish_test_css)
-						finish_button.click()
-						self.confirm_save()
-						break
-					except NoSuchElementException:
-						# try to go to next question
-						if not self.goto_next_question():
-							if give_up:
-								raise InteractionException("failed to finish test.")
-							with wait_for_page_load(self.driver):
-								self.driver.refresh()
-							give_up = True
+		finish_test_css = 'a[data-nextcmd="finishTest"]'
 
-			with wait_for_page_load(self.driver):
-				self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
+		def finish_test():
+			finish_button = self.driver.find_element_by_css_selector(finish_test_css)
+			finish_button.click()
+			self.confirm_save()
+
+		def confirm_finish():
+			self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
+
+		try:
+			try_submit(self.driver, finish_test, allow_reload=True)
+
+			try_submit(self.driver, confirm_finish)
 
 		except WebDriverException:
 			raise InteractionException("failed to properly finish test")
@@ -517,56 +510,65 @@ class ExamDriver:
 
 		self.verify_answer(after_crash=True)
 
-	def _click_save(self, button, n_tries=5):
+	def _click_save(self, find_button, n_tries=5):
 		def click_to_save():
+			button = find_button()
 			button.click()
 			self.confirm_save()
 
 		with measure_time(self.dts):
 			try_submit(self.driver, click_to_save, allow_reload=False, n_tries=n_tries)
 
-	def goto_first_question(self):
+	def _has_element(self, get_element):
 		while True:
 			try:
-				button = self.driver.find_element_by_css_selector(
-					'a[data-nextcmd="previousQuestion"]')
+				get_element()
+				return True
 			except NoSuchElementException:
-				return  # done
+				return False
+			except TimeoutException:
+				pass
+
+	def goto_first_question(self):
+		def find_button():
+			return self.driver.find_element_by_css_selector(
+				'a[data-nextcmd="previousQuestion"]')
+
+		while self._has_element(find_button):
 			self.report("goto previous question.")
-			self._click_save(button)
+			self._click_save(find_button)
 
 	def goto_next_question(self):
 		self.protocol.append((time.time(), "test", "goto next question."))
 
-		try:
-			button = self.driver.find_element_by_css_selector(
+		def find_button():
+			return self.driver.find_element_by_css_selector(
 				'a[data-nextcmd="nextQuestion"]')
-		except NoSuchElementException:
+
+		if self._has_element(find_button):
+			self.report("goto next question.")
+			self._click_save(find_button)
+			return True
+		else:
 			return False
-
-		self.report("goto next question.")
-		self._click_save(button)
-
-		return True
 
 	def goto_next_or_previous_question(self, random_dir=False):
 		self.protocol.append((time.time(), "test", "goto next or previous question."))
 
-		options = ("next", "previous")
+		options = ('next', 'previous')
 		if random_dir and random.random() < 0.5:
 			options = reversed(options)
 
-		for what in options:
-			try:
-				button = self.driver.find_element_by_css_selector(
-					'a[data-nextcmd="%sQuestion"]' % what)
-			except NoSuchElementException:
-				continue
+		for command in options:
+			def find_button():
+				return self.driver.find_element_by_css_selector(
+					'a[data-nextcmd="%sQuestion"]' % command)
 
-			self.report("goto %s question." % what)
-			self._click_save(button)
+			if self._has_element(find_button):
+				self.report("goto %s question." % command)
+				self._click_save(find_button)
 
-			return True
+				return True
 
 		return False
 
@@ -1134,8 +1136,7 @@ class TestDriver:
 				raise InteractionException("could not detect start button. aborting.")
 
 			try:
-				with wait_for_page_load(self.driver):
-					start_button.click()
+				try_submit(self.driver, lambda: start_button.click())
 			except NoSuchElementException:
 				raise InteractionException("user does not have rights to start this test. aborting.")
 
