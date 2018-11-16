@@ -117,7 +117,8 @@ def workbook_to_result(wb, username, report):
 		report("gathering data from XLS.")
 
 	# extract user result row from general tab (i.e. scores for each question
-	# for one user).
+	# for one user). note that ILIAS sometimes exports empty rows but still
+	# yields all users - we ignore empty rows below.
 
 	main_sheet = wb.worksheets[0]
 	result_row = None
@@ -125,10 +126,11 @@ def workbook_to_result(wb, username, report):
 	while True:
 		result_row = XlsResultRow(main_sheet, row_index)
 		row_username = result_row.get_username()
-		assert row_username
 		if row_username == username:
 			break
 		row_index += 1
+		if row_index > 1000:
+			raise IntegrityException("user %s not found in XLS" % username)
 	assert result_row
 
 	# find user tab and extract individual answer information (i.e. specific
