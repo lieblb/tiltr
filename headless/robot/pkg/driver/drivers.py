@@ -80,9 +80,15 @@ class Login:
 			pass
 
 		if change_password:
+			# will only happen if admin setting "change password on first login" is enabled.
 			self.report("changing password.")
 
 			def do_change_password():
+				try:
+					driver.find_element_by_css_selector("#il_prop_cont_current_password")
+				except NoSuchElementException:
+					return  # the password change did succeed despite an earlier error.
+
 				set_inputs(
 					driver,
 					current_password=self.password,
