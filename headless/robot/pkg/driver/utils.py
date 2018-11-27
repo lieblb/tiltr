@@ -192,7 +192,7 @@ def get_driver_error_details(driver):
 		return error_class("unknown error on url %s (driver no longer functional)" % url)
 
 
-def try_submit(driver, f, allow_reload=True, n_tries=7):
+def try_submit(driver, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 	for i in range(n_tries):
 		try:
 			url = driver.url
@@ -209,10 +209,10 @@ def try_submit(driver, f, allow_reload=True, n_tries=7):
 		except TimeoutException as e:
 			if i >= n_tries - 1:
 				raise get_driver_error_details(driver) from e
-			time.sleep(1)
+			time.sleep(min(max_sleep_time, 2 ** i))
 		except NoSuchElementException as e:
 			if i >= n_tries - 1:
 				raise get_driver_error_details(driver) from e
 			if allow_reload:
 				driver.refresh()
-			time.sleep(1)
+			time.sleep(min(max_sleep_time, 2 ** i))

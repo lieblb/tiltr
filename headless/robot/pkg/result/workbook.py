@@ -118,7 +118,9 @@ def workbook_to_result(wb, username, report):
 
 	# extract user result row from general tab (i.e. scores for each question
 	# for one user). note that ILIAS sometimes exports empty rows but still
-	# yields all users - we ignore empty rows below.
+	# yields all users - we ignore empty rows below (which usually seem to
+	# indicate that a wrong additional pass has been created, we will detect
+	# this in the detailed result check if so).
 
 	main_sheet = wb.worksheets[0]
 	result_row = None

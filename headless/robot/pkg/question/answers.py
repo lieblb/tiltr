@@ -286,6 +286,9 @@ def implicit_text_to_number_xls(context, value):
 			# take place!
 			value = "0"
 
+	if value == '-':
+		value = '-.'  # i.e. negative float
+
 	return value
 
 
