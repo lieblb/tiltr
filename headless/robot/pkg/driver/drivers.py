@@ -54,23 +54,16 @@ class Login:
 
 		wait_for_css(driver, "form[name='formlogin']")
 
-		def do_login():
+		def do_login(button):
 			set_inputs(
 				driver,
 				username=self.username,
 				password=self.password)
 
-			driver.find_element_by_css_selector(
-				"input[name='cmd[doStandardAuthentication]']").click()
+			button.click()
 
 		self.report("logging in as " + self.username + "/" + self.password + ".")
-		try_submit(driver, do_login)
-
-		try:
-			driver.find_element_by_css_selector("form[name='formlogin']")
-			raise InteractionException("login failed. aborting.")
-		except NoSuchElementException:
-			pass  # expected
+		try_submit(driver, "input[name='cmd[doStandardAuthentication]']", do_login)
 
 		change_password = False
 		try:
@@ -83,21 +76,16 @@ class Login:
 			# will only happen if admin setting "change password on first login" is enabled.
 			self.report("changing password.")
 
-			def do_change_password():
-				try:
-					driver.find_element_by_css_selector("#il_prop_cont_current_password")
-				except NoSuchElementException:
-					return  # the password change did succeed despite an earlier error.
-
+			def do_change_password(button):
 				set_inputs(
 					driver,
 					current_password=self.password,
 					new_password=self.password + "_",
 					new_password_retype=self.password + "_"
 				)
-				driver.find_element_by_css_selector("input[name='cmd[savePassword]']").click()
+				button.click()
 
-			try_submit(self.driver, do_change_password)
+			try_submit(self.driver, "input[name='cmd[savePassword]']", do_change_password)
 
 		# only after login can we determine the user's language setting, that ILIAS properly reports
 		# in the <html> tag. needed for checking exported XLS contents.
@@ -473,18 +461,17 @@ class ExamDriver:
 
 		finish_test_css = 'a[data-nextcmd="finishTest"]'
 
-		def finish_test():
-			finish_button = self.driver.find_element_by_css_selector(finish_test_css)
+		def finish_test(finish_button):
 			finish_button.click()
 			self.confirm_save()
 
-		def confirm_finish():
-			self.driver.find_element_by_css_selector('input[name="cmd[confirmFinish]"]').click()
+		def confirm_finish(button):
+			button.click()
 
 		try:
-			try_submit(self.driver, finish_test, allow_reload=True)
+			try_submit(self.driver, finish_test_css, finish_test, allow_reload=True)
 
-			try_submit(self.driver, confirm_finish)
+			try_submit(self.driver, 'input[name="cmd[confirmFinish]"]', confirm_finish)
 
 		except WebDriverException:
 			raise InteractionException("failed to properly finish test")
@@ -516,14 +503,13 @@ class ExamDriver:
 
 		self.verify_answer(after_crash=True)
 
-	def _click_save(self, find_button, n_tries=5):
-		def click_to_save():
-			button = find_button()
+	def _click_save(self, css, n_tries=5):
+		def click_to_save(button):
 			button.click()
 			self.confirm_save()
 
 		with measure_time(self.dts):
-			try_submit(self.driver, click_to_save, allow_reload=False, n_tries=n_tries)
+			try_submit(self.driver, css, click_to_save, allow_reload=False, n_tries=n_tries)
 
 	def _has_element(self, get_element):
 		while True:
@@ -542,7 +528,7 @@ class ExamDriver:
 
 		while self._has_element(find_button):
 			self.report("goto previous question.")
-			self._click_save(find_button)
+			self._click_save('a[data-nextcmd="previousQuestion"]')
 
 	def goto_next_question(self):
 		self.protocol.append((time.time(), "test", "goto next question."))
@@ -553,7 +539,7 @@ class ExamDriver:
 
 		if self._has_element(find_button):
 			self.report("goto next question.")
-			self._click_save(find_button)
+			self._click_save('a[data-nextcmd="nextQuestion"]')
 			return True
 		else:
 			return False
@@ -566,13 +552,14 @@ class ExamDriver:
 			options = reversed(options)
 
 		for command in options:
+			css = 'a[data-nextcmd="%sQuestion"]' % command
+
 			def find_button():
-				return self.driver.find_element_by_css_selector(
-					'a[data-nextcmd="%sQuestion"]' % command)
+				return self.driver.find_element_by_css_selector(css)
 
 			if self._has_element(find_button):
 				self.report("goto %s question." % command)
-				self._click_save(find_button)
+				self._click_save(css)
 
 				return True
 
@@ -1127,22 +1114,8 @@ class TestDriver:
 			with wait_for_page_load(self.driver):
 				resume_player.click()
 		else:
-			start_button = None
-			for i in range(10):
-				try:
-					start_button = driver.find_element_by_css_selector(
-						"input[name='cmd[startPlayer]']")
-					break
-				except NoSuchElementException:
-					with wait_for_page_load(self.driver):
-						self.driver.refresh()
-				time.sleep(1)
-
-			if not start_button:
-				raise InteractionException("could not detect start button. aborting.")
-
 			try:
-				try_submit(self.driver, lambda: start_button.click())
+				try_submit(self.driver, "input[name='cmd[startPlayer]']", lambda button: button.click())
 			except NoSuchElementException:
 				raise InteractionException("user does not have rights to start this test. aborting.")
 

@@ -175,13 +175,17 @@ def get_driver_error_details(driver):
 		html = "[unknown html]"
 
 	error_class = InteractionException
-	if url is None or '/error.php' in url:
+	if url is not None and '/error.php' in url:
 		error_class = UnexpectedErrorException
-		try:
-			alert_text = driver.find_element_by_css_selector(".alert").text
-			return error_class("ILIAS aborted with: %s.\nFULL HTML: %s" % (alert_text, html))
-		except:
-			pass
+
+	alert_text = None
+	try:
+		alert_text = driver.find_element_by_css_selector(".alert").text
+	except:
+		pass
+
+	if alert_text is not None:
+		return error_class("ILIAS aborted with: %s.\nFULL HTML: %s" % (alert_text, html))
 
 	if url is None:
 		url = "[unknown url]"
@@ -192,7 +196,25 @@ def get_driver_error_details(driver):
 		return error_class("unknown error on url %s (driver no longer functional)" % url)
 
 
-def try_submit(driver, f, allow_reload=True, n_tries=7, max_sleep_time=8):
+def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
+	button = None
+
+	for i in range(n_tries):
+		try:
+			button = driver.find_element_by_css_selector(css)
+			break
+		except TimeoutException as e:
+			time.sleep(min(max_sleep_time, 2 ** i))
+		except NoSuchElementException:
+			if allow_reload:
+				with wait_for_page_load(driver):
+					driver.refresh()
+			else:
+				time.sleep(min(max_sleep_time, 2 ** i))
+
+	if not button:
+		raise InteractionException("could not detect %s button. aborting." % css)
+
 	for i in range(n_tries):
 		try:
 			url = driver.url
@@ -204,15 +226,16 @@ def try_submit(driver, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 
 		try:
 			with wait_for_page_load(driver):
-				f()
+				if i > 0:
+					button = driver.find_element_by_css_selector(css)
+
+				f(button)
 			break
 		except TimeoutException as e:
 			if i >= n_tries - 1:
 				raise get_driver_error_details(driver) from e
 			time.sleep(min(max_sleep_time, 2 ** i))
 		except NoSuchElementException as e:
-			if i >= n_tries - 1:
-				raise get_driver_error_details(driver) from e
-			if allow_reload:
-				driver.refresh()
-			time.sleep(min(max_sleep_time, 2 ** i))
+			# we've seen css before, and now it's gone. usually this means that
+			# we succeeded.
+			break
