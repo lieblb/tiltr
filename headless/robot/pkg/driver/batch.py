@@ -159,7 +159,8 @@ def in_master(batch, protocol):
 	with Browser(headless=True, capabilities=capabilities, log_path=log_path, wait_time=batch.wait_time) as browser:
 		context.driver = browser.driver
 
-		test_driver = TestDriver(browser.driver, batch.test, batch.workarounds, batch.ilias_url, context.report)
+		test_driver = TestDriver(
+			browser.driver, batch.test, batch.ilias_admin_user, batch.workarounds, batch.ilias_url, context.report)
 		context.test_driver = test_driver
 
 		with Login(browser.driver, context.report, batch.ilias_url, batch.ilias_admin_user, batch.ilias_admin_password) as login:

@@ -443,8 +443,10 @@ def measure_time(dts):
 
 
 class ExamDriver:
-	def __init__(self, driver, report, context, questions):
+	def __init__(self, driver, ilias_url, username, report, context, questions):
 		self.driver = driver
+		self.ilias_url = ilias_url
+		self.username = username
 		self.report = report
 		self.context = context
 		self.questions = questions
@@ -622,18 +624,46 @@ class ExamDriver:
 				# guard against StaleElementReferenceException
 				pass
 
-	def get_sequence_id(self):
+	def get_sequence_id(self, allow_reload=False):
 		url = self.driver.current_url
-		try:
-			return int(http_get_parameters(url)["sequence"])
-		except:
-			pass
+		for i in range(3):
+			try:
+				return int(http_get_parameters(url)["sequence"])
+			except:
+				# sometimes our session gets lost and we need to resume the test.
+				is_resumed = False
+				try:
+					resume_player = self.driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
+					resume_player.click()
+					is_resumed = True
+				except:
+					pass
+				if not is_resumed:
+					if not allow_reload:
+						break
+					with wait_for_page_load(self.driver):
+						self.driver.refresh()
 		raise get_driver_error_details(self.driver)
 
-	def create_answer(self):
+	def _get_debug_info(self, question_title):
 		try:
-			page_title = self.driver.find_element_by_css_selector(".ilc_page_title_PageTitle")
-		except NoSuchElementException:
+			query = '/Customizing/uni-regensburg/extensions/Versions/debug.php?login=%s&question=%s'
+			r = requests.get(self.ilias_url + (query % (self.username, question_title)))
+			return r.text
+		except:
+			return "not available"
+
+	def create_answer(self):
+		page_title = None
+
+		for i in range(3):
+			try:
+				page_title = self.driver.find_element_by_css_selector(".ilc_page_title_PageTitle")
+			except (NoSuchElementException, TimeoutException):
+				with wait_for_page_load(self.driver):
+					self.driver.refresh()
+
+		if page_title is None:
 			raise InteractionException("no question title found.")
 
 		title = page_title.text
@@ -651,7 +681,7 @@ class ExamDriver:
 			except NoSuchElementException:
 				continue
 
-			answer = answer_class(self.driver, self.questions[title])
+			answer = answer_class(self.driver, self.questions[title], self._get_debug_info)
 			break
 
 		sequence_id = self.get_sequence_id()
@@ -661,7 +691,7 @@ class ExamDriver:
 		return answer
 
 	def randomize_answer(self):
-		sequence_id = self.get_sequence_id()
+		sequence_id = self.get_sequence_id(True)
 		if sequence_id not in self.answers:
 			self.create_answer()
 		answer = self.answers[sequence_id]
@@ -761,9 +791,10 @@ class Test:
 
 
 class TestDriver:
-	def __init__(self, driver, test, workarounds, ilias_url, report):
+	def __init__(self, driver, test, username, workarounds, ilias_url, report):
 		self.driver = driver
 		self.test = test
+		self.username = username
 		self.workarounds = workarounds
 		self.ilias_url = ilias_url
 		self.report = report
@@ -1119,5 +1150,5 @@ class TestDriver:
 			except NoSuchElementException:
 				raise InteractionException("user does not have rights to start this test. aborting.")
 
-		return ExamDriver(driver, self.report, context, questions)
+		return ExamDriver(driver, self.ilias_url, self.username, self.report, context, questions)
 

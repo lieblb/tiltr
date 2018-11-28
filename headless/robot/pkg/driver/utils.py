@@ -185,13 +185,13 @@ def get_driver_error_details(driver):
 		pass
 
 	if alert_text is not None:
-		return error_class("ILIAS aborted with: %s.\nFULL HTML: %s" % (alert_text, html))
+		return error_class("ILIAS aborted with: %s.\nURL: %s\nFULL HTML: %s" % (alert_text, url, html))
 
 	if url is None:
 		url = "[unknown url]"
 
 	try:
-		return error_class("failed on loading " + url + " with html:\n" + html)
+		return error_class("failed on loading %s with html: %s\n" % (url, html))
 	except:
 		return error_class("unknown error on url %s (driver no longer functional)" % url)
 

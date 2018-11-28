@@ -123,7 +123,9 @@ class TakeExamCommand:
 
 		try:
 			with Login(driver, master_report, self.ilias_url, self.username, self.password):
-				test_driver = TestDriver(driver, Test(self.test_id), self.workarounds, self.ilias_url, master_report)
+				test_driver = TestDriver(
+					driver, Test(self.test_id), self.username,
+					self.workarounds, self.ilias_url, master_report)
 				test_driver.goto(self.test_url)
 
 				do_regression_tests = True

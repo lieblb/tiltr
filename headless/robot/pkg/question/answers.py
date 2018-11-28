@@ -13,6 +13,7 @@ import time
 import html
 from enum import Enum
 from selenium.common.exceptions import NoSuchElementException
+import random
 
 from .questions import ClozeType
 from ..driver.utils import set_element_value
@@ -31,8 +32,9 @@ class Validness(Enum):
 
 
 class AnswerProtocol:
-	def __init__(self, title):
+	def __init__(self, title, get_debug_info):
 		self.title = title
+		self.get_debug_info = get_debug_info
 		self.entries = []
 
 	def choose(self, key, value):
@@ -42,13 +44,16 @@ class AnswerProtocol:
 		if expected == actual:
 			self.entries.append(
 				(time.time(), "OK verified that '%s' is still '%s'" % (key, normalize_answer(expected))))
+			#self.entries.append((time.time(), "debug info: " + self.get_debug_info(self.title)))
 		else:
 			err = "FAIL answer on '%s' was stored incorrectly: answer was '%s', but ILIAS stored '%s'" % (
 				key, normalize_answer(expected), normalize_answer(actual))
 			self.entries.append((time.time(), err))
 
+			self.entries.append((time.time(), "debug info: " + self.get_debug_info(self.title)))
+
 			if after_crash:
-				raise AutoSaveException("answer mismatch after crash: " + err);
+				raise AutoSaveException("answer mismatch after crash: " + err)
 			else:
 				raise IntegrityException("answer mismatch during in-test verification: " + err)
 
@@ -63,13 +68,13 @@ Choice = namedtuple('Choice', ['selector', 'label', 'checked'])
 
 
 class SingleChoiceAnswer:
-	def __init__(self, driver, question):
+	def __init__(self, driver, question, get_debug_info):
 		assert question.__class__.__name__ == "SingleChoiceQuestion"
 		self.driver = driver
 		self.question = question
 		self.current_answer = None
 		self.current_score = None
-		self.protocol = AnswerProtocol(self.question.title)
+		self.protocol = AnswerProtocol(self.question.title, get_debug_info)
 
 	def randomize(self, context):
 		self._set_answer(*self.question.get_random_answer(context))
@@ -118,13 +123,13 @@ class SingleChoiceAnswer:
 
 
 class MultipleChoiceAnswer:
-	def __init__(self, driver, question):
+	def __init__(self, driver, question, get_debug_info):
 		assert question.__class__.__name__ == "MultipleChoiceQuestion"
 		self.driver = driver
 		self.question = question
 		self.current_answers = None
 		self.current_score = None
-		self.protocol = AnswerProtocol(self.question.title)
+		self.protocol = AnswerProtocol(self.question.title, get_debug_info)
 
 	def randomize(self, context):
 		self._set_answers(*self.question.get_random_answer(context))
@@ -286,20 +291,17 @@ def implicit_text_to_number_xls(context, value):
 			# take place!
 			value = "0"
 
-	if value == '-':
-		value = '-.'  # i.e. negative float
-
 	return value
 
 
 class ClozeAnswer(object):
-	def __init__(self, driver, question):
+	def __init__(self, driver, question, get_debug_info):
 		assert question.__class__.__name__ == "ClozeQuestion"
 		self.driver = driver
 		self.question = question
 		self.current_answers = None
 		self.current_score = None
-		self.protocol = AnswerProtocol(self.question.title)
+		self.protocol = AnswerProtocol(self.question.title, get_debug_info)
 
 	def randomize(self, context):
 		answers, valid, score = self.question.get_random_answer(context)
@@ -365,13 +367,13 @@ class ClozeAnswer(object):
 
 
 class KPrimAnswer(object):
-	def __init__(self, driver, question):
+	def __init__(self, driver, question, get_debug_info):
 		assert question.__class__.__name__ == "KPrimQuestion"
 		self.driver = driver
 		self.question = question
 		self.current_answers = None
 		self.current_score = None
-		self.protocol = AnswerProtocol(self.question.title)
+		self.protocol = AnswerProtocol(self.question.title, get_debug_info)
 		self.n_rows = 4
 
 	def randomize(self, context):
@@ -425,13 +427,13 @@ class KPrimAnswer(object):
 class AbstractLongTextAnswer:
 	_export_names = dict(de="Ergebnis", en="Result")
 
-	def __init__(self, driver, question):
+	def __init__(self, driver, question, get_debug_info):
 		assert question.__class__.__name__ == "LongTextQuestion"
 		self.driver = driver
 		self.question = question
 		self.current_answer = None
 		self.current_score = None
-		self.protocol = AnswerProtocol(self.question.title)
+		self.protocol = AnswerProtocol(self.question.title, get_debug_info)
 
 	def randomize(self, context):
 		answer, score = self.question.get_random_answer(context)
