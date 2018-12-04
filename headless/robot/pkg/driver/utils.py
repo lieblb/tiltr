@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
 from selenium.common.exceptions import WebDriverException, TimeoutException, SessionNotCreatedException,\
-	NoSuchWindowException, NoSuchElementException
+	NoSuchWindowException, NoSuchElementException, ElementClickInterceptedException, ElementNotInteractableException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.command import Command
@@ -203,7 +203,7 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 		try:
 			button = driver.find_element_by_css_selector(css)
 			break
-		except TimeoutException as e:
+		except (TimeoutException, ElementClickInterceptedException, ElementNotInteractableException):
 			time.sleep(min(max_sleep_time, 2 ** i))
 		except NoSuchElementException:
 			if allow_reload:
@@ -231,7 +231,7 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 
 				f(button)
 			break
-		except TimeoutException as e:
+		except (TimeoutException, ElementClickInterceptedException, ElementNotInteractableException) as e:
 			if i >= n_tries - 1:
 				raise get_driver_error_details(driver) from e
 			time.sleep(min(max_sleep_time, 2 ** i))
