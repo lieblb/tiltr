@@ -215,11 +215,19 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 	if not button:
 		raise InteractionException("could not detect %s button. aborting." % css)
 
+	old_url = None
+	unknown_url = "[unknown url]"
+
 	for i in range(n_tries):
 		try:
 			url = driver.url
 		except:
-			url = "[unknown url]"
+			url = unknown_url
+
+		if old_url is None:
+			old_url = url
+		elif url != old_url and url != unknown_url and old_url != unknown_url:
+			break  # the page already changed.
 
 		if '/error.php' in url:
 			raise get_driver_error_details(driver)
