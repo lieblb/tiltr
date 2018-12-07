@@ -154,7 +154,7 @@ class AppHandler(tornado.web.RequestHandler):
 		# differentiate between internal ILIAS docker container which
 		# we expose via :11145 and external ILIAS installation.
 		if ilias_url.startswith('http://web:80/'):
-			ilias_url = 'http://' + self.request.host.replace("11150", "11145") + '/ILIAS'
+			ilias_url = ilias_url.replace('web:80', self.request.host.replace("11150", "11145"))  # hacky
 		self.render("master.html",
 			num_machines=len(self.state.machines),
 			ilias_url=ilias_url,

@@ -113,7 +113,7 @@ def set_argument_environ(args):
 		print("Testing against embedded ILIAS.")
 		embedded_ilias = True
 		entrypoint_args.extend([
-			'--ilias-url', 'http://web:80/ILIAS',
+			'--ilias-url', 'http://web:80/ILIAS?client_id=ilias',
 			'--ilias-admin-user', 'root',
 			'--ilias-admin-password', 'odysseus'])
 
