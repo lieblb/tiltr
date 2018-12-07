@@ -625,9 +625,9 @@ class ExamDriver:
 				pass
 
 	def get_sequence_id(self, allow_reload=False):
-		url = self.driver.current_url
 		for i in range(3):
 			try:
+				url = self.driver.current_url
 				return int(http_get_parameters(url)["sequence"])
 			except:
 				# sometimes our session gets lost and we need to resume the test.
@@ -635,14 +635,16 @@ class ExamDriver:
 				try:
 					resume_player = self.driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
 					resume_player.click()
+					self.report('resuming test after it spuriously paused.')
 					is_resumed = True
 				except:
 					pass
 				if not is_resumed:
 					if not allow_reload:
-						break
-					with wait_for_page_load(self.driver):
-						self.driver.refresh()
+						time.sleep(1)
+					else:
+						with wait_for_page_load(self.driver):
+							self.driver.refresh()
 		raise get_driver_error_details(self.driver)
 
 	def _get_debug_info(self, question_title):
@@ -695,7 +697,7 @@ class ExamDriver:
 		if sequence_id not in self.answers:
 			self.create_answer()
 		answer = self.answers[sequence_id]
-		self.report('answering question "%s".' % answer.question.title)
+		self.report('answering question "%s" [%d].' % (answer.question.title, sequence_id))
 		valid = answer.randomize(self.context)
 		answer.verify(self.context, after_crash=False)
 		return valid
@@ -706,7 +708,7 @@ class ExamDriver:
 			raise InteractionException("cannot verify unknown answer " + str(sequence_id))
 
 		answer = self.answers[sequence_id]
-		self.report('verifying question "%s".' % answer.question.title)
+		self.report('verifying question "%s" [%d].' % (answer.question.title, sequence_id))
 		answer.verify(self.context, after_crash)
 
 	def copy_protocol(self, result):
