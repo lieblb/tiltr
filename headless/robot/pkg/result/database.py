@@ -195,5 +195,7 @@ class DB:
 		xls, protocol = c.fetchone()
 
 		with zipfile.ZipFile(file, "w") as z:
-			z.writestr("/exported.xls", xls)
-			z.writestr("/protocol.txt", protocol)
+			z.writestr('/exported.xls', xls)
+			protocols = json.loads(protocol.decode("utf-8"))
+			for k, v in protocols.items():
+				z.writestr('/' + k, v.encode('utf-8'))

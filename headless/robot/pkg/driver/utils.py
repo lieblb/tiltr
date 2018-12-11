@@ -173,28 +173,32 @@ def get_driver_error_details(driver):
 	try:
 		html = driver.find_element_by_css_selector("body").get_attribute('innerHTML')
 	except:
-		html = "[unknown html]"
+		html = None
+
+	try:
+		alert_text = driver.find_element_by_css_selector(".alert").text
+	except:
+		alert_text = None
+
+	return url, html, alert_text
+
+def create_detailed_exception(driver):
+	url, html, alert_text = get_driver_error_details(driver)
 
 	error_class = InteractionException
 	if url is not None and '/error.php' in url:
 		error_class = UnexpectedErrorException
 
-	alert_text = None
-	try:
-		alert_text = driver.find_element_by_css_selector(".alert").text
-	except:
-		pass
-
-	if alert_text is not None:
-		return error_class("ILIAS aborted with: %s.\nURL: %s\nFULL HTML: %s" % (alert_text, url, html))
+	if html is None:
+		html = "[unknown html]"
 
 	if url is None:
 		url = "[unknown url]"
 
-	try:
+	if alert_text is not None:
+		return error_class("ILIAS aborted with: %s.\nURL: %s\nFULL HTML: %s" % (alert_text, url, html))
+	else:
 		return error_class("failed on loading %s with html: %s\n" % (url, html))
-	except:
-		return error_class("unknown error on url %s (driver no longer functional)" % url)
 
 
 def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
@@ -231,7 +235,7 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 			break  # the page already changed.
 
 		if '/error.php' in url:
-			raise get_driver_error_details(driver)
+			raise create_detailed_exception(driver)
 
 		try:
 			with wait_for_page_load(driver):
@@ -239,7 +243,7 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 			break
 		except (TimeoutException, ElementClickInterceptedException, ElementNotInteractableException) as e:
 			if i >= n_tries - 1:
-				raise get_driver_error_details(driver) from e
+				raise create_detailed_exception(driver) from e
 			time.sleep(min(max_sleep_time, 2 ** i))
 		except NoSuchElementException:
 			# we've seen css before, and now it's gone. usually this means that

@@ -27,13 +27,15 @@ class Result:
 			self.origin = Origin[data["origin"]]
 			self.properties = dict((tuple(key), value) for key, value in data["properties"])
 			self.protocol = data["protocol"]
+			self.files = data["files"]
 			self.performance = data["performance"]
 			self.errors = data["errors"]
 			self.coverage = Coverage(from_dict=data["coverage"])
 		else:
-			self.origin = kwargs.get("origin", "unknown")
+			self.origin = kwargs.get('origin', 'unknown')
 			self.properties = dict()
 			self.protocol = []
+			self.files = kwargs.get('files', dict())
 			self.performance = []
 			self.errors = dict()
 			self.coverage = Coverage()
@@ -43,6 +45,7 @@ class Result:
 			origin=self.origin.name,
 			properties=list(self.properties.items()),
 			protocol=self.protocol,
+			files=self.files,
 			performance=self.performance,
 			errors=self.errors,
 			coverage=self.coverage.as_dict()))
@@ -63,8 +66,8 @@ class Result:
 		self.properties[key] = value
 
 	@staticmethod
-	def from_error(origin, domain, err):
-		r = Result(origin=origin)
+	def from_error(origin, domain, err, files=None):
+		r = Result(origin=origin, files=files or dict())
 		r.errors[domain.name] = err
 		return r
 
@@ -76,6 +79,9 @@ class Result:
 
 	def attach_protocol(self, protocol):
 		self.protocol = protocol
+
+	def attach_file(self, filename, contents):
+		self.files[filename] = contents
 
 	def attach_performance_measurements(self, performance):
 		self.performance = performance

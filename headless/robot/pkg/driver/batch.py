@@ -196,6 +196,7 @@ class Run:
 		self.users = []
 		self.temporary_users = TemporaryUsers()
 		self.protocols = defaultdict(list)
+		self.files = dict()
 		self.questions = None
 		self.test_url = None
 		self.language = None
@@ -425,6 +426,8 @@ class Run:
 
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			self.protocols[user.get_username()] = recorded_result.protocol
+			for k, v in recorded_result.files.items():
+				self.files[user.get_username() + '_' + k] = v
 
 		for recorded_result in all_recorded_results:
 			self.performance_data.extend(recorded_result.performance)
@@ -465,12 +468,17 @@ class Run:
 		self.add_to_protocol("master", text)
 
 	def store(self, elapsed_time):
+		files = dict()
+		files['protocol.txt'] = self._make_protocol(self.users)
+		for k, v in self.files.items():
+			files[k] = v
+
 		with open_results() as db:
 			db.put(
 				batch_id=self.batch_id,
 				success=encode_success(self.success),
 				xls=self.xls,
-				protocol=self._make_protocol(self.users),
+				protocol=json.dumps(files),
 				num_users=len(self.users),
 				elapsed_time=elapsed_time)
 			db.put_performance_data(self.performance_data)

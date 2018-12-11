@@ -12,6 +12,7 @@ import requests
 import time
 import traceback
 import random
+import urllib.parse as urlparse
 
 from openpyxl import load_workbook
 from zipfile import ZipFile
@@ -29,7 +30,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .utils import wait_for_page_load, http_get_parameters, set_inputs,\
 	wait_for_css, wait_for_css_visible, set_element_value_by_css,\
-	set_element_value, is_driver_alive, get_driver_error_details, try_submit
+	set_element_value, is_driver_alive, create_detailed_exception, try_submit
 
 from ..question import *
 from ..result import *
@@ -351,7 +352,7 @@ class TemporaryUsersBackend:
 		return user
 
 	def _create_n_users(self, n):
-		parsed = urllib.parse.urlparse(self.driver.current_url)
+		parsed = urlparse.urlparse(self.driver.current_url)
 		base_url = parsed.scheme + "://" + parsed.netloc + '/'.join(parsed.path.split('/')[:-1])
 
 		xml_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "users.xml"))
@@ -445,7 +446,12 @@ def measure_time(dts):
 class ExamDriver:
 	def __init__(self, driver, ilias_url, username, report, context, questions):
 		self.driver = driver
+
 		self.ilias_url = ilias_url
+		parsed_url = urlparse.urlparse(self.ilias_url)
+		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
+		self.client_id = urlparse.parse_qs(parsed_url.query)['client_id']
+
 		self.username = username
 		self.report = report
 		self.context = context
@@ -645,15 +651,32 @@ class ExamDriver:
 					else:
 						with wait_for_page_load(self.driver):
 							self.driver.refresh()
-		raise get_driver_error_details(self.driver)
+		raise create_detailed_exception(self.driver)
 
 	def _get_debug_info(self, question_title):
+		base_url = self.ilias_base_url + '/Customizing/uni-regensburg/extensions/'
+		cookies = dict((cookie['name'], cookie['value']) for cookie in self.driver.get_cookies())
+
+		info = dict()
+
 		try:
-			query = '/Customizing/uni-regensburg/extensions/Versions/debug.php?login=%s&question=%s'
-			r = requests.get(self.ilias_url + (query % (self.username, question_title)))
-			return r.text
+			r = requests.get(base_url + 'Versions/debug.php', cookies=cookies, params=dict(
+				client_id=self.client_id,
+				question=question_title
+			))
+			info['version_log.html'] = r.text
 		except:
-			return "not available"
+			pass
+
+		try:
+			r = requests.get(base_url + 'RequestLog/debug.php', cookies=cookies, params=dict(
+				client_id=self.client_id
+			))
+			info['request_log.html'] = r.text
+		except:
+			pass
+
+		return info
 
 	def create_answer(self):
 		page_title = None
@@ -718,8 +741,11 @@ class ExamDriver:
 			encoded = answer.to_dict(self.context, "de")
 			question_title = encoded["title"]
 
-			for t, what in encoded["protocol"]:
+			for t, what in encoded["protocol"]["lines"]:
 				protocol.append((t, question_title, what))
+
+			for filename, what in encoded["protocol"]["files"].items():
+				result.attach_file(filename, what)
 
 		protocol.sort(key=lambda x: x[0])  # by time
 		protocol_lines = [
@@ -747,7 +773,7 @@ class ExamDriver:
 		for sequence_id, answer in self.answers.items():
 			encoded = answer.to_dict(self.context, language)
 			question_title = encoded["title"]
-			
+
 			for dimension_title, dimension_value in encoded["answers"].items():
 				result.add(("question", question_title, "answer", dimension_title), dimension_value)
 
@@ -798,7 +824,12 @@ class TestDriver:
 		self.test = test
 		self.username = username
 		self.workarounds = workarounds
+
 		self.ilias_url = ilias_url
+		parsed_url = urlparse.urlparse(self.ilias_url)
+		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
+		self.client_id = urlparse.parse_qs(parsed_url.query)['client_id']
+
 		self.report = report
 		self.cached_link = None
 		self.autosave_time = 5
@@ -809,7 +840,7 @@ class TestDriver:
 		self.report("importing test.")
 
 		# goto Magazin.
-		driver.get(self.ilias_url + "/goto.php?target=root_1&client_id=ilias")
+		driver.get(self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id))
 
 		# add new item: Test.
 		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
@@ -929,7 +960,7 @@ class TestDriver:
 		with wait_for_page_load(driver):
 			Select(driver.find_element_by_name("format")).select_by_value("csv")
 			driver.find_element_by_name("cmd[createExportFile]").click()
-			
+
 		url = None
 		for a in driver.find_elements_by_css_selector("table a"):
 			params = http_get_parameters(a.get_attribute("href"))

@@ -110,12 +110,21 @@ class TakeExamCommand:
 				self._simulate_crash(exam_driver)
 			exam_driver.goto_next_or_previous_question()
 
-	def _error_details(self, driver, trace):
-		more_info = str(get_driver_error_details(driver))
-		if more_info:
-			return "TEST ABORTED:\n%s\nORIGINAL EXCEPTION:\n%s" % (more_info, trace)
-		else:
-			return "TEST ABORTED:\n%s" % trace
+	def _create_result_with_details(self, driver, report, e, trace):
+		files = dict()
+		files['trace.txt'] = trace
+
+		url, html, alert = get_driver_error_details(driver)
+		if alert:
+			files['alert.txt'] = alert
+		if html:
+			files['error.html'] = html
+
+		filenames = map(lambda s: '%s_%s' % (self.username, s), files.keys())
+		error = 'test failed on url %s. for details, see  %s.' % (url, ', '.join(filenames))
+		report(error)
+
+		return Result.from_error(Origin.recorded, e.get_error_domain(), error, files)
 
 	def run(self, driver, master_report):
 		machine_info = "running test on machine #%s (%s)." % (self.machine_index, self.machine)
@@ -150,10 +159,8 @@ class TakeExamCommand:
 					self._pass2(exam_driver, report)
 					self._pass3(exam_driver, report)
 				except TestILIASException as e:
-					info = self._error_details(driver, traceback.format_exc())
 					traceback.print_exc()
-					master_report(info)
-					r = Result.from_error(Origin.recorded, e.get_error_domain(), info)
+					r = self._create_result_with_details(driver, master_report, e, traceback.format_exc())
 					exam_driver.copy_protocol(r)
 					return r
 
@@ -163,10 +170,8 @@ class TakeExamCommand:
 				result.attach_coverage(context.coverage)
 
 		except TestILIASException as e:
-			info = self._error_details(driver, traceback.format_exc())
 			traceback.print_exc()
-			master_report(info)
-			return Result.from_error(Origin.recorded, e.get_error_domain(), info)
+			return self._create_result_with_details(driver, master_report, e, traceback.format_exc())
 		except WebDriverException as webdriver_error:
 			e = InteractionException(str(webdriver_error))
 			traceback.print_exc()
