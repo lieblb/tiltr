@@ -639,9 +639,9 @@ class ExamDriver:
 				# sometimes our session gets lost and we need to resume the test.
 				is_resumed = False
 				try:
-					resume_player = self.driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
-					resume_player.click()
-					self.report('resuming test after it spuriously paused.')
+					is_resumed = self._try_start_or_resume()
+					if is_resumed:
+						self.report('starting or resuming test after it spuriously paused.')
 					is_resumed = True
 				except:
 					pass
@@ -833,6 +833,7 @@ class TestDriver:
 		self.report = report
 		self.cached_link = None
 		self.autosave_time = 5
+		self.allow_resume = False
 
 	def import_test(self):
 		driver = self.driver
@@ -1161,27 +1162,30 @@ class TestDriver:
 
 		raise InteractionException("test was not found in ILIAS")
 
-	def start(self, context, questions, allow_resume=False):
-		driver = self.driver
-
-		self.report("starting test.")
-
+	def _try_start_or_resume(self):
 		resume_player = None
 		try:
-			resume_player = driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
+			resume_player = self.driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
 		except NoSuchElementException:
 			pass
 
 		if resume_player:
-			if not allow_resume:
+			if not self.allow_resume:
 				raise InteractionException("test has already been started by this user. aborting.")
 			with wait_for_page_load(self.driver):
 				resume_player.click()
+				return True
 		else:
 			try:
 				try_submit(self.driver, "input[name='cmd[startPlayer]']", lambda button: button.click())
+				return True
 			except NoSuchElementException:
-				raise InteractionException("user does not have rights to start this test. aborting.")
+				return False
 
-		return ExamDriver(driver, self.ilias_url, self.username, self.report, context, questions)
+	def start(self, context, questions, allow_resume=False):
+		self.report("starting test.")
+		self.allow_resume = allow_resume
+		if not self._try_start_or_resume():
+			raise InteractionException("user does not have rights to start this test. aborting.")
+		return ExamDriver(self.driver, self.ilias_url, self.username, self.report, context, questions)
 
