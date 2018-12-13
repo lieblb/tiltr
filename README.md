@@ -118,7 +118,7 @@ often, as it implies a test restart with extra time.
 
 An integrity error happened, but it happened directly after an autosave and a crash was
 triggered, which indicates that the autosave simply didn't run in the specified time frame.
-Sporadical errors of this kind doenot indicate a structural bug in ILIAS but simply mean
+Sporadical errors of this kind do not indicate a structural bug in ILIAS but simply mean
 that you have too much load on your server.
 
 * `integrity`
