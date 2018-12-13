@@ -92,37 +92,30 @@ description of what each class means. The only class you really should be concer
 `integrity`. All other classes usually do not indicate structural bugs in ILIAS.
 
 * `not_implemented`
-
 TestILIAS ran into something that hasn't been implemented yet in TestILIAS itself,
 e.g. some question type that cannot yet be tested. Does not indicate a problem in ILIAS.
 
 * `interaction`
-
 Some problem with Selenium and browser control. This usually comes down to some kind of
 timeout problem related to high server load.
-
 Sometimes errors that should belong in `unexpected` get classified as `interaction`
 (e.g. the repeated failure to find a button a specific page).
 
 * `unexpected`
-
 ILIAS did something completely unexpected or landed on the error page. You
 usually will have to look into ILIAS's error logs to see what happened exactly.
 This happens, for example, on failed database transactions.
-
 This class only encompasses explicit problems that should be obvious to the user
 as they disrupt the test interaction. This class is mainly a problem if it happens
 often, as it implies a test restart with extra time.
 
 * `auto_save`
-
 An integrity error happened, but it happened directly after an autosave and a crash was
 triggered, which indicates that the autosave simply didn't run in the specified time frame.
 Sporadical errors of this kind do not indicate a structural bug in ILIAS but simply mean
 that you have too much load on your server.
 
 * `integrity`
-
 This indicates a bug in ILIAS. Some data was not retrieved in the same state as it was saved.
 
 # Technical stuff
