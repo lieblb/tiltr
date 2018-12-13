@@ -636,10 +636,11 @@ class ExamDriver:
 				url = self.driver.current_url
 				return int(http_get_parameters(url)["sequence"])
 			except:
-				# sometimes our session gets lost and we need to resume the test.
 				is_resumed = False
 				try:
-					is_resumed = self._try_start_or_resume()
+					# sometimes we get kicked out and we need to resume the test. allow this
+					# as non-error.
+					is_resumed = self._try_start_or_resume(True)
 					if is_resumed:
 						self.report('starting or resuming test after it spuriously paused.')
 					is_resumed = True
@@ -1162,7 +1163,7 @@ class TestDriver:
 
 		raise InteractionException("test was not found in ILIAS")
 
-	def _try_start_or_resume(self):
+	def _try_start_or_resume(self, force_allow_resume=False):
 		resume_player = None
 		try:
 			resume_player = self.driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
@@ -1170,7 +1171,7 @@ class TestDriver:
 			pass
 
 		if resume_player:
-			if not self.allow_resume:
+			if not (self.allow_resume or force_allow_resume):
 				raise InteractionException("test has already been started by this user. aborting.")
 			with wait_for_page_load(self.driver):
 				resume_player.click()
