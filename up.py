@@ -20,13 +20,21 @@ from threading import Thread
 from collections import defaultdict
 
 py3 = sys.version_info >= (3, 0)
+monitor_thread = None
 
 parser = argparse.ArgumentParser(description='Starts up ILIAS robot test environment.')
 parser.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
 parser.add_argument('--debug', help='output debugging information', action='store_true')
 parser.add_argument('--n', nargs='?', const=2, type=int)
 parser.add_argument('--ilias', help='YAML file that specifies an external ILIAS installation to test against')
+parser.add_argument('--fork', help='fork up.py', action='store_true')
 args = parser.parse_args()
+
+if args.fork:
+	pid = os.fork()
+	if pid != 0:
+		print("started up.py on pid %d." % pid)
+		sys.exit(0)
 
 
 def monitor_docker_stats(tmp_path, docker_compose_name):
@@ -259,7 +267,8 @@ except KeyboardInterrupt:
 	print("")
 	print("Please wait while docker-compose is shutting down.")
 	subprocess.call(["docker-compose", "stop"])
-	monitor_thread.join()
+	if monitor_thread:
+		monitor_thread.join()
 	sys.exit()
 finally:
 	if not args.verbose:
