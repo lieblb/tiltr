@@ -225,7 +225,7 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 
 	for i in range(n_tries):
 		try:
-			url = driver.url
+			url = driver.current_url
 		except:
 			url = unknown_url
 
