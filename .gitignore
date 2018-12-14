@@ -1,7 +1,8 @@
 .DS_Store
+.idea
 *.pyc
-headless/robot/pkg/venv
-headless/robot/pkg/.idea
-headless/robot/tmp
+robot/files/testilias/venv
+robot/files/testilias/.idea
+robot/files/tmp
 web/ILIAS
 docker-compose.log

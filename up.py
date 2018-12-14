@@ -20,15 +20,22 @@ from threading import Thread
 from collections import defaultdict
 
 py3 = sys.version_info >= (3, 0)
-monitor_thread = None
 
-parser = argparse.ArgumentParser(description='Starts up ILIAS robot test environment.')
+monitor_thread = None
+request_quit = False
+
+parser = argparse.ArgumentParser(description='Starts up the TestILIAS test environment.')
 parser.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
 parser.add_argument('--debug', help='output debugging information', action='store_true')
-parser.add_argument('--n', nargs='?', const=2, type=int)
+parser.add_argument('--n', nargs='?', const=1, type=int, default=1)
 parser.add_argument('--ilias', help='YAML file that specifies an external ILIAS installation to test against')
 parser.add_argument('--fork', help='fork up.py', action='store_true')
+parser.add_argument('--port', help='port to run TestILIAS on', nargs='?', const=1, type=int, default=11150)
+parser.add_argument('--embedded-ilias-port', help='port to run embedded ILIAS on', nargs='?', const=1, type=int, default=11145)
 args = parser.parse_args()
+
+os.environ['TESTILIAS_PORT'] = str(args.port)
+os.environ['EMBEDDED_ILIAS_PORT'] = str(args.embedded_ilias_port)
 
 if args.fork:
 	pid = os.fork()
@@ -48,7 +55,7 @@ def monitor_docker_stats(tmp_path, docker_compose_name):
 	stats_lock_path = os.path.join(tmp_path, "stats.lock")
 	stats_path = os.path.join(tmp_path, "stats.json")
 
-	while True:
+	while not request_quit:
 		line = stream.stdout.readline()
 		if py3:
 			line = line.decode("utf-8")
@@ -92,10 +99,35 @@ def monitor_docker_stats(tmp_path, docker_compose_name):
 					stats[bin]['mem'] += float(row[mem_index].replace('%', ''))
 
 
+def instrument_ilias():
+	base = os.path.dirname(os.path.realpath(__file__))
+
+	ilias_path = os.path.realpath(os.path.join(base, "web", "ILIAS"))
+	if not os.path.isdir(ilias_path) or not os.path.exists(os.path.join(ilias_path, "ilias.php")):
+		print("please put the ILIAS source code you want to test against under %s." % ilias_path)
+		print("note that the code you put there will get modified into a default test client.")
+		print("aborting.")
+		sys.exit(1)
+
+	# instrument ILIAS source code for test runner.
+
+	shutil.copyfile(
+		os.path.join(base, "web", "custom", "ilias.ini.php"),
+		os.path.join(base, "web", "ILIAS", "ilias.ini.php"))
+
+	client_zip = zipfile.ZipFile(os.path.join(base, "web", "custom", "data.zip"), 'r')
+	client_zip.extractall(os.path.join(base, "web", "ILIAS"))
+	client_zip.close()
+
+	return ilias_path
+
+
 def set_argument_environ(args):
 	entrypoint_args = []
 	if args.debug:
 		entrypoint_args.append('--debug')
+
+	entrypoint_args.extend(['--testilias-port', str(args.port)])
 
 	if args.ilias:
 		embedded_ilias = False
@@ -118,12 +150,14 @@ def set_argument_environ(args):
 		print("Testing against external ILIAS at %s." % ilias_config['url'])
 	else:
 		# use our default embedded ILIAS.
-		print("Testing against embedded ILIAS.")
+		ilias_path = instrument_ilias()
+		print("Testing against embedded ILIAS located at %s." % ilias_path)
 		embedded_ilias = True
 		entrypoint_args.extend([
 			'--ilias-url', 'http://web:80/ILIAS?client_id=ilias',
 			'--ilias-admin-user', 'root',
 			'--ilias-admin-password', 'odysseus'])
+		entrypoint_args.extend(['--ext-ilias-port', str(args.embedded_ilias_port)])
 
 	os.environ['ILIASTEST_ARGUMENTS'] = ' '.join(entrypoint_args)
 
@@ -136,7 +170,7 @@ base = os.path.dirname(os.path.realpath(__file__))
 os.chdir(base)  # important for docker-compose later
 _, docker_compose_name = os.path.split(base)
 
-tmp_path = os.path.join(base, "headless", "robot", "tmp")
+tmp_path = os.path.join(base, "robot", "files", "tmp")
 if not os.path.exists(tmp_path):
 	os.makedirs(tmp_path)
 
@@ -150,24 +184,6 @@ def publish_machines(machines):
 		f.write(json.dumps(machines))
 	os.rename(machines_path + ".tmp", machines_path)  # hopefully atomic
 
-
-if embedded_ilias:
-	ilias_path = os.path.realpath(os.path.join(base, "web", "ILIAS"))
-	if not os.path.isdir(ilias_path) or not os.path.exists(os.path.join(ilias_path, "ilias.php")):
-		print("please put the ILIAS source code you want to test against under %s." % ilias_path)
-		print("note that the code you put there will get modified into a default test client.")
-		print("aborting.")
-		sys.exit(1)
-
-	# instrument ILIAS source code for test runner.
-
-	shutil.copyfile(
-		os.path.join(base, "web", "custom", "ilias.ini.php"),
-		os.path.join(base, "web", "ILIAS", "ilias.ini.php"))
-
-	client_zip = zipfile.ZipFile(os.path.join(base, "web", "custom", "data.zip"), 'r')
-	client_zip.extractall(os.path.join(base, "web", "ILIAS"))
-	client_zip.close()
 
 # start up docker.
 compose = subprocess.Popen(["docker-compose", "up", "--scale", "machine=%d" % args.n],
@@ -191,6 +207,14 @@ def filter_log(s):
 	return s.startswith("machine_")
 
 
+def terminate():
+	subprocess.call(["docker-compose", "stop"])
+	global request_quit
+	request_quit = True
+	if monitor_thread:
+		monitor_thread.join()
+
+
 try:
 	def wait_for_apache():
 		while True:
@@ -207,36 +231,48 @@ try:
 
 	wait_for_apache()
 
-	machines = dict()
-	for i in range(args.n):
-		if args.verbose:
-			print("looking for machine %d." % (i + 1))
-		while True:
-			try:
-				machine_ip = subprocess.check_output([
-					"docker", "inspect", "-f",
-					"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
-					"%s_machine_%d" % (docker_compose_name, (i + 1))]).strip()
-				if len(str(machine_ip)) == 0:
-					print("failed to lookup machine %d. shutting down." % i)
-					subprocess.call(["docker-compose", "stop"])
-					sys.exit()
-				break
-			except subprocess.CalledProcessError:
-				time.sleep(1)
-		if py3:
-			machine_ip = machine_ip.decode("utf-8")
-		machines["machine_%d" % (1 + i)] = machine_ip
-		if args.verbose:
-			print("detected machine %d at %s." % ((i + 1), machine_ip))
+	def find_and_publish_machines():
+		machines = dict()
+		for i in range(args.n):
+			if args.verbose:
+				print("looking for machine %d." % (i + 1))
+			while True:
+				try:
+					machine_ip = subprocess.check_output([
+						"docker", "inspect", "-f",
+						"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+						"%s_machine_%d" % (docker_compose_name, (i + 1))]).strip()
+					if len(str(machine_ip)) == 0:
+						print("failed to lookup machine %d. shutting down." % i)
+						subprocess.call(["docker-compose", "stop"])
+						sys.exit()
+					break
+				except subprocess.CalledProcessError:
+					time.sleep(1)
+			if py3:
+				machine_ip = machine_ip.decode("utf-8")
+			machines["machine_%d" % (1 + i)] = machine_ip
+			if args.verbose:
+				print("detected machine %d at %s." % ((i + 1), machine_ip))
 
-	publish_machines(machines)
+		publish_machines(machines)
+
+
+	def get_exposed_port(docker_name):
+		return subprocess.check_output([
+			"docker", "inspect", "-f",
+			"{{range $p, $conf := .NetworkSettings.Ports}} {{(index $conf 0).HostPort}} {{end}}",
+			docker_name]).strip()
+
+
+	find_and_publish_machines()
 
 	if embedded_ilias:
 		print("Preparing ILIAS. This might take a while...")
 		subprocess.call(["docker-compose", "exec", "web", "ilias-startup.sh"])
+		print("Done.")
 
-	print("TestILIAS is at http://%s:11150" % socket.gethostname())
+	print("TestILIAS is at http://%s:%d" % (socket.gethostname(), args.port))
 
 	def check_alive():
 		status = subprocess.check_output([
@@ -248,9 +284,9 @@ try:
 	def print_docker_logs():
 		while True:
 			if not check_alive():
-				print("master has shut down unexpectedly. try a docker logs %s_master_1" % docker_compose_name)
-				subprocess.call(["docker-compose", "stop"])
-				sys.exit()
+				print("master has shut down unexpectedly. try to run: docker logs %s_master_1" % docker_compose_name)
+				terminate()
+				break
 			line = compose.stdout.readline()
 			if py3:
 				line = line.decode("utf-8")
@@ -266,10 +302,7 @@ try:
 except KeyboardInterrupt:
 	print("")
 	print("Please wait while docker-compose is shutting down.")
-	subprocess.call(["docker-compose", "stop"])
-	if monitor_thread:
-		monitor_thread.join()
-	sys.exit()
+	terminate()
 finally:
 	if not args.verbose:
 		log.close()

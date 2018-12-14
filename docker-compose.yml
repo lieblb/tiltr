@@ -4,7 +4,7 @@ services:
   web:
     build: web
     ports:
-      - "11145:80"
+      - "${EMBEDDED_ILIAS_PORT}:80"
     expose:
       - "80"
     volumes:
@@ -23,15 +23,15 @@ services:
       - net
 
   master:
-    build: headless
+    build: robot
     ports:
-      - "11150:80"
+      - "${TESTILIAS_PORT}:80"
     expose:
       - "80"
     volumes:
-      - ./headless/robot:/robot
-    working_dir: /robot
-    entrypoint: python3 -m pkg --master $ILIASTEST_ARGUMENTS
+      - ./robot/files:/files
+    working_dir: /files
+    entrypoint: python3 -m testilias --master $ILIASTEST_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'
@@ -39,11 +39,11 @@ services:
       - net
   
   machine:
-    build: headless
+    build: robot
     volumes:
-      - ./headless/robot:/robot
-    working_dir: /robot
-    entrypoint: python3 -m pkg --machine $ILIASTEST_ARGUMENTS
+      - ./robot/files:/files
+    working_dir: /files
+    entrypoint: python3 -m testilias --machine $ILIASTEST_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'
