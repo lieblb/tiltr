@@ -456,7 +456,10 @@ class Run:
 
 		for i in range(num_readjustments + 1):
 			xls, workbook = master.test_driver.fetch_exported_workbook()
-			check_workbook_consistency(workbook, master.report, self.workarounds)
+			try:
+				check_workbook_consistency(workbook, master.report, self.workarounds)
+			except:
+				raise IntegrityException("failed to check workbook consistency: %s." % traceback.format_exc())
 			if i == 0:
 				self.xls = xls
 
