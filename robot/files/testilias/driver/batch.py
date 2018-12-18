@@ -39,7 +39,7 @@ from testilias.question import *  # needed for pickling
 from testilias.driver.exam_configuration import * # needed for pickling
 
 from .commands import TakeExamCommand
-from .drivers import Login, TemporaryUsers, TestDriver, Test, verify_admin_settings
+from .drivers import Login, UsersBackend, UsersFactory, TestDriver, Test, verify_admin_settings
 from .utils import wait_for_page_load
 
 
@@ -196,7 +196,7 @@ class Run:
 		self.performance_data = []
 		self.coverage = Coverage()
 		self.users = []
-		self.temporary_users = TemporaryUsers()
+		self.users_factory = batch.users_factory
 		self.protocols = defaultdict(list)
 		self.files = dict()
 		self.test_url = None
@@ -351,6 +351,9 @@ class Run:
 			result.update(("exam", "score", "total"), score)
 			result.update(("exam", "score", "gui"), score)
 
+	def _users_backend(self, master):
+		return lambda: UsersBackend(master.driver, self.batch.ilias_url, master.report)
+
 	def prepare(self, master):
 		self.language = master.language
 		master.report("running with admin language '%s'" % self.language)
@@ -371,10 +374,7 @@ class Run:
 		self.protocols["settings"].extend(
 			verify_admin_settings(master.driver, self.workarounds, self.batch.ilias_url, master.report))
 
-		master.report("creating users.")
-		self.users = self.temporary_users.get_instance(
-			master.driver, self.batch.ilias_url, master.report).create(len(self.machines))
-		master.report("done creating users.")
+		self.users = self.users_factory.acquire(self._users_backend(master))
 
 		# print('switching to test "%s".' % test.get_title())
 		# goto test.
@@ -503,8 +503,7 @@ class Run:
 			db.put_coverage_data(self.coverage)
 
 	def cleanup(self, master):
-		self.temporary_users.get_instance(
-			master.driver, self.batch.ilias_url, master.report).destroy(self.users)
+		self.users_factory.release(self._users_backend(master))
 		# keep self.users for storing some information on them later.
 
 	def run(self):
@@ -581,6 +580,8 @@ class Batch(threading.Thread):
 		self.machines_lookup["master"] = "master"
 	
 		self.test = test
+		self.users_factory = UsersFactory(test, len(machines))
+
 		self.screenshot = None
 
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())
@@ -593,6 +594,9 @@ class Batch(threading.Thread):
 
 	def get_id(self):
 		return self.batch_id
+
+	def set_recycle_users(self, recycle):
+		self.users_factory.recycle = recycle
 
 	def configure(self, args):
 		self.debug = args.debug

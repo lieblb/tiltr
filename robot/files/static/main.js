@@ -528,7 +528,7 @@ $(function() {
 
 	function updateSettings() {
 		$.getJSON(host + "/settings.json", function(settings) {
-			if (settings.looping) {
+			if (settings.is_looping) {
 				$("#run-loop").addClass("is-info is-selected");
 			} else {
 				$("#run-loop").removeClass("is-info is-selected");
@@ -543,7 +543,7 @@ $(function() {
 			method: "POST",
 			url: host + "/settings.json",
 			data: JSON.stringify({
-				looping: !$("#run-loop").hasClass("is-selected")})
+				is_looping: !$("#run-loop").hasClass("is-selected")})
 		}).done(function() {
 			updateSettings();
 		});

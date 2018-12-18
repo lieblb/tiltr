@@ -40,7 +40,7 @@ class Looper(threading.Thread):
 		self.done = False
 
 	def run(self):
-		while self.state.looping:
+		while self.state.is_looping:
 			try:
 				if self.state.batch and self.state.batch.is_done():
 					self.state.batch = None
@@ -53,6 +53,7 @@ class Looper(threading.Thread):
 			time.sleep(1)
 
 		self.state.looper = None
+
 		print("looper has exited.")
 
 
@@ -62,7 +63,7 @@ class GlobalState:
 		self.batch = None
 		self.ilias_version = None
 		self.looper = None
-		self.looping = False
+		self._is_looping = False
 		self.args = args
 		self.ilias_url = args.ilias_url
 
@@ -105,15 +106,25 @@ class GlobalState:
 				return tuple(int(x) for x in m[1].split("."))
 		raise Exception("could not retrieve ILIAS version")
 
-	def set_looping(self, looping):
-		self.looping = looping
-		print("setting looping to %s." % looping)
-		if self.batch and self.looping and self.looper is None:
+	@property
+	def is_looping(self):
+		return self._is_looping
+
+	@is_looping.setter
+	def is_looping(self, is_looping):
+		print("setting is_looping to %s." % is_looping)
+
+		self._is_looping = is_looping
+
+		if self.batch:
+			self.batch.set_recycle_users(is_looping)
+
+		if self.batch and self.is_looping and self.looper is None:
 			batch = self.batch
 			self.looper = Looper(
 				self, batch.test, batch.settings, batch.workarounds, batch.wait_time)
 			self.looper.start()
-		if not self.looping:
+		if not self.is_looping:
 			self.looper = None
 
 	def start_batch(self, test, settings, workarounds, wait_time):
@@ -126,17 +137,20 @@ class GlobalState:
 
 		if self.batch is None:
 			clear_tmp()
+
 			self.batch = Batch(self.machines, ilias_version, test, settings, workarounds, wait_time)
 			self.batch.configure(self.args)
+			self.batch.set_recycle_users(self.is_looping)
+
 			self.batch.start()
 
-		if self.looping:
+		if self.is_looping:
 			if self.looper is None:
 				print("creating new looper.")
 				self.looper = Looper(self, test, settings, workarounds, wait_time)
 				self.looper.start()
 			else:
-				print("reusing existing looper.")
+				#print("reusing existing looper.")
 				self.looper.workarounds = workarounds
 		elif self.looper:
 			print("removing looper.")
@@ -329,14 +343,14 @@ class SettingsHandler(tornado.web.RequestHandler):
 		total, used, free = shutil.disk_usage(__file__)
 
 		self.write(json.dumps(dict(
-			looping=self.state.looping,
+			is_looping=self.state.is_looping,
 			host_disk_free=humanize.naturalsize(free))))
 
 		self.finish()
 
 	def post(self):
 		settings = json.loads(self.request.body)
-		self.state.set_looping(settings["looping"])
+		self.state.is_looping = settings["is_looping"]
 
 
 class ReportHandler(tornado.web.RequestHandler):

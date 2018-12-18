@@ -314,41 +314,42 @@ def create_users_xml(base_url, tmp_users):
 	])
 
 
-class TemporaryUsersBackend:
-	def __init__(self, prefix, driver, ilias_url, report):
-		self.prefix = prefix
+class UsersBackend:
+	def __init__(self, driver, ilias_url, report):
 		self.driver = driver
 		self.ilias_url = ilias_url
 		self.report = report
-		self.batch = True
+		self.as_batch = True
 
-	def create(self, n):
-		if self.batch:
-			return self._create_n_users(n)
+	def create(self, prefix, n):
+		self.report("creating %d users." % n)
+		users = []
+		if self.as_batch:
+			users = self._create_n_users(prefix, n)
 		else:
-			users = []
 			for i in range(n):
-				users.append(self._create_1_user(i))
-			return users
+				users.append(self._create_1_user(prefix, i))
+		self.report("done creating users.")
+		return users
 
-	def destroy(self, users):
-		if self.batch:
-			self._delete_n_users(users)
+	def destroy(self, prefix, users):
+		if self.as_batch:
+			self._delete_n_users(prefix, users)
 		else:
 			for user in users:
-				self._delete_1_user(user)
+				self._delete_1_user(prefix, user)
 
-	def _create_temporary_user(self, unique_id):
+	def _create_temporary_user(self, prefix, unique_id):
 		user = TemporaryUser()
 
 		# note: self.username must always stay <= 31 chars, as Excel tab names are limited to that
 		# size and we fail to match names if names are longer here.
-		user.username = self.prefix + str(unique_id)
+		user.username = prefix + str(unique_id)
 		user.password = "dev1234"
 
 		return user
 
-	def _create_n_users(self, n):
+	def _create_n_users(self, prefix, n):
 		parsed = urlparse(self.driver.current_url)
 		base_url = parsed.scheme + "://" + parsed.netloc + '/'.join(parsed.path.split('/')[:-1])
 
@@ -356,7 +357,7 @@ class TemporaryUsersBackend:
 
 		users = []
 		for i in range(n):
-			users.append(self._create_temporary_user(i))
+			users.append(self._create_temporary_user(prefix, i))
 		xml = create_users_xml(base_url, users)
 
 		with open(xml_path, "w") as f:
@@ -382,16 +383,16 @@ class TemporaryUsersBackend:
 
 		return users
 
-	def _delete_n_users(self, users):
+	def _delete_n_users(self, prefix, users):
 		try:
-			n = delete_users(self.driver, self.ilias_url, self.prefix, len(users))
+			n = delete_users(self.driver, self.ilias_url, prefix, len(users))
 			self.report("deleted %d user(s)." % n)
 		except:
 			self.report("deletion of user failed.")
 			self.report(traceback.format_exc())
 
-	def _create_1_user(self, unique_id):
-		user = self._create_temporary_user(unique_id)
+	def _create_1_user(self, prefix, unique_id):
+		user = self._create_temporary_user(prefix, unique_id)
 
 		retries = 0
 		while True:
@@ -407,7 +408,7 @@ class TemporaryUsersBackend:
 
 		return user
 
-	def _delete_1_user(self, user):
+	def _delete_1_user(self, prefix, user):
 		try:
 			n = delete_users(self.driver, self.ilias_url, user.username, 1)
 			self.report("deleted %d user(s)." % n)
@@ -416,12 +417,37 @@ class TemporaryUsersBackend:
 			self.report(traceback.format_exc())
 
 
-class TemporaryUsers:
-	def __init__(self):
-		self.prefix = datetime.datetime.today().strftime('tu_%Y%m%d%H%M%S') + '_'
+class UsersFactory:
+	def __init__(self, test, n):
+		self.test = test
+		self.n = n
 
-	def get_instance(self, driver, ilias_url, report):
-		return TemporaryUsersBackend(self.prefix, driver, ilias_url, report)
+		self.prefix = datetime.datetime.today().strftime('tu_%Y%m%d%H%M%S') + '_'
+		self.users = None
+
+		if self.test.recycled_users:
+			prefix, users = self.test.recycled_users
+			if len(users) == n:
+				self.prefix = prefix
+				self.users = users
+				self.test.recycled_users = None
+
+		self.recycle = False
+
+	def acquire(self, make_backend):
+		assert self.prefix is not None
+		if not self.users:
+			self.users = make_backend().create(self.prefix, self.n)
+		return self.users
+
+	def release(self, make_backend):
+		if self.recycle:
+			self.test.recycled_users = (self.prefix, self.users)
+		else:
+			make_backend().destroy(self.prefix, self.users)
+
+		self.users = None
+		self.prefix = None
 
 
 class MeasureTime:
@@ -810,9 +836,12 @@ class Test:
 		with ZipFile(self.path, 'r') as zf:
 			root = ET.fromstring(zf.read("%s/%s.xml" % (test_id, test_id)))
 		self.title = root.findall(".//Title")[0].text
+
 		self.questions = None
 		self.exam_configuration = None
+
 		self.cached_link = None
+		self.recycled_users = None
 
 	def get_id(self):
 		return self.test_id
