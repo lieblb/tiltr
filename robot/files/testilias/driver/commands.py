@@ -89,18 +89,19 @@ class ExamRobot:
 				raise RuntimeError("unknown pass type %s" % p)
 
 
-
 class TakeExamCommand:
 	def __init__(self, from_json=None, **kwargs):
 		if from_json:
 			data = json.loads(from_json)
 			assert data["command"] == "take_exam"
 			self.questions = pickle.loads(base64.b64decode(data["questions"].encode("utf-8")))
+			self.exam_configuration = pickle.loads(base64.b64decode(data["exam_configuration"].encode("utf-8")))
 			self.settings = Settings(from_dict=data["settings"])
 			self.workarounds = Workarounds(from_dict=data["workarounds"])
 		else:
 			data = kwargs
 			self.questions = kwargs["questions"]
+			self.exam_configuration = kwargs["exam_configuration"]
 			self.settings = kwargs["settings"]
 			self.workarounds = kwargs["workarounds"]
 
@@ -127,6 +128,7 @@ class TakeExamCommand:
 			test_id=self.test_id,
 			test_url=self.test_url,
 			questions=base64.b64encode(pickle.dumps(self.questions, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
+			exam_configuration=base64.b64encode(pickle.dumps(self.exam_configuration, pickle.HIGHEST_PROTOCOL)).decode("utf-8"),
 			settings=self.settings.to_dict(),
 			workarounds=self.workarounds.to_dict(),
 			wait_time=self.wait_time,
@@ -165,7 +167,7 @@ class TakeExamCommand:
 				else:
 					context = RandomContext(self.questions, self.workarounds)
 
-				exam_driver = test_driver.start(context, self.questions)
+				exam_driver = test_driver.start(context, self.questions, self.exam_configuration)
 
 				try:
 					exam_driver.add_protocol(machine_info)

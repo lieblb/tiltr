@@ -34,7 +34,9 @@ from testilias.data.result import open_results
 from testilias.data.workbook import workbook_to_result, check_workbook_consistency
 from testilias.data.context import RandomContext
 from testilias.question.coverage import Coverage
+
 from testilias.question import *  # needed for pickling
+from testilias.driver.exam_configuration import * # needed for pickling
 
 from .commands import TakeExamCommand
 from .drivers import Login, TemporaryUsers, TestDriver, Test, verify_admin_settings
@@ -197,7 +199,6 @@ class Run:
 		self.temporary_users = TemporaryUsers()
 		self.protocols = defaultdict(list)
 		self.files = dict()
-		self.questions = None
 		self.test_url = None
 		self.language = None
 
@@ -207,11 +208,15 @@ class Run:
 		self.workarounds = batch.workarounds
 		self.batch_id = batch.batch_id
 		self.ilias_version = batch.ilias_version
-		self.test = batch.test
 		self.wait_time = batch.wait_time
 
+		self.test = batch.test
+		self.questions = self.test.questions
+		self.exam_configuration = self.test.exam_configuration
+
 	def _make_protocol(self, users):
-		sections = ["header",
+		sections = [
+			"header",
 			"result",
 			"preferences-workarounds",
 			"preferences-settings",
@@ -380,8 +385,15 @@ class Run:
 			master.test_driver.delete_all_participants()
 		master.test_driver.configure()
 
+		# grab exam configuration from UI.
+		if self.exam_configuration is None:
+			self.exam_configuration = master.test_driver.parse_exam_configuration()
+			self.test.exam_configuration = self.exam_configuration
+
 		# grab question definitions from UI.
-		self.questions = master.test_driver.get_question_definitions()
+		if self.questions is None:
+			self.questions = master.test_driver.parse_question_definitions()
+			self.test.questions = self.questions
 
 		# find URL of test, since this saves us a lot of time in the clients.
 		self.test_url = master.test_driver.get_test_url()
@@ -403,6 +415,7 @@ class Run:
 						test_id=self.test.get_id(),
 						test_url=self.test_url,
 						questions=self.questions,
+						exam_configuration=self.exam_configuration,
 						settings=self.settings,
 						workarounds=self.workarounds,
 						wait_time=self.wait_time,
@@ -547,7 +560,7 @@ class Run:
 
 
 class Batch(threading.Thread):
-	def __init__(self, machines, ilias_version, test_name, settings, workarounds, wait_time):
+	def __init__(self, machines, ilias_version, test, settings, workarounds, wait_time):
 		threading.Thread.__init__(self)
 
 		self.sockets = []
@@ -557,7 +570,6 @@ class Batch(threading.Thread):
 		self.machines = machines
 		self.ilias_version = ilias_version
 
-		self.test_name = test_name
 		self.settings = settings
 		self.workarounds = workarounds
 		self.wait_time = wait_time
@@ -565,7 +577,7 @@ class Batch(threading.Thread):
 		self.machines_lookup = dict((v, k) for k, v in machines.items())
 		self.machines_lookup["master"] = "master"
 	
-		self.test = Test(test_name)
+		self.test = test
 		self.screenshot = None
 
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())

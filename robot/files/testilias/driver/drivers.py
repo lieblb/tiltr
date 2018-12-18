@@ -12,6 +12,7 @@ import re
 import requests
 import traceback
 from urllib.parse import urlparse, parse_qs
+from decimal import *
 
 from openpyxl import load_workbook
 from zipfile import ZipFile
@@ -25,6 +26,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 from .utils import *
+from .exam_configuration import *
 
 from testilias.question import *
 from testilias.data.result import *
@@ -439,7 +441,7 @@ def measure_time(dts):
 
 
 class ExamDriver:
-	def __init__(self, driver, ilias_url, username, report, context, questions):
+	def __init__(self, driver, ilias_url, username, report, context, questions, exam_configuration):
 		self.driver = driver
 
 		self.ilias_url = ilias_url
@@ -451,6 +453,7 @@ class ExamDriver:
 		self.report = report
 		self.context = context
 		self.questions = questions
+		self.exam_configuration = exam_configuration
 		self.answers = dict()
 		self.protocol = []
 		self.dts = []
@@ -753,8 +756,12 @@ class ExamDriver:
 		result.attach_protocol(protocol_lines)
 
 	def get_expected_result(self, language):
-		def clip_score(score):
-			return max(score, Decimal(0))  # clamp score to >= 0 (FIXME: check test settings)
+		if self.exam_configuration.score_cutting == ScoreCutting.per_question:
+			def clip_question_score(score):
+				return max(score, Decimal(0))  # clamp score to >= 0
+		else:
+			def clip_question_score(score):
+				return score  # do not clip on question level
 
 		def format_score(score):
 			s = str(score)
@@ -773,11 +780,17 @@ class ExamDriver:
 			for dimension_title, dimension_value in encoded["answers"].items():
 				result.add(("question", question_title, "answer", dimension_title), dimension_value)
 
-			result.add(("question", question_title, "score"), format_score(clip_score(answer.current_score)))
+			result.add(
+				("question", question_title, "score"),
+				format_score(clip_question_score(answer.current_score)))
 
 		expected_total_score = Decimal(0)
 		for answer in self.answers.values():
-			expected_total_score += clip_score(answer.current_score)
+			expected_total_score += clip_question_score(answer.current_score)
+
+		# always clip final score on 0.
+		expected_total_score = max(expected_total_score, Decimal(0))
+
 		result.add(("exam", "score", "total"), format_score(expected_total_score))
 		result.add(("exam", "score", "gui"), format_score(expected_total_score))
 
@@ -793,6 +806,8 @@ class Test:
 		with ZipFile(self.path, 'r') as zf:
 			root = ET.fromstring(zf.read("%s/%s.xml" % (test_id, test_id)))
 		self.title = root.findall(".//Title")[0].text
+		self.questions = None
+		self.exam_configuration = None
 
 	def get_id(self):
 		return self.test_id
@@ -1033,7 +1048,21 @@ class TestDriver:
 
 		return scores
 
-	def get_question_definitions(self):
+	def parse_exam_configuration(self):
+		self.report("parsing exam configuration.")
+
+		self.goto_scoring()
+
+		settings = ExamConfiguration()
+		for name in ('count_system', 'mc_scoring', 'score_cutting', 'pass_scoring'):
+			for radio in self.driver.find_elements_by_css_selector('input[name="%s"]' % name):
+				if radio.is_selected():
+					setter = getattr(settings, 'set_%s' % name)
+					setter(int(radio.get_attribute('value')))
+
+		return settings
+
+	def parse_question_definitions(self):
 		driver = self.driver
 
 		self.goto_questions()
@@ -1178,10 +1207,10 @@ class TestDriver:
 			except NoSuchElementException:
 				return False
 
-	def start(self, context, questions, allow_resume=False):
+	def start(self, context, questions, exam_configuration, allow_resume=False):
 		self.report("starting test.")
 		self.allow_resume = allow_resume
 		if not self._try_start_or_resume():
 			raise InteractionException("user does not have rights to start this test. aborting.")
-		return ExamDriver(self.driver, self.ilias_url, self.username, self.report, context, questions)
+		return ExamDriver(self.driver, self.ilias_url, self.username, self.report, context, questions, exam_configuration)
 

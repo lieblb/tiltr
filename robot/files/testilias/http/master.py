@@ -30,10 +30,10 @@ from testilias.data.settings import Settings, Workarounds
 
 
 class Looper(threading.Thread):
-	def __init__(self, state, test_name, settings, workarounds, wait_time):
+	def __init__(self, state, test, settings, workarounds, wait_time):
 		threading.Thread.__init__(self)
 		self.state = state
-		self.test_name = test_name
+		self.test = test
 		self.settings = settings
 		self.workarounds = workarounds
 		self.wait_time = wait_time
@@ -46,7 +46,7 @@ class Looper(threading.Thread):
 					self.state.batch = None
 
 				if self.state.batch is None:
-					self.state.start_batch(self.test_name, self.settings, self.workarounds, self.wait_time)
+					self.state.start_batch(self.test, self.settings, self.workarounds, self.wait_time)
 			except:
 				traceback.print_exc()
 
@@ -110,12 +110,13 @@ class GlobalState:
 		print("setting looping to %s." % looping)
 		if self.batch and self.looping and self.looper is None:
 			batch = self.batch
-			self.looper = Looper(self, batch.test_name, batch.settings, batch.workarounds, batch.wait_time)
+			self.looper = Looper(
+				self, batch.test, batch.settings, batch.workarounds, batch.wait_time)
 			self.looper.start()
 		if not self.looping:
 			self.looper = None
 
-	def start_batch(self, test_name, settings, workarounds, wait_time):
+	def start_batch(self, test, settings, workarounds, wait_time):
 		if self.batch and self.batch.is_done():
 			self.batch = None
 
@@ -125,14 +126,14 @@ class GlobalState:
 
 		if self.batch is None:
 			clear_tmp()
-			self.batch = Batch(self.machines, ilias_version, test_name, settings, workarounds, wait_time)
+			self.batch = Batch(self.machines, ilias_version, test, settings, workarounds, wait_time)
 			self.batch.configure(self.args)
 			self.batch.start()
 
 		if self.looping:
 			if self.looper is None:
 				print("creating new looper.")
-				self.looper = Looper(self, test_name, settings, workarounds, wait_time)
+				self.looper = Looper(self, test, settings, workarounds, wait_time)
 				self.looper.start()
 			else:
 				print("reusing existing looper.")
@@ -204,7 +205,7 @@ class StartBatchHandler(tornado.web.RequestHandler):
 		workarounds = Workarounds(from_dict=workarounds_dict)
 		test_id = data["test"]
 		wait_time = 0
-		batch_id = self.state.start_batch(test_id, settings, workarounds, wait_time)
+		batch_id = self.state.start_batch(Test(test_id), settings, workarounds, wait_time)
 
 		if batch_id is None:
 			self.write("error")
