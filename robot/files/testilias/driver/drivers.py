@@ -690,6 +690,7 @@ class ExamDriver:
 		if page_title is None:
 			raise InteractionException("no question title found.")
 
+		answer = None
 		title = page_title.text
 		self.report('entering question "' + title + '"')
 
@@ -707,6 +708,9 @@ class ExamDriver:
 
 			answer = answer_class(self.driver, self.questions[title], AnswerProtocol(title, self._get_debug_info))
 			break
+
+		if answer is None:
+			raise InteractionException("no question content found for '%s'." % page_title)
 
 		sequence_id = self.get_sequence_id()
 		assert sequence_id not in self.answers
@@ -808,6 +812,7 @@ class Test:
 		self.title = root.findall(".//Title")[0].text
 		self.questions = None
 		self.exam_configuration = None
+		self.cached_link = None
 
 	def get_id(self):
 		return self.test_id
@@ -842,7 +847,6 @@ class TestDriver:
 		self.client_id = parse_qs(parsed_url.query)['client_id']
 
 		self.report = report
-		self.cached_link = None
 		self.autosave_time = 5
 		self.allow_resume = False
 
@@ -1130,17 +1134,17 @@ class TestDriver:
 		self.driver.find_element_by_css_selector('input[name="cmd[confirmDeleteAllUserResults]"]').click()
 
 	def get_test_url(self):
-		if not self.cached_link:
+		if not self.test.cached_link:
 			self.goto()
-		return self.cached_link
+		return self.test.cached_link
 
 	def goto(self, url=None):
-		if self.cached_link is None and url:
-			self.cached_link = url
+		if self.test.cached_link is None and url:
+			self.test.cached_link = url
 
-		if self.cached_link is not None:
+		if self.test.cached_link is not None:
 			with wait_for_page_load(self.driver):
-				self.driver.get(self.cached_link)
+				self.driver.get(self.test.cached_link)
 			return True
 
 		driver = self.driver
@@ -1179,13 +1183,14 @@ class TestDriver:
 		for i in range(10):
 			for link in driver.find_elements_by_partial_link_text(self.test.get_title()):
 				if link.is_displayed():
-					with wait_for_page_load(driver):
-						link.click()
-					self.cached_link = driver.current_url
-					return True
+					if link.text.strip() == self.test.get_title():
+						with wait_for_page_load(driver):
+							link.click()
+						self.test.cached_link = driver.current_url
+						return True
 			time.sleep(1)
 
-		raise InteractionException("test was not found in ILIAS")
+		raise InteractionException("test '%s' was not found in ILIAS" % self.test.get_title())
 
 	def _try_start_or_resume(self, force_allow_resume=False):
 		resume_player = None
