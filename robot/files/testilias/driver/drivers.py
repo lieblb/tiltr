@@ -786,9 +786,9 @@ class ExamDriver:
 		result.attach_protocol(protocol_lines)
 
 	def get_expected_result(self, language):
-		if self.exam_configuration.score_cutting == ScoreCutting.per_question:
+		if self.exam_configuration.score_cutting == ScoreCutting.QUESTION:
 			def clip_question_score(score):
-				return max(score, Decimal(0))  # clamp score to >= 0
+				return max(score, Decimal(0))
 		else:
 			def clip_question_score(score):
 				return score  # do not clip on question level

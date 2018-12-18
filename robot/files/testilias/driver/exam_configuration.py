@@ -2,23 +2,23 @@ from enum import Enum
 
 
 class CountSystem(Enum):
-	partial = 0
-	complete = 1
+	PARTIAL = 0
+	COMPLETE = 1
 
 
 class MCScoring(Enum):
-	do_not_save_empty = 0
-	save_empty = 1
+	DO_NOT_SAVE_EMPTY = 0
+	SAVE_EMPTY = 1
 
 
 class ScoreCutting(Enum):
-	per_question = 0
-	per_test = 1
+	QUESTION = 0
+	TEST = 1
 
 
 class PassScoring(Enum):
-	last_pass = 0
-	best_pass = 1
+	LAST = 0
+	BEST = 1
 
 
 class ExamConfiguration:
