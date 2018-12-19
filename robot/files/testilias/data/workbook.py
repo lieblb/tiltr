@@ -60,10 +60,18 @@ def get_workbook_user_answers(sheet, report=None):
 		while sheet.cell(row=row, column=1).value is not None:
 			key = sheet.cell(row=row, column=1).value
 			assert key is not None
-			value = sheet.cell(row=row, column=2).value
-			if value is None:
-				value = ""  # an empty gap in cloze question, for example
-			dimensions.append((key, value))
+
+			value = sheet.cell(row=row, column=3).value
+			if value is not None:
+				# matching questions are stored as (key, "matches", value).
+				dimensions.append(((key, value), True))
+			else:  # regular non-matching question
+				value = sheet.cell(row=row, column=2).value
+				if value is None:
+					value = ""  # an empty gap in cloze question, for example
+
+				dimensions.append((key, value))
+
 			row += 1
 
 		answers.append((question_title.strip(), dimensions))
@@ -145,7 +153,7 @@ def workbook_to_result(wb, username, report):
 
 	for question_title, dimensions in get_workbook_user_answers(user_sheet):
 		for dimension_title, dimension_value in dimensions:
-			result.add(("question", question_title, "answer", dimension_title), dimension_value)
+			result.add(Result.key("question", question_title, "answer", dimension_title), dimension_value)
 
 	for title, score in result_row.get_question_scores().items():
 		result.add(("question", title, "score"), score)

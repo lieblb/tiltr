@@ -6,6 +6,7 @@
 #
 
 import json
+from selenium.webdriver.common.action_chains import ActionChains
 
 from .answer import Answer, Validness
 
@@ -26,11 +27,14 @@ class KPrimAnswer(Answer):
 
 	def _set_answers(self, answers, score):
 		ui = self._parse_ui()
+		chain = ActionChains(self.driver)
 
 		assert len(answers) == self.n_rows
 		for index, radios, answer in zip(range(self.n_rows), ui, answers):
 			self.protocol.choose(index, answer)
-			radios[answer].click()
+			chain.click(radios[answer])
+
+		chain.perform()
 
 		self.current_answers = answers
 		self.current_score = score

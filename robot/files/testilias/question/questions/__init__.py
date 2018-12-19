@@ -10,3 +10,4 @@ from .kprim import KPrimQuestion
 from .longtext import LongTextQuestion
 from .multiple_choice import MultipleChoiceQuestion
 from .single_choice import SingleChoiceQuestion
+from .matching import MatchingQuestion

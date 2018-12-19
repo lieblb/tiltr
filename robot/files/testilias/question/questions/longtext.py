@@ -19,6 +19,10 @@ class LongTextQuestion(Question):
 		if not driver.find_element_by_id("scoring_mode_non").is_selected():
 			raise NotImplementedException("only manual scoring is supported for tests with LongTextQuestion")
 
+	def create_answer(self, driver, *args):
+		from ..answers.longtext import LongTextAnswerTinyMCE
+		return LongTextAnswerTinyMCE(driver, self, *args)
+
 	def initialize_coverage(self, coverage, context):
 		for args in coverage.text_cases(self.length, context):
 			coverage.add_case(self, "verify", *args)

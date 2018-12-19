@@ -10,3 +10,4 @@ from .kprim import KPrimAnswer
 from .longtext import LongTextAnswerPlainHTML, LongTextAnswerTinyMCE
 from .multiple_choice import MultipleChoiceAnswer
 from .single_choice import SingleChoiceAnswer
+from .matching import MatchingAnswer

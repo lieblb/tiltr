@@ -6,6 +6,7 @@
 #
 
 import json
+from selenium.webdriver.common.action_chains import ActionChains
 
 from .answer import Answer, Validness, Choice
 
@@ -24,12 +25,16 @@ class MultipleChoiceAnswer(Answer):
 		return Validness.VALID
 
 	def _set_answers(self, answers, score):
+		chain = ActionChains(self.driver)
+
 		for choice in self._parse_ui():
 			checkbox = self.driver.find_element_by_css_selector(choice.selector)
 			self.protocol.choose(choice.label, answers[choice.label])
 			if answers[choice.label] != checkbox.is_selected():
-				checkbox.click()
-			assert checkbox.is_selected() == answers[choice.label]
+				chain.click(checkbox)
+
+		chain.perform()
+
 		self.current_answers = answers
 		self.current_score = score
 

@@ -35,6 +35,10 @@ class MultipleChoiceQuestion(Question):
 				checked_score=Decimal(points.get_attribute("value")),
 				unchecked_score=Decimal(points_unchecked.get_attribute("value")))
 
+	def create_answer(self, driver, *args):
+		from ..answers.multiple_choice import MultipleChoiceAnswer
+		return MultipleChoiceAnswer(driver, self, *args)
+
 	def initialize_coverage(self, coverage, context):
 		if True:  # all cases
 			elements = [(False, True)] * len(self.choices)

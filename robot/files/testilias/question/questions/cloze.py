@@ -298,6 +298,10 @@ class ClozeQuestion(Question):
 
 			self.gaps[gap_index] = gap
 
+	def create_answer(self, driver, *args):
+		from ..answers.cloze import ClozeAnswer
+		return ClozeAnswer(driver, self, *args)
+
 	def initialize_coverage(self, coverage, context):
 		for gap in self.gaps.values():
 			gap.initialize_coverage(coverage, context)

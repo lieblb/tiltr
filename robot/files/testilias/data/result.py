@@ -15,12 +15,32 @@ from .database import DB
 from .exceptions import ErrorDomain, most_severe
 
 
+def _dump_properties(properties, report):
+	# this supports tuple-keys (for matching questions); which is why we don't simply use
+	# json.dumps(properties) to print this out.
+	for k, v in properties.items():
+		report('  %s: %s' % (json.dumps(k), json.dumps(v)))
+
+
+def _flat(x):
+	if isinstance(x, tuple):
+		for y in x:
+			for yy in _flat(y):
+				yield yy
+	else:
+		yield x
+
+
 class Origin(Enum):
 	recorded = 0
 	exported = 1
 
 
 class Result:
+	@staticmethod
+	def key(*args):
+		return tuple(_flat(args))
+
 	def __init__(self, from_json=None, **kwargs):
 		if from_json:
 			data = json.loads(from_json)
@@ -132,8 +152,10 @@ class Result:
 		report("")
 
 		if not all_ok:
-			report("DEBUG properties A: %s" % json.dumps(self.properties))
-			report("DEBUG properties B: %s" % json.dumps(other.properties))
+			report("DUMP of properties A:")
+			_dump_properties(self.properties, report)
+			report("DUMP of properties B:")
+			_dump_properties(other.properties, report)
 
 		if self.errors:
 			for type, err in self.errors.items():

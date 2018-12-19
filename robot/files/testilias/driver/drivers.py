@@ -716,27 +716,15 @@ class ExamDriver:
 		if page_title is None:
 			raise InteractionException("no question title found.")
 
-		answer = None
 		title = page_title.text
+
+		if title not in self.questions:
+			raise InteractionException("no question content found for '%s'." % page_title)
+
 		self.report('entering question "' + title + '"')
 
-		for css, answer_class in [
-			(".ilc_question_SingleChoice", SingleChoiceAnswer),
-			(".ilc_question_MultipleChoice", MultipleChoiceAnswer),
-			(".ilc_question_KprimChoice", KPrimAnswer),
-			(".ilc_question_ClozeTest", ClozeAnswer),
-			(".ilc_question_TextQuestion", LongTextAnswerTinyMCE)
-		]:
-			try:
-				self.driver.find_element_by_css_selector(css)
-			except NoSuchElementException:
-				continue
-
-			answer = answer_class(self.driver, self.questions[title], AnswerProtocol(title, self._get_debug_info))
-			break
-
-		if answer is None:
-			raise InteractionException("no question content found for '%s'." % page_title)
+		answer = self.questions[title].create_answer(
+			self.driver, AnswerProtocol(title, self._get_debug_info))
 
 		sequence_id = self.get_sequence_id()
 		assert sequence_id not in self.answers
@@ -806,9 +794,13 @@ class ExamDriver:
 		for sequence_id, answer in self.answers.items():
 			encoded = answer.to_dict(self.context, language)
 			question_title = encoded["title"]
+			key_prefix = ("question", question_title, "answer")
 
-			for dimension_title, dimension_value in encoded["answers"].items():
-				result.add(("question", question_title, "answer", dimension_title), dimension_value)
+			# format of full result key:
+			# ("question", title of question, "answer", key_1, ..., key_n)
+
+			for dimension_key, dimension_value in encoded["answers"].items():
+				result.add(Result.key(*key_prefix, dimension_key), dimension_value)
 
 			result.add(
 				("question", question_title, "score"),
@@ -1112,6 +1104,15 @@ class TestDriver:
 
 		self.report("parsing questions.")
 
+		question_classes = dict(
+			assclozetestgui=ClozeQuestion,
+			asssinglechoicegui=SingleChoiceQuestion,
+			assmultiplechoicegui=MultipleChoiceQuestion,
+			asskprimchoicegui=KPrimQuestion,
+			asstextquestiongui=LongTextQuestion,
+			assmatchingquestiongui=MatchingQuestion
+		)
+
 		questions = dict()
 		for href in hrefs:
 			parameters = http_get_parameters(href)
@@ -1125,24 +1126,12 @@ class TestDriver:
 					raise InteractionException('duplicate question titled "%s" is not allowed.' % title)
 
 				cmd_class = http_get_parameters(self.driver.current_url)["cmdClass"]
-
-				if cmd_class == "assclozetestgui":
-					self.report('parsing cloze question "%s".' % title)
-					questions[title] = ClozeQuestion(driver, title)
-				elif cmd_class == "asssinglechoicegui":
-					self.report('parsing single choice question "%s".' % title)
-					questions[title] = SingleChoiceQuestion(driver, title)
-				elif cmd_class == "assmultiplechoicegui":
-					self.report('parsing multiple choice question "%s".' % title)
-					questions[title] = MultipleChoiceQuestion(driver, title)
-				elif cmd_class == "asskprimchoicegui":
-					self.report('parsing kprim question "%s".' % title)
-					questions[title] = KPrimQuestion(driver, title)
-				elif cmd_class == "asstextquestiongui":
-					self.report('parsing text question "%s".' % title)
-					questions[title] = LongTextQuestion(driver, title)
-				else:
+				question_class = question_classes.get(cmd_class)
+				if question_class is None:
 					raise NotImplementedException("unsupported question gui cmd_class " + cmd_class)
+
+				self.report('parsing "%s" as %s.' % (title, question_class.__name__))
+				questions[title] = question_class(driver, title)
 
 		return questions
 

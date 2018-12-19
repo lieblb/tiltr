@@ -34,6 +34,10 @@ class KPrimQuestion(Question):
 			self.names.append(driver.find_element_by_name(
 				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
+	def create_answer(self, driver, *args):
+		from ..answers.kprim import KPrimAnswer
+		return KPrimAnswer(driver, self, *args)
+
 	def initialize_coverage(self, coverage, context):
 		elements = [(False, True)] * len(self.names)
 		for combination in itertools.product(*elements):

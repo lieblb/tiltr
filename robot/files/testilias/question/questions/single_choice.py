@@ -51,6 +51,10 @@ class SingleChoiceQuestion(Question):
 		self.title = title
 		self.choices = self._get_ui(driver)
 
+	def create_answer(self, driver, *args):
+		from ..answers.single_choice import SingleChoiceAnswer
+		return SingleChoiceAnswer(driver, self, *args)
+
 	def initialize_coverage(self, coverage, context):
 		for choice in self.choices.keys():
 			coverage.add_case(self, "verify", choice)

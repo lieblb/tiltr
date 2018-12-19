@@ -10,6 +10,9 @@ class Question:
 	def __init__(self):
 		raise NotImplementedError()
 
+	def create_answer(self, driver, *args):
+		raise NotImplementedError()
+
 	def initialize_coverage(self, coverage, context):
 		raise NotImplementedError()
 
