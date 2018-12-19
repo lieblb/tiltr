@@ -17,6 +17,10 @@ def _check_label(kind, element, stored):
 		raise IntegrityException('displayed %s label "%s" != "%s"' % (kind, displayed, stored))
 
 
+def _scrolling_drag_and_drop(chain, source, target):
+	pass
+
+
 class MatchingAnswer(Answer):
 	def __init__(self, driver, question, protocol):
 		assert question.__class__.__name__ == "MatchingQuestion"
@@ -62,6 +66,7 @@ class MatchingAnswer(Answer):
 					self.question.get_term_label(term_id))
 
 				chain = ActionChains(self.driver)
+				chain.move_to_element(source_element)
 				chain.drag_and_drop(source_element, target_element)
 				chain.pause(1)
 				chain.perform()
@@ -97,9 +102,11 @@ class MatchingAnswer(Answer):
 					'.draggable[data-type="term"][data-id="%s"]' % term.get_attribute('data-id'))
 
 				chain = ActionChains(self.driver)
+				chain.move_to_element(term)
 				chain.drag_and_drop(term, term_target)
 				chain.pause(1)
 				chain.perform()
+
 
 	def _parse_ui(self):
 		answers = dict()

@@ -503,7 +503,7 @@ class ExamDriver:
 		try:
 			try_submit(self.driver, finish_test_css, finish_test, allow_reload=True)
 
-			try_submit(self.driver, 'input[name="cmd[confirmFinish]"]', confirm_finish)
+			try_submit(self.driver, 'input[name="cmd[confirmFinish]"]', confirm_finish, allow_empty=True)
 
 		except WebDriverException:
 			raise InteractionException("failed to properly finish test")

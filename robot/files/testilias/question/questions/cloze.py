@@ -25,7 +25,7 @@ class ClozeComparator(Enum):
 	case_sensitive = "cs"
 
 
-class ClozeQuestionGap():
+class ClozeQuestionGap:
 	_export_names = dict(de="Lücke", en="Gap")
 
 	def __init__(self, question, index):
@@ -34,6 +34,9 @@ class ClozeQuestionGap():
 
 	def get_export_name(self, language):
 		return ClozeQuestionGap._export_names[language] + " " + str(self.index + 1)
+
+	def is_valid_answer(self, value):
+		raise NotImplementedError()
 
 
 class ClozeQuestionTextGap(ClozeQuestionGap):
@@ -116,7 +119,7 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		return Decimal(0)
 
 	def is_valid_answer(self, value):
-		return True
+		return True  # FIXME: len(value) <= self.size
 
 	def get_type(self):
 		return ClozeType.text
@@ -336,17 +339,27 @@ class ClozeQuestion(Question):
 			previous_answers_prob = 0.1 if self.identical_scoring else 0.25
 			all_empty = True
 
-			for gap in self.gaps.values():
+			shuffled_gaps = list(self.gaps.values())
+			context.random.shuffle(shuffled_gaps)  # randomize our "previous" value logic
+
+			for gap in shuffled_gaps:
 				previous = previous_answers[gap.get_type()]
+				choice = None
 
 				if len(previous) > 0 and context.random.random() < previous_answers_prob:
 					# use some previous answer to explicitly test identical_scoring
 					# option, though it's also tested through the case below.
 					choice = context.random.choice(list(previous))
-				else:
+
+					# trying to set a select gap to some illegal value causes problems.
+					if not gap.is_valid_answer(choice):
+						choice = None
+
+				if choice is None:
 					choice, _ = gap.get_random_choice(context)
 
 				previous.add(choice)
+
 				answers[gap.index] = choice
 				valid[gap.index] = gap.is_valid_answer(choice)
 				all_empty = all_empty and self._is_empty_answer(choice, context)

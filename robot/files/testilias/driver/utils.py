@@ -10,6 +10,8 @@ import time
 import itertools
 from contextlib import contextmanager
 
+from splinter import Browser
+
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
 from selenium.common.exceptions import *
@@ -200,7 +202,7 @@ def create_detailed_exception(driver):
 		return error_class("failed on loading %s with html: %s\n" % (url, html))
 
 
-def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
+def try_submit(driver, css, f, allow_reload=True, allow_empty=True, n_tries=7, max_sleep_time=8):
 	button = None
 
 	for i in range(n_tries):
@@ -217,6 +219,8 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 				time.sleep(min(max_sleep_time, 2 ** i))
 
 	if not button:
+		if allow_empty:
+			return False
 		raise InteractionException("could not detect %s button. aborting." % css)
 
 	old_url = None
@@ -251,3 +255,14 @@ def try_submit(driver, css, f, allow_reload=True, n_tries=7, max_sleep_time=8):
 		except StaleElementReferenceException:
 			# this usually indicates our click and page change has finally succeeded.
 			break
+
+	return True
+
+
+def create_browser(**kwargs):
+	browser = Browser(**kwargs)
+
+	# we try to avoid the need to scroll, but a large size can cause memory issues.
+	browser.driver.set_window_size(1024, 1024)
+
+	return browser

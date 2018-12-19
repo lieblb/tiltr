@@ -57,13 +57,17 @@ class SelectAnswerGap(ClozeAnswerGap):
 	def value(self, new_value):
 		match = self.driver.find_element_by_name(self.name)
 		found = False
+		option_values = []
 		for option in match.find_elements_by_tag_name('option'):
-			if option.text.strip() == new_value:
+			option_value = option.text.strip()
+			if option_value == new_value:
 				option.click()
 				found = True
 				break
+			option_values.append(option_value)
 		if not found:
-			raise InteractionException('option "%s" not found.' % new_value)
+			raise InteractionException(
+				'option "%s" not found in %s.' % (new_value, option_values))
 		self._value = new_value
 
 

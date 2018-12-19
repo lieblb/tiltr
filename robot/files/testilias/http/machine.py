@@ -10,15 +10,13 @@ import traceback
 import sys
 import json
 import time
-import os
 
 import tornado.ioloop
 import tornado.web
 
-from splinter import Browser
-
 from ..driver.commands import TakeExamCommand
 from .utils import clear_tmp
+from ..driver.utils import create_browser
 from .args import parse_args
 
 
@@ -26,10 +24,12 @@ class GlobalState:
 	def __init__(self):
 		self.runner = None
 
-	def create_browser(self, machine_index, wait_time):
+	@staticmethod
+	def create_browser(machine_index, wait_time):
 		log_path = "tmp/geckodriver.machine_%d.log" % machine_index
 		open(log_path, 'w').close()  # empty log file
-		return Browser(headless=True, log_path=log_path, wait_time=wait_time)
+		browser = create_browser(headless=True, log_path=log_path, wait_time=wait_time)
+		return browser
 
 
 class Runner(threading.Thread):

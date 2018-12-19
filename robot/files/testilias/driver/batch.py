@@ -22,8 +22,6 @@ import threading
 from collections import defaultdict
 from contextlib import contextmanager
 
-from splinter import Browser
-
 import selenium
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -40,7 +38,7 @@ from testilias.driver.exam_configuration import * # needed for pickling
 
 from .commands import TakeExamCommand
 from .drivers import Login, UsersBackend, UsersFactory, TestDriver, Test, verify_admin_settings
-from .utils import wait_for_page_load
+from .utils import wait_for_page_load, create_browser
 
 
 monitor_mutex = Lock()
@@ -158,7 +156,7 @@ def in_master(batch, protocol):
 	open(log_path, 'w').close()  # empty log file
 
 	batch.report("master", "connecting to client browser...")
-	with Browser(headless=True, capabilities=capabilities, log_path=log_path, wait_time=batch.wait_time) as browser:
+	with create_browser(headless=True, capabilities=capabilities, log_path=log_path, wait_time=batch.wait_time) as browser:
 		context.driver = browser.driver
 
 		test_driver = TestDriver(
