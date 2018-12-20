@@ -1087,7 +1087,7 @@ class TestDriver:
 
 		return settings
 
-	def parse_question_definitions(self):
+	def parse_question_definitions(self, settings):
 		driver = self.driver
 
 		self.goto_questions()
@@ -1131,7 +1131,7 @@ class TestDriver:
 					raise NotImplementedException("unsupported question gui cmd_class " + cmd_class)
 
 				self.report('parsing "%s" as %s.' % (title, question_class.__name__))
-				questions[title] = question_class(driver, title)
+				questions[title] = question_class(driver, title, settings)
 
 		return questions
 

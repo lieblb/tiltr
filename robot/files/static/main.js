@@ -7,8 +7,10 @@ $(function() {
 	var port = window.location.port;
 	var host = "http://" + window.location.hostname + ":" + port;
 
-	var workaroundKeys = [];
-	var settingKeys = [];
+	var settings = {
+		fetchWorkarounds: null,
+		fetchSettings: null
+	};
 
 	// https://gist.github.com/mjackson/5311256
 	function hslToRgb(h, s, l) {
@@ -38,34 +40,142 @@ $(function() {
 	  //return [ r * 255, g * 255, b * 255 ];
 	}
 
+	function createTogglesDashboard(container, items) {
+		var isChecked = {};
+
+		function setIsChecked(tile, checked) {
+			var enabledClass = 'is-primary';
+			$(tile).removeClass('is-light ' + enabledClass);
+			$(tile).addClass(checked ? enabledClass : 'is-light');
+			var key = $(tile).attr('data-toggle-key');
+			isChecked[key] = checked;
+		}
+
+		function toggleTile(e) {
+			var key = $(this).attr('data-toggle-key');
+			setIsChecked(this, !isChecked[key]);
+			return false;
+		}
+
+		var dashboard = $('<div></div>');
+		dashboard.addClass('tile is-ancestor');
+
+		var numRows = Math.ceil(items.length / 3);
+		var i = 0;
+		while (i < items.length) {
+			var column = $('<div></div>');
+			column.addClass('tile is-parent is-vertical');
+
+			var j = 0;
+			while (i < items.length && j < numRows) {
+				var key = items[i][0];
+				var title = items[i][1];
+				var description = items[i][2];
+				var checked = items[i][3];
+
+				var article = $('<article></article>');
+				article.addClass('tile is-child box notification');
+				article.attr('data-toggle-key', key);
+				article.click(toggleTile);
+				article.addClass('no-text-selection');
+
+				var text1 = $('<span></span>');
+				text1.text(description);
+				article.append(text1);
+				var text2 = $('<span></span>');
+				text2.addClass('is-italic');
+				text2.text(' ' + title);
+				article.append(text2);
+
+				setIsChecked(article, checked);
+
+				i += 1;
+				j += 1;
+				column.append(article);
+			}
+
+			dashboard.append(column);
+		}
+
+		container.append(dashboard);
+
+		return function() {
+			return isChecked;
+		};
+	}
+
+	function createSettingsDashboard(container, items) {
+		var dashboard = $('<div></div>');
+		dashboard.addClass('tile is-ancestor');
+
+		var inputs = [];
+
+		var numRows = Math.ceil(items.length / 3);
+		var i = 0;
+		while (i < items.length) {
+			var column = $('<div></div>');
+			column.addClass('tile is-parent is-vertical');
+
+			var j = 0;
+			while (i < items.length && j < numRows) {
+				var key = items[i][0];
+				var description = items[i][1];
+				var value = items[i][2];
+
+				var article = $('<article></article>');
+				article.addClass('tile is-child box notification info');
+
+				var text1 = $('<div></div>');
+				text1.text(description);
+				article.append(text1);
+
+				article.append($('<hr>'));
+
+				var input = $('<input type="text"></input>');
+				input.addClass('input is-size-7');
+				input.attr('id', 'setting-' + key);
+				inputs.push([key, input.attr('id')]);
+				input.val(value);
+				article.append(input);
+
+				i += 1;
+				j += 1;
+				column.append(article);
+			}
+
+			dashboard.append(column);
+		}
+
+		container.append(dashboard);
+
+		return function() {
+			var settings = {};
+			for (var i = 0; i < inputs.length; i++) {
+				settings[inputs[i][0]] = $('#' + inputs[i][1]).val();
+			}
+			return settings;
+		};
+	}
+
 	$.getJSON(host + "/preferences.json", function(preferences) {
-		var settings = preferences.settings;
-		for (var i = 0; i < settings.length; i++) {
-			var key = settings[i].key;
-			settingKeys.push(key);
-			var description = settings[i].description;
-			$("#settings-table").append('<tr><td><label><input id="' +
-				key + '" type="text" class="input is-rounded is-size-7"></td><td>' + description +
-				'</label><p id="' + key + '_help" class="help"></p></td></tr>');
-			//$("#" + key + "_help").text(help);
-			$("#" + key).val(settings[i].value);
-		}
+		settings.fetchWorkarounds = createTogglesDashboard(
+			$("#workarounds-dashboard"),
+			preferences.workarounds.map(
+				function(w) {
+					var parts = /^(W[0-9]+) (.+)/g;
+					var m = parts.exec(w.description);
+					return [w.key, m ? m[1] : '', m ? m[2] : w.description, w.value];
+				}
+			)
+		);
 
-		var workarounds = preferences.workarounds;
-		for (var i = 0; i < workarounds.length; i++) {
-			var key = workarounds[i].key;
-			workaroundKeys.push(key);
-			//var help = workarounds[i].description;
-
-			var regex = /^(W[0-9]+) (.+)/g;
-			var match = regex.exec(workarounds[i].description);
-
-			$("#workarounds-table").append('<tr><td><label class="checkbox"><input id="' +
-				key + '" type="checkbox"> ' + match[1] + '</label><span id="' +
-				key + '_help" class="is-pulled-right"></span></td></tr>');
-			$("#" + key + "_help").text(match[2]);
-			$("#" + key).prop("checked", workarounds[i].value);
-		}
+		settings.fetchSettings = createSettingsDashboard(
+			$("#settings-dashboard"),
+			preferences.settings.map(
+				function(s) {
+					return [s.key, s.description, s.value];
+				}
+			));
 	});
 
 	$.getJSON(host + "/tests.json", function(tests) {
@@ -552,25 +662,13 @@ $(function() {
 	restart = function() {
 		if (!$("#start").attr("disabled")) {
 
-			var workarounds = {};
-			for (var i = 0; i < workaroundKeys.length; i++) {
-				var key = workaroundKeys[i];
-				workarounds[key] = $("#" + key).prop("checked");
-			}
-
-			var settings = {};
-			for (var i = 0; i < settingKeys.length; i++) {
-				var key = settingKeys[i];
-				settings[key] = $("#" + key).val();
-			}
-
 			$.ajax({
 				method: "POST",
 				url: host + "/start",
 				data: JSON.stringify({
 					test: $("#select-test").val(),
-					workarounds: workarounds,
-					settings: settings
+					workarounds: settings.fetchWorkarounds(),
+					settings: settings.fetchSettings()
                 })
 			}).done(function(batchId) {
 				if (batchId == "error") {

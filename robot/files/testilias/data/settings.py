@@ -71,6 +71,51 @@ class Settings(ValueBag):
 				"""Generate fake errors of the specified error level for a simple self tests.
 				Use this to check that the current implementation correctly reports thrown exceptions.""",
 				0
+			),
+			(
+				'cloze_previous_answer_p',
+				"""Probability with which to use previous answers in cloze questions.""",
+				0.2
+			),
+			(
+				'cloze_text_enter_scored_p',
+				"""Probability with which to enter a scored answer in open text cloze gaps.""",
+				0.75
+			),
+			(
+				'cloze_text_enter_random_number_p',
+				"""Probability with which to enter a random number instead of random text into a text cloze gap.""",
+				0.1
+			),
+			(
+				'invalid_answer_p',
+				"""Probability of giving an invalid answer (e.g. text in numeric gap).""",
+				0.25
+			),
+			(
+				'test_passes',
+				"""Passes to use during test. A = answer, V = verify, R = random verify/answer.""",
+				'AVR'
+			),
+			(
+				'max_long_text_length',
+				"""Maximum number of characters to enter into long text questions.""",
+				20
+			),
+			(
+				'max_cloze_text_length',
+				"""Maximum number of characters to enter into cloze text gaps.""",
+				7
+			),
+			(
+				'num_deterministic_machines',
+				"""Number of deterministic/regression test machines - these always do the same things.""",
+				1
+			),
+			(
+				'resolution',
+				"""Pixel resolution of virtual browser windows.""",
+				"1024x1024"
 			)
 		], **kwargs)
 

@@ -47,7 +47,7 @@ class SingleChoiceQuestion(Question):
 			set_element_value(driver, points, str(choices[choice.get_attribute("value")]))
 			i += 1
 
-	def __init__(self, driver, title):
+	def __init__(self, driver, title, settings):
 		self.title = title
 		self.choices = self._get_ui(driver)
 

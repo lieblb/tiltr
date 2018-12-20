@@ -25,10 +25,14 @@ class GlobalState:
 		self.runner = None
 
 	@staticmethod
-	def create_browser(machine_index, wait_time):
+	def create_browser(machine_index, wait_time, resolution):
 		log_path = "tmp/geckodriver.machine_%d.log" % machine_index
 		open(log_path, 'w').close()  # empty log file
-		browser = create_browser(headless=True, log_path=log_path, wait_time=wait_time)
+		browser = create_browser(
+			headless=True,
+			log_path=log_path,
+			wait_time=wait_time,
+			resolution=resolution)
 		return browser
 
 
@@ -36,7 +40,9 @@ class Runner(threading.Thread):
 	def __init__(self, state, batch, command):
 		threading.Thread.__init__(self)
 		clear_tmp()
-		self.browser = state.create_browser(command.machine_index, command.wait_time)
+
+		self.browser = state.create_browser(
+			command.machine_index, command.wait_time, command.settings.resolution)
 		self.wait_time = command.wait_time
 		self.batch = batch
 		self.command = command

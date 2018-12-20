@@ -12,9 +12,9 @@ from ...data.exceptions import *
 
 
 class LongTextQuestion(Question):
-	def __init__(self, driver, title):
+	def __init__(self, driver, title, settings):
 		self.title = title
-		self.length = 20
+		self.length = int(settings.max_long_text_length)
 
 		if not driver.find_element_by_id("scoring_mode_non").is_selected():
 			raise NotImplementedException("only manual scoring is supported for tests with LongTextQuestion")

@@ -25,7 +25,7 @@ def verify_hello(machine):
 	return False
 
 
-def detect_machines(max_wait_time=15):
+def detect_machines(max_wait_time=30):
 	base = os.path.dirname(__file__)
 	machines_path = os.path.realpath(os.path.join(base, "..", "..", "tmp", "machines.json"))
 	t0 = time.time()

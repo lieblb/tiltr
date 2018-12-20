@@ -115,7 +115,7 @@ class TakeExamCommand:
 		self.wait_time = data["wait_time"]
 		self.admin_lang = data["admin_lang"]
 
-		self.n_deterministic_machines = 1
+		self.n_deterministic_machines = int(self.settings.num_deterministic_machines)
 
 	def to_json(self):
 		return json.dumps(dict(
@@ -163,9 +163,10 @@ class TakeExamCommand:
 
 				if self.machine_index <= self.n_deterministic_machines:
 					# some machines can operate deterministically as a well-defined baseline regression test
-					context = RegressionContext(self.machine_index * 73939133, self.questions, self.workarounds)
+					context = RegressionContext(
+						self.machine_index * 73939133, self.questions, self.settings, self.workarounds)
 				else:
-					context = RandomContext(self.questions, self.workarounds)
+					context = RandomContext(self.questions, self.settings, self.workarounds)
 
 				exam_driver = test_driver.start(context, self.questions, self.exam_configuration)
 
@@ -177,7 +178,7 @@ class TakeExamCommand:
 						exam_driver.add_protocol(s)
 
 					robot = ExamRobot(exam_driver, context, report, self.questions, self.settings)
-					robot.run('AVR')
+					robot.run(self.settings.test_passes)
 
 				except TestILIASException as e:
 					traceback.print_exc()

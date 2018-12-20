@@ -89,22 +89,22 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 			return text, self.get_score(text)
 
 	def get_random_choice(self, context):
-		if context.random.random() < 0.75 and not context.prefer_text():
+		if context.random.random() < float(context.settings.cloze_text_enter_scored_p) and not context.prefer_text():
 			# pick scored answer.
 			text, score = context.random.choice(list(self.options.items()))
 			return self._modify_solution(text, score, context)
 		else:
 			# make up something random and probably wrong.
-			if context.random.random() < 0.9:
-				# produce some random test.
-				text = context.produce_text(
-					self.size, context.cloze_random_chars)
-			else:
+			if context.random.random() < float(context.settings.cloze_text_enter_random_number_p):
 				# insert a random number. this is useful to test
 				# workarounds.implicit_text_number_conversions.
 				num_digits = context.random.randint(0, 2)
 				format = (".%d" % num_digits) + "%f"
 				text = format % (context.random.random() * 1000)
+			else:
+				# produce some random test.
+				text = context.produce_text(
+					self.size, context.cloze_random_chars)
 			return text, self.get_score(text)
 
 	def get_score(self, text):
@@ -185,7 +185,7 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 
 	def get_random_choice(self, context):
 		if not context.workarounds.disallow_invalid_answers:
-			if context.random.random() < 0.25:
+			if context.random.random() < float(context.settings.invalid_answer_p):
 				return context.produce_text(20, context.cloze_random_chars), Decimal(0)
 
 		t = context.random.randint(1, 4)
@@ -252,7 +252,7 @@ def parse_gap_options(driver, gap_index):
 
 
 class ClozeQuestion(Question):
-	def __init__(self, driver, title):
+	def __init__(self, driver, title, settings):
 		self.title = title
 		self.gaps = dict()
 
@@ -260,9 +260,8 @@ class ClozeQuestion(Question):
 
 		fallback_length = driver.find_element_by_name("fixedTextLength").get_attribute("value").strip()
 		if fallback_length == '':
-			fallback_length = 7
-		else:
-			fallback_length = int(fallback_length)
+			fallback_length = settings.max_cloze_text_length
+		fallback_length = int(fallback_length)
 
 		self.comparator = ClozeComparator(driver.find_element_by_css_selector(
 			"#textgap_rating option[selected]").get_attribute("value"))
@@ -336,7 +335,7 @@ class ClozeQuestion(Question):
 			valid = dict()
 
 			previous_answers = defaultdict(set)
-			previous_answers_prob = 0.1 if self.identical_scoring else 0.25
+			previous_answers_p = float(context.settings.cloze_previous_answer_p)
 			all_empty = True
 
 			shuffled_gaps = list(self.gaps.values())
@@ -346,7 +345,7 @@ class ClozeQuestion(Question):
 				previous = previous_answers[gap.get_type()]
 				choice = None
 
-				if len(previous) > 0 and context.random.random() < previous_answers_prob:
+				if len(previous) > 0 and context.random.random() < previous_answers_p:
 					# use some previous answer to explicitly test identical_scoring
 					# option, though it's also tested through the case below.
 					choice = context.random.choice(list(previous))

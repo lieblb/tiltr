@@ -61,7 +61,8 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 
 
 class TestContext:
-	def __init__(self, questions, workarounds):
+	def __init__(self, questions, settings, workarounds):
+		self.settings = settings
 		self.workarounds = workarounds
 		self.cloze_random_chars = get_random_chars(
 			allow_newlines=False,

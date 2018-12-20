@@ -156,7 +156,14 @@ def in_master(batch, protocol):
 	open(log_path, 'w').close()  # empty log file
 
 	batch.report("master", "connecting to client browser...")
-	with create_browser(headless=True, capabilities=capabilities, log_path=log_path, wait_time=batch.wait_time) as browser:
+
+	with create_browser(
+			headless=True,
+			capabilities=capabilities,
+			log_path=log_path,
+			wait_time=batch.wait_time,
+			resolution=batch.settings.resolution) as browser:
+
 		context.driver = browser.driver
 
 		test_driver = TestDriver(
@@ -390,7 +397,7 @@ class Run:
 
 		# grab question definitions from UI.
 		if self.questions is None:
-			self.questions = master.test_driver.parse_question_definitions()
+			self.questions = master.test_driver.parse_question_definitions(self.settings)
 			self.test.questions = self.questions
 
 		# find URL of test, since this saves us a lot of time in the clients.

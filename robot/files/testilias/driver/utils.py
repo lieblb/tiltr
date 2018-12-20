@@ -259,10 +259,18 @@ def try_submit(driver, css, f, allow_reload=True, allow_empty=True, n_tries=7, m
 	return True
 
 
-def create_browser(**kwargs):
+def create_browser(resolution=None, **kwargs):
 	browser = Browser(**kwargs)
 
-	# we try to avoid the need to scroll, but a large size can cause memory issues.
-	browser.driver.set_window_size(1024, 1024)
+	# we try to avoid the need to scroll. a large size can cause memory issues.
+	w = 1024
+	h = 1024
+
+	if resolution is not None and isinstance(resolution, str):
+		w, h = resolution.split('x')
+		w = int(w)
+		h = int(h)
+
+	browser.driver.set_window_size(w, h)
 
 	return browser

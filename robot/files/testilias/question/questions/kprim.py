@@ -13,7 +13,7 @@ from .question import Question
 
 
 class KPrimQuestion(Question):
-	def __init__(self, driver, title):
+	def __init__(self, driver, title, settings):
 		self.title = title
 
 		self.halfpoints = driver.find_element_by_name("score_partsol_enabled").is_selected()
