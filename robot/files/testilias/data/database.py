@@ -21,14 +21,20 @@ class DB:
 	def __enter__(self):
 		db_path = os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "results.db")
 		self.db = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
+
 		c = self.db.cursor()
 		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT, nusers INTEGER, elapsed INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
 		c.execute("CREATE TABLE IF NOT EXISTS longterm (created TIMESTAMP, success INTEGER, detail TEXT, nusers INTEGER)")
+
+		c.execute("CREATE INDEX IF NOT EXISTS index_results_created ON results(created)")
+		c.execute("CREATE INDEX IF NOT EXISTS index_longterm_created ON longterm(created)")
+
 		self.db.commit()
 		c.close()
+
 		return self
 
 	def __exit__(self, *args):
@@ -114,18 +120,13 @@ class DB:
 
 	def get_details(self):
 		c = self.db.cursor()
-
 		c.execute("SELECT created, elapsed, batch, success FROM results ORDER BY created")
+		rows = c.fetchall()
+		c.close()
 
 		entries = []
 		tz = pytz.timezone('Europe/Berlin')
-		while True:
-			r = c.fetchone()
-			if r is None:
-				break
-
-			timestamp, elapsed, batch, success = r
-
+		for timestamp, elapsed, batch, success in rows:
 			timestamp = timestamp.replace(tzinfo=pytz.utc).astimezone(tz)
 			entries.append(dict(
 				time=timestamp.strftime('%d.%m.%Y %H:%M:%S'),
@@ -133,39 +134,30 @@ class DB:
 				batch=batch.decode("utf-8"),
 				success=success.decode("utf-8")
 			))
-		c.close()
+
 		return entries
 
 	def get_performance_data(self):
 		c = self.db.cursor()
 		c.execute("SELECT dt FROM performance")
-		dts = []
-		while True:
-			row = c.fetchone()
-			if row is None:
-				break
-			dts.append(row[0] / 1000.0)
+		rows = c.fetchall()
 		c.close()
-		return dts
+
+		return [row[0] / 1000.0 for row in rows]
 
 	def get_longterm_data(self):
 		c = self.db.cursor()
 		c.execute("SELECT created, success, nusers FROM longterm ORDER BY created")
+		rows = c.fetchall()
+		c.close()
 
 		tz = pytz.timezone('Europe/Berlin')
 		values = []
 
-		while True:
-			row = c.fetchone()
-			if row is None:
-				break
-
-			timestamp, success, n_users = row
+		for timestamp, success, n_users in rows:
 			timestamp = timestamp.replace(tzinfo=pytz.utc).astimezone(tz)
-
 			values.append((timestamp.strftime('%d.%m.%Y %H:%M:%S'), success, n_users))
 
-		c.close()
 		return values
 
 	def get_protocols(self):
