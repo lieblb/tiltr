@@ -55,6 +55,12 @@ def monitor_docker_stats(tmp_path, docker_compose_name):
 	stats_lock_path = os.path.join(tmp_path, "stats.lock")
 	stats_path = os.path.join(tmp_path, "stats.json")
 
+	def parse_percentage(s):
+		if '%' in s:
+			return float(s.replace('%', ''))
+		else:
+			return 0
+
 	while not request_quit:
 		line = stream.stdout.readline()
 		if py3:
@@ -63,7 +69,7 @@ def monitor_docker_stats(tmp_path, docker_compose_name):
 		if not line:
 			break
 
-		row = re.split('\s\s+', line.strip())
+		row = re.split(r'\s\s+', line.strip())
 		is_header = False
 
 		for i, k in enumerate(row):
@@ -95,8 +101,8 @@ def monitor_docker_stats(tmp_path, docker_compose_name):
 					bin = None
 
 				if bin:
-					stats[bin]['cpu'] += float(row[cpu_index].replace('%', ''))
-					stats[bin]['mem'] += float(row[mem_index].replace('%', ''))
+					stats[bin]['cpu'] += parse_percentage(row[cpu_index])
+					stats[bin]['mem'] += parse_percentage(row[mem_index])
 
 
 def instrument_ilias():
@@ -183,6 +189,8 @@ def publish_machines(machines):
 	with open(machines_path + ".tmp", "w") as f:
 		f.write(json.dumps(machines))
 	os.rename(machines_path + ".tmp", machines_path)  # hopefully atomic
+	if args.verbose:
+		print("wrote machines.json at %s" % machines_path)
 
 
 # start up docker.
