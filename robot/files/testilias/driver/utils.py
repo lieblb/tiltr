@@ -22,6 +22,20 @@ from selenium.webdriver.remote.command import Command
 from testilias.data.exceptions import *
 
 
+def interact(driver, action, refresh=False):
+	n_retries = 5
+	while True:
+		try:
+			return action()
+		except (WebDriverException, SessionNotCreatedException):
+			if n_retries < 1:
+				raise
+			n_retries -= 1
+			if refresh:
+				with wait_for_page_load(driver):
+					driver.refresh()
+
+
 def is_loaded(driver):
 	return driver.execute_script("return document.readyState") == "complete"
 
@@ -69,33 +83,11 @@ def wait_for_page_load(driver, timeout=30):
 
 
 def wait_for_css(driver, css, timeout=30):
-	retries = 0
-
-	while True:
-		try:
-			WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, css)))
-			break
-		except (WebDriverException, SessionNotCreatedException):
-			# sporadically we get: "selenium.common.exceptions.WebDriverException:
-			# Message: Failed to decode response from marionette" for some reason
-			retries += 1
-			if retries >= 5:
-				raise
+	interact(driver, lambda: WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, css))))
 
 
 def wait_for_css_visible(driver, css, timeout=30):
-	retries = 0
-
-	while True:
-		try:
-			WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, css)))
-			break
-		except (WebDriverException, SessionNotCreatedException):
-			# sporadically we get: "selenium.common.exceptions.WebDriverException:
-			# Message: Failed to decode response from marionette" for some reason
-			retries += 1
-			if retries >= 5:
-				raise
+	interact(driver, lambda: WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((By.CSS_SELECTOR, css))))
 
 
 def set_element_value(driver, field, value):
@@ -112,31 +104,12 @@ def set_elements_values(driver, values):
 
 
 def set_element_value_by_css(driver, css, value):
-	retries = 0
-
-	while True:
-		try:
-			field = driver.find_element_by_css_selector(css)
-			break
-		except NoSuchWindowException:
-			retries += 1
-			if retries >= 5:
-				raise
-
+	field = interact(driver, lambda: driver.find_element_by_css_selector(css))
 	set_element_value(driver, field, value)
 
 
 def set_inputs(driver, **kwargs):
-	retries = 0
-
-	while True:
-		try:
-			fields = driver.find_elements_by_tag_name("input")
-			break
-		except NoSuchWindowException:
-			retries += 1
-			if retries >= 5:
-				raise
+	fields = interact(driver, lambda: driver.find_elements_by_tag_name("input"))
 
 	field_to_value = dict()
 

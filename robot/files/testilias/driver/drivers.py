@@ -394,17 +394,12 @@ class UsersBackend:
 	def _create_1_user(self, prefix, unique_id):
 		user = self._create_temporary_user(prefix, unique_id)
 
-		retries = 0
-		while True:
-			try:
-				goto_user_administration(self.driver, self.ilias_url)
-				self.report("creating user %s." % user.username)
-				add_user(self.driver, user.username, user.password)
-				break
-			except WebDriverException:
-				retries += 1
-				if retries >= 3:
-					raise
+		def perform_action():
+			goto_user_administration(self.driver, self.ilias_url)
+			self.report("creating user %s." % user.username)
+			add_user(self.driver, user.username, user.password)
+
+		interact(self.driver, perform_action)
 
 		return user
 
@@ -655,27 +650,42 @@ class ExamDriver:
 				pass
 
 	def get_sequence_id(self, allow_reload=False):
-		for i in range(3):
+		exc = []
+
+		for _ in range(3):
+			url = None
 			try:
 				url = self.driver.current_url
 				return int(http_get_parameters(url)["sequence"])
 			except:
+				exc.append('url "%s" / %s' % (url, traceback.format_exc()))
+				self.report('get_sequence_id failed on url %s' % url)
+
+				if url is not None:
+					allow_reload = True  # once we were thrown out, we may as well reload.
+
 				is_resumed = False
 				try:
-					# sometimes we get kicked out and we need to resume the test. allow this
-					# as non-error.
+					# sometimes we get kicked out and we need _try_start_or_resume to resume
+					# the test. allow this as non-error.
 					is_resumed = self._try_start_or_resume(True)
 					if is_resumed:
 						self.report('starting or resuming test after it spuriously paused.')
 					is_resumed = True
 				except:
 					pass
+
+				self.report('is_resumed = %s' % is_resumed)
+
 				if not is_resumed:
 					if not allow_reload:
 						time.sleep(1)
 					else:
 						with wait_for_page_load(self.driver):
 							self.driver.refresh()
+
+		self.report('get_sequence_id failed: %s' % '\n\n'.join(exc))
+
 		raise create_detailed_exception(self.driver)
 
 	def _get_debug_info(self, question_title):
@@ -749,7 +759,8 @@ class ExamDriver:
 
 		answer = self.answers[sequence_id]
 		self.report('verifying question "%s" [%d].' % (answer.question.title, sequence_id))
-		answer.verify(self.context, after_crash)
+
+		interact(self.driver, lambda: answer.verify(self.context, after_crash))
 
 	def copy_protocol(self, result):
 		protocol = self.protocol[:]
@@ -1017,13 +1028,12 @@ class TestDriver:
 		return xls, wb
 
 	def get_gui_scores(self, user_ids):
-		reached = None
-		login = None
-
-		n_retries = 0
-		while True:
+		def fetch_scores():
 			with wait_for_page_load(self.driver):
 				self.goto_statistics()
+
+			reached = None
+			login = None
 
 			for index, a in enumerate(self.driver.find_elements_by_css_selector("#tst_eval_all thead th a")):
 				nav = http_get_parameters(a.get_attribute("href"))["tst_eval_all_table_nav"].split(":")
@@ -1033,16 +1043,11 @@ class TestDriver:
 					login = index
 
 			if reached is not None and login is not None:
-				break
+				return reached, login
+			else:
+				raise InteractionException("unable to get gui scores")
 
-			n_retries += 1
-			if n_retries >= 2:
-				raise InteractionException("unable to get gui score")
-			with wait_for_page_load(self.driver):
-				self.driver.refresh()
-
-			reached = None
-			login = None
+		reached, login = interact(self.driver, fetch_scores, refresh=True)
 
 		# configure table to show up to 800 entries.
 		form = self.driver.find_element_by_css_selector("#evaluation_all")
