@@ -261,6 +261,115 @@ $(function() {
 		"longterm": false
 	};
 
+	function updatePanels() {
+		if (panels.coverage) {
+			$.getJSON(host + "/results-coverage.json", function(coverage) {
+				$("#toggle-coverage").removeClass("is-loading");
+				$("#message-results-coverage .message-body").show();
+				updateCoverage(coverage);
+	        });
+		} else {
+			$("#message-results-coverage .message-body").hide();
+			$("#toggle-coverage").removeClass("is-loading");
+		}
+
+		if (panels.details) {
+			$.getJSON(host + "/results-details.json", function(entries) {
+				$("#toggle-details").removeClass("is-loading");
+
+				$("#results").empty();
+
+				$("#message-results-details .message-body").show();
+
+				for (var i = 0; i < entries.length; i++) {
+					var tr = $("<tr></tr>");
+					tr.append($("<td>" + entries[i].time + "</td>"));
+
+					tr.append($("<td>" + entries[i].elapsed + "s</td>"));
+
+					var success = entries[i].success;
+
+					var td = $("<td></td>");
+					td.append(getIcon("status_" + success.replace("/", "_")));
+					tr.append(td);
+
+					tr.append($("<td>" + success + ".</td>"));
+
+					tr.append($('<td><a href="' + host + '/result/' + entries[i].batch + '.zip">Download</a></td>'));
+
+					$("#results").append(tr);
+				}
+			});
+		} else {
+			$("#message-results-details .message-body").hide();
+			$("#toggle-details").removeClass("is-loading");
+		}
+
+		if (panels.performance) {
+			$("#message-results-performance .message-body").show();
+
+			$.getJSON(host + "/results-performance.json", function(performance) {
+				$("#toggle-performance").removeClass("is-loading");
+				var trace = {
+					x: performance,
+					type: 'histogram'
+				};
+				var layout = {
+				};
+				var data = [trace];
+				Plotly.newPlot('performance-plot', data, layout);
+			});
+		} else {
+			$("#message-results-performance .message-body").hide();
+			$("#toggle-performance").removeClass("is-loading");
+		}
+
+		if (panels.longterm) {
+			$("#message-results-longterm .message-body").show();
+
+			$.getJSON(host + "/results-longterm.json", function(longterm) {
+				$("#toggle-longterm").removeClass("is-loading");
+
+				var counts = {"OK": 0, "FAIL": 0};
+
+				var x = [];
+				var y = [];
+				var colors = [];
+
+				for (var i = 0; i < longterm.length; i++) {
+					var r = longterm[i];
+					x.push(r[0]);
+					colors.push(r[1] > 0 ? 'rgb(0, 200, 0)' : 'rgb(200, 0, 0)');
+					y.push(r[2]);
+
+					counts[r[1] > 0 ? "OK" : "FAIL"] += r[2];
+				}
+
+				data = [{
+					x: x,
+					y: y,
+					type: 'bar',
+					showlegend: true,
+					name: name,
+					marker: {
+						color: colors
+					}
+				}];
+
+				var layout = {
+				};
+
+				Plotly.newPlot('longterm-plot', data, layout);
+
+				$("#longterm-ok").text(counts["OK"] + " users");
+				$("#longterm-fail").text(counts["FAIL"] + " users");
+			});
+		} else {
+			$("#toggle-longterm").removeClass("is-loading");
+            $("#message-results-longterm .message-body").hide();
+        }
+	}
+
 	function updateResults() {
 		$.getJSON(host + "/results-counts.json", function(counts) {
             $("#results-overview").empty();
@@ -299,128 +408,39 @@ $(function() {
 			$('article[id="message-results-longterm"]').show();
         });
 
-		if (panels.coverage) {
-			$.getJSON(host + "/results-coverage.json", function(coverage) {
-				$("#message-results-coverage .message-body").show();
-				updateCoverage(coverage);
-	        });
-		} else {
-			$("#message-results-coverage .message-body").hide();
-		}
-
-		if (panels.details) {
-			$.getJSON(host + "/results-details.json", function(entries) {
-				$("#results").empty();
-
-				$("#message-results-details .message-body").show();
-
-				for (var i = 0; i < entries.length; i++) {
-					var tr = $("<tr></tr>");
-					tr.append($("<td>" + entries[i].time + "</td>"));
-
-					tr.append($("<td>" + entries[i].elapsed + "s</td>"));
-
-					var success = entries[i].success;
-
-					var td = $("<td></td>");
-					td.append(getIcon("status_" + success.replace("/", "_")));
-					tr.append(td);
-
-					tr.append($("<td>" + success + ".</td>"));
-
-					tr.append($('<td><a href="' + host + '/result/' + entries[i].batch + '.zip">Download</a></td>'));
-
-					$("#results").append(tr);
-				}
-			});
-		} else {
-			$("#message-results-details .message-body").hide();
-		}
-
-		if (panels.performance) {
-			$("#message-results-performance .message-body").show();
-
-			$.getJSON(host + "/results-performance.json", function(performance) {
-				var trace = {
-					x: performance,
-					type: 'histogram'
-				};
-				var layout = {
-				};
-				var data = [trace];
-				Plotly.newPlot('performance-plot', data, layout);
-			});
-		} else {
-			$("#message-results-performance .message-body").hide();
-		}
-
-		if (panels.longterm) {
-			$("#message-results-longterm .message-body").show();
-
-			$.getJSON(host + "/results-longterm.json", function(longterm) {
-				var counts = {"OK": 0, "FAIL": 0};
-
-				var x = [];
-				var y = [];
-				var colors = [];
-
-				for (var i = 0; i < longterm.length; i++) {
-					var r = longterm[i];
-					x.push(r[0]);
-					colors.push(r[1] > 0 ? 'rgb(0, 200, 0)' : 'rgb(200, 0, 0)');
-					y.push(r[2]);
-
-					counts[r[1] > 0 ? "OK" : "FAIL"] += r[2];
-				}
-
-				data = [{
-					x: x,
-					y: y,
-					type: 'bar',
-					showlegend: true,
-					name: name,
-					marker: {
-						color: colors
-					}
-				}];
-
-				var layout = {
-				};
-
-				Plotly.newPlot('longterm-plot', data, layout);
-
-				$("#longterm-ok").text(counts["OK"] + " users");
-				$("#longterm-fail").text(counts["FAIL"] + " users");
-			});
-		} else {
-            $("#message-results-longterm .message-body").hide();
-        }
+		updatePanels();
 	}
 
 	$("#toggle-coverage").on("click", function() {
+		$("#toggle-coverage").addClass("is-loading");
 		panels.coverage = !panels.coverage;
-		updateResults();
+		updatePanels();
 	});
 
 	$("#toggle-details").on("click", function() {
+		$("#toggle-details").addClass("is-loading");
 		panels.details = !panels.details;
-		updateResults();
+		updatePanels();
 	});
 
 	$("#toggle-performance").on("click", function() {
+		$("#toggle-performance").addClass("is-loading");
 		panels.performance = !panels.performance;
-		updateResults();
+		updatePanels();
 	});
 
 	$("#toggle-longterm").on("click", function() {
+		$("#toggle-longterm").addClass("is-loading");
 		panels.longterm = !panels.longterm;
-		updateResults();
+		updatePanels();
 	});
 
 	$("#delete-results").click(function() {
+		$("#delete-results").addClass("is-loading");
 		$.ajax({
 			url: host + "/delete-results",
 		}).done(function(data) {
+			$("#delete-results").removeClass("is-loading");
 			updateResults();
 		});
 	});
