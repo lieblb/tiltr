@@ -374,12 +374,10 @@ class UsersBackend:
 			self.driver.find_element_by_css_selector("#il_prop_cont_importFile input").send_keys(xml_path)
 			import_button.click()
 
-		# user creation can take forever on a slow main machine.
-		self.driver.set_page_load_timeout(n * 2)
-
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_css_selector("option[value='update_on_conflict']").click()
-			self.driver.find_element_by_name('cmd[importUsers]').click()
+			import_users_button = self.driver.find_element_by_name('cmd[importUsers]')
+			interact(self.driver, lambda: import_users_button.click())
 
 		return users
 

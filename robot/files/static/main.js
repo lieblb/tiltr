@@ -105,6 +105,13 @@ $(function() {
 	}
 
 	function createSettingsDashboard(container, items) {
+		var ignoredInDashboard = {};
+		ignoredInDashboard['browser'] = true;
+
+		items = items.filter(function(item) {
+			return ignoredInDashboard[item[0]] !== true;
+		});
+
 		var dashboard = $('<div></div>');
 		dashboard.addClass('tile is-ancestor');
 
@@ -153,6 +160,9 @@ $(function() {
 			for (var i = 0; i < inputs.length; i++) {
 				settings[inputs[i][0]] = $('#' + inputs[i][1]).val();
 			}
+
+			settings['browser'] = $('#select-browser').val();
+
 			return settings;
 		};
 	}
@@ -602,6 +612,9 @@ $(function() {
 		$("#start").addClass("is-loading");
 		$("#log").empty();
 
+		$("#select-browser").attr("disabled", true);
+		$("#select-test").attr("disabled", true);
+
 		console.log("connecting to batch " + batchId);
 		connected = true;
 
@@ -628,6 +641,9 @@ $(function() {
 				$("#status").removeClass("is-active");
 				$("#workarounds").removeClass("disabled");
 				$("#workarounds").show();
+
+				$("#select-browser").attr("disabled", false);
+				$("#select-test").attr("disabled", false);
 
 				if (data.success == "OK") {
 					$("#status").hide();

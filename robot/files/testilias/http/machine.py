@@ -25,11 +25,11 @@ class GlobalState:
 		self.runner = None
 
 	@staticmethod
-	def create_browser(machine_index, wait_time, resolution):
+	def create_browser(machine_index, wait_time, browser, resolution):
 		log_path = "tmp/geckodriver.machine_%d.log" % machine_index
 		open(log_path, 'w').close()  # empty log file
 		browser = create_browser(
-			headless=True,
+			browser=browser,
 			log_path=log_path,
 			wait_time=wait_time,
 			resolution=resolution)
@@ -42,14 +42,17 @@ class Runner(threading.Thread):
 		clear_tmp()
 
 		self.browser = state.create_browser(
-			command.machine_index, command.wait_time, command.settings.resolution)
+			command.machine_index,
+			command.wait_time,
+			command.settings.browser,
+			command.settings.resolution)
 		self.wait_time = command.wait_time
 		self.batch = batch
 		self.command = command
 
 		self.screenshot = None
 		self.screenshot_valid_time = time.time()
-		self.screenshot_keep = 10
+		self.screenshot_refresh_time = float(command.settings.screenshot_refresh_time)
 
 		self.messages = []
 
@@ -61,11 +64,14 @@ class Runner(threading.Thread):
 			if time.time() > self.screenshot_valid_time:
 				try:
 					self.screenshot = self.browser.driver.get_screenshot_as_base64()
-					self.screenshot_valid_time = time.time() + self.screenshot_keep
+					self.screenshot_valid_time = time.time() + self.screenshot_refresh_time
 				except:
 					pass # screenshot failed
 
 			self.messages.append(["ECHO", " ".join("%s" % arg for arg in args)])
+
+		report('running on user agent',
+			self.browser.driver.execute_script('return navigator.userAgent'))
 
 		try:
 			report("machine browser has wait time %d." % self.wait_time)

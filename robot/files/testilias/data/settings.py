@@ -41,6 +41,21 @@ class Settings(ValueBag):
 	def __init__(self, **kwargs):
 		super().__init__([
 			(
+				'browser',
+				"""Browser to use for testing. Must be "firefox" or "chrome".""",
+				'firefox'
+			),
+			(
+				'resolution',
+				"""Pixel resolution of virtual browser windows.""",
+				"1024x1024"
+			),
+			(
+				'num_deterministic_machines',
+				"""Number of deterministic/regression test machines - these always do the same things.""",
+				1
+			),
+			(
 				"crash_frequency",
 				"""Make the automation simulate a complete crash of the client browser with the given
 				percentage of question navigation operations.""",
@@ -108,14 +123,9 @@ class Settings(ValueBag):
 				7
 			),
 			(
-				'num_deterministic_machines',
-				"""Number of deterministic/regression test machines - these always do the same things.""",
-				1
-			),
-			(
-				'resolution',
-				"""Pixel resolution of virtual browser windows.""",
-				"1024x1024"
+				'screenshot_refresh_time',
+				"""Number of seconds after which to refresh browser screenshots.""",
+				10
 			)
 		], **kwargs)
 

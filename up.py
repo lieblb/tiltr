@@ -32,6 +32,7 @@ parser.add_argument('--ilias', help='YAML file that specifies an external ILIAS 
 parser.add_argument('--fork', help='fork up.py', action='store_true')
 parser.add_argument('--port', help='port to run TestILIAS on', nargs='?', const=1, type=int, default=11150)
 parser.add_argument('--embedded-ilias-port', help='port to run embedded ILIAS on', nargs='?', const=1, type=int, default=11145)
+parser.add_argument('--rebuild', help='rebuild docker containers', action='store_true')
 args = parser.parse_args()
 
 os.environ['TESTILIAS_PORT'] = str(args.port)
@@ -171,6 +172,9 @@ def set_argument_environ(args):
 
 
 embedded_ilias = set_argument_environ(args)
+
+if args.rebuild:
+	subprocess.call(["docker-compose", "build", "--no-cache"])
 
 base = os.path.dirname(os.path.realpath(__file__))
 os.chdir(base)  # important for docker-compose later

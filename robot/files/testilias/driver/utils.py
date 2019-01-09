@@ -11,6 +11,7 @@ import itertools
 from contextlib import contextmanager
 
 from splinter import Browser
+import selenium
 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
@@ -232,8 +233,30 @@ def try_submit(driver, css, f, allow_reload=True, allow_empty=True, n_tries=7, m
 	return True
 
 
-def create_browser(resolution=None, **kwargs):
-	browser = Browser(**kwargs)
+def create_browser(browser='firefox', resolution=None, **kwargs):
+	args = dict(headless=True)
+
+	if browser == 'firefox':
+		for k in ('log_path', 'wait_time'):
+			if k in kwargs:
+				args[k] = kwargs[k]
+
+		# moz:webdriverClick needed for file uploads to work.
+		args['capabilities'] = {"moz:webdriverClick": False}
+	elif browser == 'chrome':
+		options = selenium.webdriver.chrome.options.Options()
+		options.add_argument('headless')
+		options.add_argument('start-maximized')
+		options.add_argument('disable-infobars')
+		options.add_argument('disable-extensions')
+		options.add_argument('disable-dev-shm-usage')
+		options.add_argument('no-sandbox')
+		options.add_argument('disable-setuid-sandbox')
+		args['chrome_options'] = options
+	else:
+		raise Exception("unsupported browser %s" % browser)
+
+	browser = Browser(browser, **args)
 
 	# we try to avoid the need to scroll. a large size can cause memory issues.
 	w = 1024
@@ -245,5 +268,7 @@ def create_browser(resolution=None, **kwargs):
 		h = int(h)
 
 	browser.driver.set_window_size(w, h)
+
+	browser.driver.set_page_load_timeout(30)
 
 	return browser

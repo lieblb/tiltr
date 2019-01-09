@@ -149,20 +149,20 @@ class MasterContext:
 def in_master(batch, protocol):
 	context = MasterContext(batch, protocol)
 
-	# moz:webdriverClick needed for file uploads to work.
-	capabilities = {"moz:webdriverClick": False}
-
 	log_path = "tmp/geckodriver.master.log"
 	open(log_path, 'w').close()  # empty log file
 
-	batch.report("master", "connecting to client browser...")
+	batch.report("master", "connecting to client browser.")
 
-	with create_browser(
-			headless=True,
-			capabilities=capabilities,
-			log_path=log_path,
-			wait_time=batch.wait_time,
-			resolution=batch.settings.resolution) as browser:
+	args = dict(
+		browser=batch.settings.browser,
+		log_path=log_path,
+		wait_time=batch.wait_time,
+		resolution=batch.settings.resolution)
+
+	with create_browser(**args) as browser:
+		batch.report(
+			'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
 
 		context.driver = browser.driver
 
@@ -170,7 +170,10 @@ def in_master(batch, protocol):
 			browser.driver, batch.test, batch.ilias_admin_user, batch.workarounds, batch.ilias_url, context.report)
 		context.test_driver = test_driver
 
-		with Login(browser.driver, context.report, batch.ilias_url, batch.ilias_admin_user, batch.ilias_admin_password) as login:
+		login_args = [
+			browser.driver, context.report, batch.ilias_url, batch.ilias_admin_user, batch.ilias_admin_password]
+
+		with Login(*login_args) as login:
 			context.language = login.language
 			yield context
 
