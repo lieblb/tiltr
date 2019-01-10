@@ -126,13 +126,19 @@ class Settings(ValueBag):
 				'screenshot_refresh_time',
 				"""Number of seconds after which to refresh browser screenshots.""",
 				10
+			),
+			(
+				'numbers_in_text_fields_p',
+				"""Probability of entering numeric values in text fields.""",
+				0.05
 			)
 		], **kwargs)
 
 
 class Workarounds(ValueBag):
 	_solved = dict(
-		disallow_clamps_in_cloze=(5, 4)  # see https://github.com/ILIAS-eLearning/ILIAS/pull/1082.
+		disallow_clamps_in_cloze=(5, 3, 12),  # see https://github.com/ILIAS-eLearning/ILIAS/pull/1082
+		disallow_invalid_answers=(5, 3, 12),  # https://www.ilias.de/mantis/view.php?id=23432
 	)
 
 	@staticmethod

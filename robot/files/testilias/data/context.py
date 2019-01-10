@@ -23,25 +23,9 @@ def random_number(random, n):
 		else:
 			return str(random.random() * 1000)[:n]
 	else:
-		s = ""
-		if random.random() < 0.5:
-			s += "+"
+		s = random.choice(('', '-', '+'))
 		s += str(random.randint(0, (10 ** (n - len(s))) - 1))
 		return s
-
-
-def random_text(random, n, random_chars):
-	if random.random() * 100 < 5:
-		return random_number(random, n)
-	else:
-		components = list()
-		n_chars = 0
-		while n_chars < n:
-			p = random.choice(random_chars)
-			if n_chars + len(p) <= n:
-				components.append(p)
-				n_chars += len(p)
-		return "".join(components)
 
 
 def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
@@ -74,6 +58,26 @@ class TestContext:
 			allow_clamps=True)
 		self.coverage = Coverage(questions, self)
 
+	def _random_text(self, n, random_chars, allow_numbers=True):
+		if allow_numbers and self.random.random() < self.settings.numbers_in_text_fields_p:
+			return random_number(self.random, n)
+		else:
+			components = list()
+
+			n_chars = 0
+			while n_chars < n:
+				p = self.random.choice(random_chars)
+
+				if n_chars == 0 and not allow_numbers:
+					if p.isdigit() or p == '.':
+						continue
+
+				if n_chars + len(p) <= n:
+					components.append(p)
+					n_chars += len(p)
+
+			return "".join(components)
+
 	def strip_whitespace(self, value):
 		return self.workarounds.strip_whitespace(value)
 
@@ -98,8 +102,22 @@ class TestContext:
 	def prefer_text(self):
 		raise NotImplementedError()
 
-	def produce_text(self, size, random_chars):
+	def _produce_text(self, size, random_chars, allow_numbers=False):
 		raise NotImplementedError()
+
+	def produce_text(self, size, random_chars, allow_numbers=False):
+		while True:
+			text = self._produce_text(size, random_chars, allow_numbers)
+
+			if not self.workarounds.disallow_empty_answers:
+				break
+
+			# in this case, ILIAS does not support empty answers, as they will end up with a None
+			# score in the XLS
+			if len(text.strip()) >= 1:
+				break
+
+		return text
 
 
 class RegressionContext(TestContext):
@@ -110,17 +128,17 @@ class RegressionContext(TestContext):
 	def prefer_text(self):
 		return True  # prefer entering random text to picking correct solution in cloze gaps
 
-	def produce_text(self, size, random_chars):
+	def _produce_text(self, size, random_chars, allow_numbers=False):
 		special = ""
 		for c in "<>\n":
 			if c in random_chars:
 				special += c
 		if len(special) == 0:
-			return random_text(self.random, size, random_chars)
+			return self._random_text(size, random_chars, allow_numbers)
 		s = ""
 		while len(s) < size:
 			if len(s) % len(special) == 0:
-				s += random_text(self.random, 1, random_chars)
+				s += self._random_text(1, random_chars, allow_numbers)
 			else:
 				s += special[0]
 				special = special[1:] + special[:1]
@@ -135,5 +153,13 @@ class RandomContext(TestContext):
 	def prefer_text(self):
 		return False
 
-	def produce_text(self, size, random_chars):
-		return random_text(self.random, self.random.randint(0, size), random_chars)
+	def _produce_text(self, size, random_chars, allow_numbers=False):
+		if self.workarounds.disallow_empty_answers:
+			if size < 1:
+				raise Exception("internal error: max allowed produce_text size too small")
+			min_size = 1
+		else:
+			min_size = 0
+		return self._random_text(self.random.randint(min_size, size), random_chars, allow_numbers)
+
+

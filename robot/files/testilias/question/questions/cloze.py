@@ -165,7 +165,9 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		self.numeric_upper = Decimal(driver.find_element_by_name("gap_%d_numeric_upper" % index).get_attribute("value"))
 		self.score = Decimal(driver.find_element_by_name("gap_%d_numeric_points" % index).get_attribute("value"))
 
-		self.exponent = min(x.as_tuple().exponent for x in (self.numeric_value, self.numeric_lower, self.numeric_upper))
+		# ILIAS will limit exports to XLS to 16 significant decimals, which makes sense.
+		# e.g. 25.433019319138662 -> 25.43301931913866, 0.17493771424585164 -> 0.1749377142458516
+		self.format = '%.16g'
 
 	def initialize_coverage(self, coverage, context):
 		for mode in ("verify", "export"):
@@ -183,44 +185,59 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		if x in [str(self.numeric_value), str(self.numeric_lower), str(self.numeric_upper)]:
 			coverage.case_occurred(self.question, self.index, "export", x)
 
+	def _get_random_inside(self, context):
+		return context.random.uniform(float(self.numeric_lower), float(self.numeric_upper))
+
+	def _get_random_outside(self, context):
+		r = 14  # generate fake numbers up to this scale
+		d = float(self.numeric_upper - self.numeric_lower)
+		off = context.random.uniform(10 ** -r, (10 ** r) * d)
+
+		return context.random.choice((
+			float(self.numeric_lower) - off,
+			float(self.numeric_upper) + off
+		))
+
 	def get_random_choice(self, context):
+		s = None
+
 		if not context.workarounds.disallow_invalid_answers:
 			if context.random.random() < float(context.settings.invalid_answer_p):
-				return context.produce_text(20, context.cloze_random_chars), Decimal(0)
+				s = context.produce_text(20, context.cloze_random_chars, allow_numbers=False)
 
-		t = context.random.randint(1, 4)
-		if t == 1:
-			return str(self.numeric_lower), self.score
-		elif t == 2:
-			return str(self.numeric_upper), self.score
-		elif t == 3:
-			x = Decimal(context.random.uniform(float(self.numeric_lower), float(self.numeric_upper)))
-			return str(round(x, -self.exponent)), self.score
-		else:
-			eps_exp = self.exponent - context.random.randint(0, 2)  # e.g. enter 5.32 for a numeric range defined as [3, 7]
-			eps = 10.0 ** eps_exp
-			d = float(self.numeric_upper - self.numeric_lower)
-			off = Decimal(str(context.random.uniform(eps, 1000 * d)))
-			if context.random.random() < 0.5:
-				return str(round(self.numeric_lower - off, -self.exponent)), Decimal(0)
-			else:
-				return str(round(self.numeric_upper + off, -self.exponent)), Decimal(0)
+		if s is None:
+			g = context.random.choice((
+				lambda _: float(self.numeric_lower),
+				lambda _: float(self.numeric_upper),
+				self._get_random_inside,
+				self._get_random_outside
+			))
+
+			n = g(context)
+			s = self.format % n
+
+		return s, self.get_score(s)
 
 	def get_score(self, text):
 		try:
-			value = Decimal(text)
-			if self.numeric_lower <= value <= self.numeric_upper:
+			n = float(text)
+			n = float(self.format % n)  # limit to number of representable digits
+
+			if float(self.numeric_lower) <= n <= float(self.numeric_upper):
 				return self.score
 			else:
 				return Decimal(0)
-		except InvalidOperation:
+		except ValueError:
 			return Decimal(0)
 
 	def is_valid_answer(self, value):
-		try:
-			Decimal(value)
+		value = value.strip()
+		if len(value) == 0:
 			return True
-		except InvalidOperation:
+		try:
+			float(value)
+			return True
+		except ValueError:
 			return False
 
 	def get_type(self):

@@ -39,17 +39,7 @@ class LongTextQuestion(Question):
 				coverage.case_occurred(self, "export", *args)
 
 	def get_random_answer(self, context):
-		while True:
-			n = context.random.randint(0, self.length)
-			text = context.produce_text(n, context.long_text_random_chars)
-
-			if not context.workarounds.disallow_empty_answers:
-				break
-
-			# ASSUMPTION: ILIAS does not support empty answers, since they will end up with
-			# a None score in the XLS
-			if len(text.strip()) >= 1:
-				break
+		text = context.produce_text(self.length, context.long_text_random_chars)
 		return text, self.compute_score(text, context)
 
 	def readjust_scores(self, driver, random, report):
