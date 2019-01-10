@@ -30,7 +30,7 @@ def random_number(random, n):
 
 def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 	random_chars =\
-		u" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789éáèêäöüÄÖÜß?!.-_:;#§%&=^|\{\}[]()@+-*/~'\"\t"
+		u" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789éáèêäöüÄÖÜß?!.-_:;#§%&=^|\{\}[]()@+-*/~'\"\t\\"
 	if allow_newlines:
 		random_chars += "\n"
 	if allow_clamps:
@@ -39,7 +39,9 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 		random_chars += "$"
 
 	random_chars = [c for c in random_chars]
-	random_chars.extend(["&lt;", "&gt;", "&amp;"])
+	random_chars.extend(["&lt;", "&gt;", "&amp;", "\\1"])
+	if allow_dollar:
+		random_chars.extend(["$1"])
 
 	return random_chars
 
