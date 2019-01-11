@@ -173,6 +173,10 @@ docker exec -it iliasdocker_db_1 /bin/bash
 
 Now zip `ilias.sql` and update in your version control.
 
+## Configuration via setup.php
+
+For the embedded ILIAS instance, you can access setup.php via `http://your.server:11145/ILIAS/setup/setup.php`. The master password is `dev`.
+
 ## Notes on the implementation
 
 The "master" container (see `docker-compose.yml`) provides the GUI for running tests and
