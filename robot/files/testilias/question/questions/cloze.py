@@ -389,30 +389,38 @@ class ClozeQuestion(Question):
 		pass
 
 	def compute_score(self, answers, context):
-		gaps = dict()
+		name_to_index = dict()
 		for gap in self.gaps.values():
-			gaps[gap.get_export_name()] = gap.index
+			name_to_index[gap.get_export_name()] = gap.index
 
 		indexed_answers = dict()
 		for name, value in answers.items():
-			indexed_answers[gaps[name]] = value
+			indexed_answers[name_to_index[name]] = value
+
 		return self.compute_score_by_indices(indexed_answers, context)
 
 	def compute_score_by_indices(self, answers, context):
 		score = Decimal(0)
-		given_answers = set()
 
-		for index, text in answers.items():
-			if not self.identical_scoring:
-				normalized = text
+		if self.identical_scoring:
+			for index, text in answers.items():
+				score += self.gaps[index].get_score(text)
+		else:
+			# make sure answers are sorted as self.identical_scoring won't be
+			# computed correctly otherwise.
+			sorted_answers = sorted(list(answers.items()), key=lambda x: int(x[0]))
+
+			given_answers = set()
+			for index, text in sorted_answers:
+				comparable_text = text
 
 				if not context.workarounds.identical_scoring_ignores_comparator:
 					if self.comparator == ClozeComparator.ignore_case:
-						normalized = text.casefold()
-				if normalized in given_answers:
+						comparable_text = text.casefold()
+				if comparable_text in given_answers:
 					continue
-				given_answers.add(normalized)
+				given_answers.add(comparable_text)
 
-			score += self.gaps[index].get_score(text)
+				score += self.gaps[index].get_score(text)
 
 		return score
