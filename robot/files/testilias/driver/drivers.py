@@ -594,24 +594,30 @@ class ExamDriver:
 		self.protocol.append((time.time(), "test", "checking error on invalid save."))
 
 		sequence_id = self.get_sequence_id()
-		self.goto_next_or_previous_question(context, random_dir=True)
 
-		err_text = None
+		# we actually try to submit twice to detect an additional class of errors,
+		# compare https://github.com/bheyser/ILIAS/pull/7
+		n_retries = 2
 
-		# after save, we should be still on the same page and see an error, like e.g.
-		# "please enter a numeric value." if we entered text in a numeric gap.
-		if self.get_sequence_id() != sequence_id:
-			err_text = "save succeeded even though saved data was invalid."
+		for retry in range(n_retries):
+			self.goto_next_or_previous_question(context, random_dir=True)
 
-		if err_text is None:
-			try:
-				self.driver.find_element_by_css_selector('div.alert-danger')
-			except NoSuchElementException:
-				err_text = "save presented no error though saved data was invalid."
+			err_text = None
 
-		if err_text:
-			self.protocol.append((time.time(), "test", err_text))
-			raise IntegrityException(err_text)
+			# after save, we should be still on the same page and see an error, like e.g.
+			# "please enter a numeric value." if we entered text in a numeric gap.
+			if self.get_sequence_id() != sequence_id:
+				err_text = "save succeeded even though saved data was invalid."
+
+			if err_text is None:
+				try:
+					self.driver.find_element_by_css_selector('div.alert-danger')
+				except NoSuchElementException:
+					err_text = "save presented no error though saved data was invalid."
+
+			if err_text:
+				self.protocol.append((time.time(), "test", err_text))
+				raise IntegrityException(err_text)
 
 	def has_next_question(self):
 		try:
@@ -754,6 +760,7 @@ class ExamDriver:
 		sequence_id = self.get_sequence_id()
 		if sequence_id not in self.answers:
 			raise InteractionException("cannot verify unknown answer " + str(sequence_id))
+
 
 		answer = self.answers[sequence_id]
 		self.report('verifying question "%s" [%d].' % (answer.question.title, sequence_id))
