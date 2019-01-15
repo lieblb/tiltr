@@ -256,8 +256,10 @@ class Run:
 			master.report("checking results for user %s." % user.get_username())
 
 			# fetch and check results.
+			assert self.questions is not None
+
 			ilias_result = workbook_to_result(
-				workbook, user.get_username(), master.report)
+				workbook, user.get_username(), self.questions, master.report)
 
 			# check score via gui participants tab as well.
 			ilias_result.add(("exam", "score", "gui"), gui_scores[user.get_username()])
@@ -465,7 +467,7 @@ class Run:
 		for i in range(num_readjustments + 1):
 			xls, workbook = master.test_driver.fetch_exported_workbook()
 			try:
-				check_workbook_consistency(workbook, master.report, self.workarounds)
+				check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
 			except:
 				raise IntegrityException("failed to check workbook consistency: %s." % traceback.format_exc())
 			if i == 0:

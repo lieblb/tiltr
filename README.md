@@ -19,6 +19,7 @@ TestILIAS works by importing and analyzing a given test (i.e. the test contents 
 * Cloze Question (select, text, and numeric gaps)
 * Long Text ("Essay") Question
 * Matching Questions
+* [Paint Questions](https://github.com/kyro46/assPaintQuestion)
 
 TestILIAS allows to work around a number of known problems in order to perform test without already known fails. It also supports running tests in a loop mode so you can keep running randomized tests for a longer time.
 

@@ -1120,7 +1120,8 @@ class TestDriver:
 			assmultiplechoicegui=MultipleChoiceQuestion,
 			asskprimchoicegui=KPrimQuestion,
 			asstextquestiongui=LongTextQuestion,
-			assmatchingquestiongui=MatchingQuestion
+			assmatchingquestiongui=MatchingQuestion,
+			asspaintquestiongui=PaintQuestion
 		)
 
 		questions = dict()

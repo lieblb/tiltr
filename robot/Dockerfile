@@ -3,7 +3,7 @@ MAINTAINER Bernhard.Liebl@rz.uni-regensburg.de
 
 # install essential dependencies.
 RUN apt-get update -y && apt-get install -y firefox wget iputils-ping vim npm curl unzip python3-pip \
-    && pip3 install splinter selenium requests openpyxl tornado pytz humanize pdb-clone \
+    && pip3 install splinter selenium requests openpyxl tornado pytz humanize pdb-clone pillow \
     && npm i -g bulma jquery open-iconic plotly.js bulma-accordion
 
 # taken from: https://github.com/SeleniumHQ/docker-selenium/blob/master/NodeFirefox/Dockerfile

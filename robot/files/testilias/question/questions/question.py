@@ -27,3 +27,6 @@ class Question:
 
 	def compute_score(self, answers, context):
 		raise NotImplementedError()
+
+	def has_xls_score(self):
+		return True
