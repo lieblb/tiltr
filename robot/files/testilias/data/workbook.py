@@ -27,7 +27,7 @@ class XlsResultRow:
 	def get_total_score(self):
 		return Decimal(self.get(3))
 
-	def get_question_scores(self):
+	def get_question_scores(self, workarounds):
 		scores = dict()
 		column = 20  # magic column "T" where user scores start
 		while True:
@@ -36,7 +36,10 @@ class XlsResultRow:
 				break
 			score = self.get(column)
 			if score is None:
-				scores[title] = "illegal_empty_score"
+				if workarounds.allow_empty_scores:
+					scores[title] = Decimal(0)
+				else:
+					scores[title] = "illegal_empty_score"
 			else:
 				scores[title] = Decimal(score)
 			column += 1
@@ -127,7 +130,7 @@ def check_workbook_consistency(wb, questions, workarounds, report):
 					assert dimensions[j][0] == other_dimensions[j][0]
 
 
-def workbook_to_result(wb, username, questions, report):
+def workbook_to_result(wb, username, questions, workarounds, report):
 	if report:
 		report("gathering data from XLS.")
 
@@ -161,7 +164,7 @@ def workbook_to_result(wb, username, questions, report):
 		for dimension_title, dimension_value in dimensions:
 			result.add(Result.key("question", question_title, "answer", dimension_title), dimension_value)
 
-	for title, score in result_row.get_question_scores().items():
+	for title, score in result_row.get_question_scores(workarounds).items():
 		result.add(("question", title, "score"), score)
 
 	result.add(("exam", "score", "total"), result_row.get_total_score())

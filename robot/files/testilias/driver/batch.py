@@ -259,7 +259,7 @@ class Run:
 			assert self.questions is not None
 
 			ilias_result = workbook_to_result(
-				workbook, user.get_username(), self.questions, master.report)
+				workbook, user.get_username(), self.questions, self.workarounds, master.report)
 
 			# check score via gui participants tab as well.
 			ilias_result.add(("exam", "score", "gui"), gui_scores[user.get_username()])

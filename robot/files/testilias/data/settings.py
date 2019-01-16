@@ -212,6 +212,11 @@ class Workarounds(ValueBag):
 				# simulated crash will provoke data loss without this.
 				"enable_autosave",
 				"W11 Inhibit tests without enabled autosave."
+			),
+			(
+				# workaround illegal_empty_score
+				"allow_empty_scores",
+				"W12 Read empty fields in XLS export as a numeric 0."
 			)
 		], **kwargs)
 
