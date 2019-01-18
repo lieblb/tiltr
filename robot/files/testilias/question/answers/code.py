@@ -17,14 +17,16 @@ from decimal import *
 class CodeAnswer(Answer):
 	def __init__(self, driver, question, protocol):
 		super().__init__(driver, question, protocol)
-		assert question.__class__.__name__ == "CodeAnswer"
+		assert question.__class__.__name__ == "CodeQuestion"
 		self.current_answer = None
 
 	def randomize(self, context):
-		self._set_answer(*self.question.get_random_answer(context))
+		self._set_answer(*self.question.get_random_answer(context), context)
 		return Validness.VALID
 
-	def _set_answer(self, answer, score):
+	def _set_answer(self, answer, score, context):
+		answer = context.strip_whitespace(answer)
+
 		self.driver.execute_script(
 			"$('textarea[data-blocktype=2]').next()[0].CodeMirror.setValue(arguments[0])", answer)
 
@@ -33,12 +35,19 @@ class CodeAnswer(Answer):
 
 	def verify(self, context, after_crash=False):
 		actual_answer = self.driver.execute_script(
-			"$('textarea[data-blocktype=2]').next()[0].CodeMirror.getValue()")
-		self.protocol.verify('canvas', bin(self.current_answer), bin(actual_answer), after_crash=after_crash)
+			"return $('textarea[data-blocktype=2]').next()[0].CodeMirror.getValue()")
+		self.protocol.verify('code', self.current_answer, actual_answer, after_crash=after_crash)
+
+	def _get_dimension_key_type(self, key):
+		if key == 'Ihr Quelltext:':
+			return 'json'
+		else:
+			return None
 
 	def _get_answer_dimensions(self, context, language):
 		blocks = dict()
-		blocks['1'] = self.current_answer
+		# for some reason, \n ends up as \r\n in XLS. that's ok.
+		blocks['1'] = self.current_answer.replace('\n', '\r\n')
 
 		answers = dict()
 		answers['Ihr Quelltext:'] = json.dumps(blocks)  # e.g. {"1":"x = range(10)\r\n"}

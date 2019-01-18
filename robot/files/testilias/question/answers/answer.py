@@ -32,6 +32,9 @@ class Answer:
 	def _get_answer_dimensions(self, context, language):
 		raise NotImplementedError()
 
+	def _get_dimension_key_type(self, key):
+		return None
+
 	def add_to_result(self, result, context, language, clip_answer_score):
 		key_prefix = ("question", self.question.title, "answer")
 
@@ -39,7 +42,10 @@ class Answer:
 		# ("question", title of question, "answer", key_1, ..., key_n)
 
 		for dimension_key, dimension_value in self._get_answer_dimensions(context, language).items():
-			result.add(Result.key(*key_prefix, dimension_key), dimension_value)
+			result.add(
+				Result.key(*key_prefix, dimension_key),
+				dimension_value,
+				self._get_dimension_key_type(dimension_key))
 
 		score = clip_answer_score(self.current_score)
 

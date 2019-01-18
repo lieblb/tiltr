@@ -14,10 +14,11 @@ from testilias.data.exceptions import *
 class CodeQuestion(Question):
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
+		self.length = int(settings.max_long_text_length)
 
 	def create_answer(self, driver, *args):
-		from ..answers.paint import PaintAnswer
-		return PaintAnswer(driver, self, *args)
+		from ..answers.code import CodeAnswer
+		return CodeAnswer(driver, self, *args)
 
 	def initialize_coverage(self, coverage, context):
 		pass

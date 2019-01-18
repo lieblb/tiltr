@@ -31,6 +31,13 @@ def _flat(x):
 		yield x
 
 
+def _normalize_json(s):
+	try:
+		return json.dumps(json.loads(s))
+	except ValueError:
+		return '-illegal-json-' + s
+
+
 class Origin(Enum):
 	recorded = 0
 	exported = 1
@@ -155,9 +162,8 @@ class Result:
 			value_other = workarounds.normalize(value_other)
 
 			if types == ('json',):
-				# normalize json formatting.
-				value_self = json.dumps(json.loads(value_self))
-				value_other = json.dumps(json.loads(value_other))
+				value_self = _normalize_json(value_self)
+				value_other = _normalize_json(value_other)
 			elif len(types) > 0:
 				raise RuntimeError("incompatible property data types")
 
