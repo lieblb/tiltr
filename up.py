@@ -197,10 +197,24 @@ def publish_machines(machines):
 		print("wrote machines.json at %s" % machines_path)
 
 
+def check_errors(pipe):
+	with pipe:
+		for line in iter(pipe.readline, b''):
+			s = line.decode('utf8').strip()
+			if s:
+				print(s)
+				compose.communicate()
+				break
+
+
 # start up docker.
-compose = subprocess.Popen(["docker-compose", "up", "--scale", "machine=%d" % args.n],
-	stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+compose = subprocess.Popen(
+	["docker-compose", "up", "--scale", "machine=%d" % args.n],
+	stdout=subprocess.PIPE,
+	stderr=subprocess.PIPE,
+	bufsize=1)
 print("Waiting for docker-compose to start up.")
+Thread(target=check_errors, args=[compose.stderr]).start()
 
 if not args.verbose:
 	print("docker-compose log files are at %s." % os.path.realpath("docker-compose.log"))
@@ -226,20 +240,23 @@ def terminate():
 	if monitor_thread:
 		monitor_thread.join()
 
-
 try:
 	def wait_for_apache():
-		while True:
-			line = compose.stdout.readline()
-			if py3:
-				line = line.decode("utf-8")
-			if line != '':
-				if args.verbose:
-					print(line)
-				if filter_log(line):
-					log.write(line)
-				if "apache2 -D FOREGROUND" in line:  # web server running?
-					break
+		try:
+			while True:
+				line = compose.stdout.readline()
+				if py3:
+					line = line.decode("utf-8")
+				if line is not None and line != '':
+					if args.verbose:
+						print(line)
+					if filter_log(line):
+						log.write(line)
+					if "apache2 -D FOREGROUND" in line:  # web server running?
+						break
+		except:
+			print("There was an error starting up docker.")
+			sys.exit(1)
 
 	wait_for_apache()
 
