@@ -197,24 +197,22 @@ def publish_machines(machines):
 		print("wrote machines.json at %s" % machines_path)
 
 
-def check_errors(pipe):
+def check_errors(pipe, output):
 	with pipe:
 		for line in iter(pipe.readline, b''):
 			s = line.decode('utf8').strip()
 			if s:
-				print(s)
-				compose.communicate()
-				break
+				print('.', end='', flush=True)
+				output.append('# ' + s)
 
 
 # start up docker.
+compose_stderr = []
 compose = subprocess.Popen(
 	["docker-compose", "up", "--scale", "machine=%d" % args.n],
 	stdout=subprocess.PIPE,
 	stderr=subprocess.PIPE,
 	bufsize=1)
-print("Waiting for docker-compose to start up.")
-Thread(target=check_errors, args=[compose.stderr]).start()
 
 if not args.verbose:
 	print("docker-compose log files are at %s." % os.path.realpath("docker-compose.log"))
@@ -239,26 +237,32 @@ def terminate():
 	request_quit = True
 	if monitor_thread:
 		monitor_thread.join()
+	print('')
 
 try:
+	print("Waiting for docker-compose to start up.", end='')
+	Thread(target=check_errors, args=[compose.stderr, compose_stderr]).start()
+
 	def wait_for_apache():
-		try:
-			while True:
-				line = compose.stdout.readline()
-				if py3:
-					line = line.decode("utf-8")
-				if line is not None and line != '':
-					if args.verbose:
-						print(line)
-					if filter_log(line):
-						log.write(line)
-					if "apache2 -D FOREGROUND" in line:  # web server running?
-						break
-		except:
-			print("There was an error starting up docker.")
-			sys.exit(1)
+		while True:
+			line = compose.stdout.readline()
+			if py3:
+				line = line.decode("utf-8")
+			if line != '':
+				if args.verbose:
+					print(line)
+				if filter_log(line):
+					log.write(line)
+				if "apache2 -D FOREGROUND" in line:  # web server running?
+					break
+			elif compose_stderr:
+				print("exiting due to Docker errors:")
+				print("\n".join(compose_stderr))
+				sys.exit(1)
+
 
 	wait_for_apache()
+	print("")
 
 	def find_and_publish_machines():
 		machines = dict()
@@ -330,7 +334,7 @@ try:
 
 except KeyboardInterrupt:
 	print("")
-	print("Please wait while docker-compose is shutting down.")
+	print("Please wait while docker-compose is shutting down.", end='', flush=True)
 	terminate()
 finally:
 	if not args.verbose:
