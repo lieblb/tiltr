@@ -49,6 +49,10 @@ class AnswerProtocol:
 		self._files[full_name] = text
 		return full_name
 
-	def to_dict(self):
-		return dict(lines=self._entries, files=self._files)
+	@property
+	def lines(self):
+		return tuple(self._entries)
 
+	@property
+	def files(self):
+		return self._files

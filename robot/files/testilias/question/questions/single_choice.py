@@ -48,7 +48,8 @@ class SingleChoiceQuestion(Question):
 			i += 1
 
 	def __init__(self, driver, title, settings):
-		self.title = title
+		super().__init__(title)
+
 		self.choices = self._get_ui(driver)
 
 	def create_answer(self, driver, *args):

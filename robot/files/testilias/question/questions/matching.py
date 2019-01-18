@@ -73,7 +73,7 @@ class MatchingQuestion(Question):
 		return items
 
 	def __init__(self, driver, title, settings):
-		self.title = title
+		super().__init__(title)
 
 		self.multiplicity = self._get_ui_multiplicity(driver)
 		self.definitions = self._get_ui_items(driver, 'definitions')

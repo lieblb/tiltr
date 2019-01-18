@@ -19,7 +19,8 @@ MultipleChoiceItem = namedtuple('MultipleChoiceItem', ['checked_score', 'uncheck
 
 class MultipleChoiceQuestion(Question):
 	def __init__(self, driver, title, settings):
-		self.title = title
+		super().__init__(title)
+
 		self.choices = dict()
 
 		while True:

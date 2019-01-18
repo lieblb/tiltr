@@ -767,72 +767,40 @@ class ExamDriver:
 
 		interact(self.driver, lambda: answer.verify(self.context, after_crash))
 
-	def copy_protocol(self, result):
-		protocol = self.protocol[:]
+	def add_protocol_to_result(self, result):
 
-		for sequence_id, answer in self.answers.items():
-			encoded = answer.to_dict(self.context, "de")
-			question_title = encoded["title"]
+		lines = list(itertools.chain(
+			self.protocol, *[answer.protocol_lines for answer in self.answers.values()]))
 
-			for t, what in encoded["protocol"]["lines"]:
-				protocol.append((t, question_title, what))
+		lines.sort(key=lambda x: x[0])  # by time
 
-			for filename, what in encoded["protocol"]["files"].items():
-				result.attach_file(filename, what)
-
-		protocol.sort(key=lambda x: x[0])  # by time
-		protocol_lines = [
+		result.attach_protocol([
 			"%s [%s] %s" % (
 				datetime.datetime.fromtimestamp(t).strftime('%H:%M:%S'),
 				title,
-				what) for t, title, what in protocol]
+				what) for t, title, what in lines])
 
-		result.attach_protocol(protocol_lines)
+		for answer in self.answers.values():
+			for filename, what in answer.protocol_files.items():
+				result.attach_file(filename, what)
 
 	def get_expected_result(self, language):
-		if self.exam_configuration.score_cutting == ScoreCutting.QUESTION:
-			def clip_question_score(score):
-				return max(score, Decimal(0))
-		else:
-			def clip_question_score(score):
-				return score  # do not clip on question level
-
-		def format_score(score):
-			s = str(score)
-			if '.' in s:
-				s = s.rstrip('0')
-				if s.endswith('.'):
-					s = s.rstrip('.')
-			return s
-
 		result = Result(origin=Origin.recorded)
-
-		for sequence_id, answer in self.answers.items():
-			encoded = answer.to_dict(self.context, language)
-			question_title = encoded["title"]
-			key_prefix = ("question", question_title, "answer")
-
-			# format of full result key:
-			# ("question", title of question, "answer", key_1, ..., key_n)
-
-			for dimension_key, dimension_value in encoded["answers"].items():
-				result.add(Result.key(*key_prefix, dimension_key), dimension_value)
-
-			result.add(
-				("question", question_title, "score"),
-				format_score(clip_question_score(answer.current_score)))
 
 		expected_total_score = Decimal(0)
 		for answer in self.answers.values():
-			expected_total_score += clip_question_score(answer.current_score)
+			score = answer.add_to_result(
+				result, self.context, language, self.exam_configuration.clip_answer_score)
+
+			expected_total_score += score
 
 		# always clip final score on 0.
 		expected_total_score = max(expected_total_score, Decimal(0))
 
-		result.add(("exam", "score", "total"), format_score(expected_total_score))
-		result.add(("exam", "score", "gui"), format_score(expected_total_score))
+		result.add_as_formatted_score(("exam", "score", "total"), expected_total_score)
+		result.add_as_formatted_score(("exam", "score", "gui"), expected_total_score)
 
-		self.copy_protocol(result)
+		self.add_protocol_to_result(result)
 		result.attach_performance_measurements(self.dts)
 		return result
 
@@ -1121,7 +1089,8 @@ class TestDriver:
 			asskprimchoicegui=KPrimQuestion,
 			asstextquestiongui=LongTextQuestion,
 			assmatchingquestiongui=MatchingQuestion,
-			asspaintquestiongui=PaintQuestion
+			asspaintquestiongui=PaintQuestion,
+			asscodequestiongui=CodeQuestion
 		)
 
 		questions = dict()

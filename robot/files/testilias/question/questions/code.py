@@ -6,14 +6,12 @@
 #
 
 from decimal import *
-from selenium.common.exceptions import NoSuchElementException
 
 from .question import Question
 from testilias.data.exceptions import *
-from testilias.driver.utils import set_element_value
 
 
-class PaintQuestion(Question):
+class CodeQuestion(Question):
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
 
@@ -28,13 +26,11 @@ class PaintQuestion(Question):
 		pass
 
 	def get_random_answer(self, context):
-		return context.random.randint(1, 255), Decimal(0)
+		text = context.produce_text(self.length, context.long_text_random_chars)
+		return text, self.compute_score(text, context)
 
 	def readjust_scores(self, driver, random, report):
 		pass
 
 	def compute_score(self, answers, context):
 		return Decimal(0)
-
-	def has_xls_score(self):
-		return False

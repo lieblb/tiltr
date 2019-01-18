@@ -73,12 +73,9 @@ class SelectAnswerGap(ClozeAnswerGap):
 
 class ClozeAnswer(Answer):
 	def __init__(self, driver, question, protocol):
+		super().__init__(driver, question, protocol)
 		assert question.__class__.__name__ == "ClozeQuestion"
-		self.driver = driver
-		self.question = question
-		self.current_answers = None
-		self.current_score = None
-		self.protocol = protocol
+		self.current_answer = None
 
 	def randomize(self, context):
 		answers, valid, score = self.question.get_random_answer(context)
@@ -124,7 +121,7 @@ class ClozeAnswer(Answer):
 				after_crash=after_crash)
 			gap.add_verify_coverage(context.coverage, recorded_value)
 
-	def to_dict(self, context, language):
+	def _get_answer_dimensions(self, context, language):
 		answers = dict()
 		for gap in self.question.gaps.values():
 			value = self.current_answers[gap.index]
@@ -137,7 +134,4 @@ class ClozeAnswer(Answer):
 				value = context.implicit_text_to_number_xls(value)
 
 			answers[gap.get_export_name(language)] = value
-		return dict(
-			title=self.question.title,
-			answers=answers,
-			protocol=self.protocol.to_dict())
+		return answers

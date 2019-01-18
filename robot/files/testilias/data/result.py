@@ -46,6 +46,7 @@ class Result:
 			data = json.loads(from_json)
 			self.origin = Origin[data["origin"]]
 			self.properties = dict((tuple(key), value) for key, value in data["properties"])
+			self.types = dict((tuple(key), value) for key, value in data["types"])
 			self.protocol = data["protocol"]
 			self.files = data["files"]
 			self.performance = data["performance"]
@@ -54,6 +55,7 @@ class Result:
 		else:
 			self.origin = kwargs.get('origin', 'unknown')
 			self.properties = dict()
+			self.types = dict()
 			self.protocol = []
 			self.files = kwargs.get('files', dict())
 			self.performance = []
@@ -64,6 +66,7 @@ class Result:
 		return json.dumps(dict(
 			origin=self.origin.name,
 			properties=list(self.properties.items()),
+			types=list(self.types.items()),
 			protocol=self.protocol,
 			files=self.files,
 			performance=self.performance,
@@ -73,17 +76,27 @@ class Result:
 	def get_origin(self):
 		return self.origin
 
-	def add(self, key, value):
+	def add(self, key, value, value_type=None):
 		assert key not in self.properties
 		if isinstance(value, Decimal):
 			value = str(value)  # make it safe for JSON
 		self.properties[key] = value
+		if value_type:
+			self.types[key] = value_type
 
 	def update(self, key, value):
 		assert key in self.properties
 		if isinstance(value, Decimal):
 			value = str(value)  # make it safe for JSON
 		self.properties[key] = value
+
+	def add_as_formatted_score(self, key, score):
+		s = str(score)
+		if '.' in s:
+			s = s.rstrip('0')
+			if s.endswith('.'):
+				s = s.rstrip('.')
+		self.add(key, s)
 
 	@staticmethod
 	def from_error(origin, domain, err, files=None):
@@ -134,8 +147,19 @@ class Result:
 			value_self = "%s" % self_properties.get(k, None)
 			value_other = "%s" % other_properties.get(k, None)
 
+			type_self = self.types.get(k, None)
+			type_other = self.types.get(k, None)
+			types = tuple(set(t for t in (type_self, type_other) if t is not None))
+
 			value_self = workarounds.normalize(value_self)
 			value_other = workarounds.normalize(value_other)
+
+			if types == ('json',):
+				# normalize json formatting.
+				value_self = json.dumps(json.loads(value_self))
+				value_other = json.dumps(json.loads(value_other))
+			elif len(types) > 0:
+				raise RuntimeError("incompatible property data types")
 
 			if value_self == value_other:
 				status = "OK"

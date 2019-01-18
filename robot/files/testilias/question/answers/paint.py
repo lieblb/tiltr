@@ -16,12 +16,9 @@ from decimal import *
 
 class PaintAnswer(Answer):
 	def __init__(self, driver, question, protocol):
+		super().__init__(driver, question, protocol)
 		assert question.__class__.__name__ == "PaintQuestion"
-		self.driver = driver
-		self.question = question
 		self.current_answer = None
-		self.current_score = Decimal(0)
-		self.protocol = protocol
 
 	def randomize(self, context):
 		self._set_answer(*self.question.get_random_answer(context))
@@ -60,7 +57,7 @@ class PaintAnswer(Answer):
 		chain.perform()
 
 		self.current_answer = answer
-		self.current_score = Decimal(0)
+		self.current_score = score
 
 	def verify(self, context, after_crash=False):
 		element = self.driver.find_element_by_id('paintCanvas')
@@ -110,8 +107,5 @@ class PaintAnswer(Answer):
 
 		self.protocol.verify('canvas', bin(self.current_answer), bin(actual_answer), after_crash=after_crash)
 
-	def to_dict(self, context, language):
-		return dict(
-			title=self.question.title,
-			answers=dict(),
-			protocol=self.protocol.to_dict())
+	def _get_answer_dimensions(self, context, language):
+		return dict()

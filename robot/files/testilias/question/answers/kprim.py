@@ -13,12 +13,9 @@ from .answer import Answer, Validness
 
 class KPrimAnswer(Answer):
 	def __init__(self, driver, question, protocol):
+		super().__init__(driver, question, protocol)
 		assert question.__class__.__name__ == "KPrimQuestion"
-		self.driver = driver
-		self.question = question
 		self.current_answers = None
-		self.current_score = None
-		self.protocol = protocol
 		self.n_rows = 4
 
 	def randomize(self, context):
@@ -65,8 +62,5 @@ class KPrimAnswer(Answer):
 		context.coverage.case_occurred(
 			self.question, "verify", json.dumps(self._get_binary_answers()))
 
-	def to_dict(self, context, language):
-		return dict(
-			title=self.question.title,
-			answers=self._get_binary_answers(),
-			protocol=self.protocol.to_dict())
+	def _get_answer_dimensions(self, context, language):
+		return self._get_binary_answers()

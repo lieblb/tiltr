@@ -270,7 +270,8 @@ def parse_gap_options(driver, gap_index):
 
 class ClozeQuestion(Question):
 	def __init__(self, driver, title, settings):
-		self.title = title
+		super().__init__(title)
+
 		self.gaps = dict()
 
 		self.identical_scoring = driver.find_element_by_name("identical_scoring").is_selected()

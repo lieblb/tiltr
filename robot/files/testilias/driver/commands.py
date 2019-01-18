@@ -183,7 +183,7 @@ class TakeExamCommand:
 				except TestILIASException as e:
 					traceback.print_exc()
 					r = self._create_result_with_details(driver, master_report, e, traceback.format_exc())
-					exam_driver.copy_protocol(r)
+					exam_driver.add_protocol_to_result(r)
 					return r
 
 				exam_driver.close()

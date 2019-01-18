@@ -10,12 +10,9 @@ from .answer import Answer, Validness, Choice
 
 class SingleChoiceAnswer(Answer):
 	def __init__(self, driver, question, protocol):
+		super().__init__(driver, question, protocol)
 		assert question.__class__.__name__ == "SingleChoiceQuestion"
-		self.driver = driver
-		self.question = question
 		self.current_answer = None
-		self.current_score = None
-		self.protocol = protocol
 
 	def randomize(self, context):
 		self._set_answer(*self.question.get_random_answer(context))
@@ -53,11 +50,7 @@ class SingleChoiceAnswer(Answer):
 			self.protocol.verify(c.label, expected, c.checked, after_crash=after_crash)
 		context.coverage.case_occurred(self.question, "verify", self.current_answer)
 
-	def to_dict(self, context, language):
-		answers = dict(
+	def _get_answer_dimensions(self, context, language):
+		return dict(
 			(choice, 1 if choice == self.current_answer else 0)
 			for choice in self.question.choices.keys())
-		return dict(
-			title=self.question.title,
-			answers=answers,
-			protocol=self.protocol.to_dict())

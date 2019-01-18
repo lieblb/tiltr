@@ -12,3 +12,4 @@ from .multiple_choice import MultipleChoiceAnswer
 from .single_choice import SingleChoiceAnswer
 from .matching import MatchingAnswer
 from .paint import PaintAnswer
+from .code import CodeAnswer

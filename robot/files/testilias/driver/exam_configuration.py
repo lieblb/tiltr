@@ -1,4 +1,5 @@
 from enum import Enum
+from decimal import *
 
 
 class CountSystem(Enum):
@@ -39,3 +40,9 @@ class ExamConfiguration:
 
 	def set_pass_scoring(self, value):
 		self.pass_scoring = PassScoring(value)
+
+	def clip_answer_score(self, score):
+		if self.score_cutting == ScoreCutting.QUESTION:
+			return max(score, Decimal(0))
+		else:
+			return score  # do not clip on question level

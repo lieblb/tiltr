@@ -14,7 +14,7 @@ from .question import Question
 
 class KPrimQuestion(Question):
 	def __init__(self, driver, title, settings):
-		self.title = title
+		super().__init__(title)
 
 		self.halfpoints = driver.find_element_by_name("score_partsol_enabled").is_selected()
 		self.score = Decimal(driver.find_element_by_name("points").get_attribute("value"))

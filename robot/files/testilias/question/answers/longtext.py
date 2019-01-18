@@ -18,12 +18,9 @@ class AbstractLongTextAnswer(Answer):
 	_export_names = dict(de="Ergebnis", en="Result")
 
 	def __init__(self, driver, question, protocol):
+		super().__init__(driver, question, protocol)
 		assert question.__class__.__name__ == "LongTextQuestion"
-		self.driver = driver
-		self.question = question
 		self.current_answer = None
-		self.current_score = None
-		self.protocol = protocol
 
 	def randomize(self, context):
 		answer, score = self.question.get_random_answer(context)
@@ -51,13 +48,10 @@ class AbstractLongTextAnswer(Answer):
 
 		self.question.add_verify_coverage(context.coverage, dict(Ergebnis=text))
 
-	def to_dict(self, context, language):
+	def _get_answer_dimensions(self, context, language):
 		export_name = AbstractLongTextAnswer._export_names[language]
 		pair = (export_name, self._encoded_current_answer(context))
-		return dict(
-			title=self.question.title,
-			answers=dict((pair,)),
-			protocol=self.protocol.to_dict())
+		return dict((pair,))
 
 
 class LongTextAnswerPlainHTML(AbstractLongTextAnswer):

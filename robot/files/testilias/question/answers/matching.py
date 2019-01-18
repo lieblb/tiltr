@@ -23,12 +23,9 @@ def _scrolling_drag_and_drop(chain, source, target):
 
 class MatchingAnswer(Answer):
 	def __init__(self, driver, question, protocol):
+		super().__init__(driver, question, protocol)
 		assert question.__class__.__name__ == "MatchingQuestion"
-		self.driver = driver
-		self.question = question
 		self.current_answer = None
-		self.current_score = None
-		self.protocol = protocol
 		self.debug = False
 
 	def randomize(self, context):
@@ -135,7 +132,7 @@ class MatchingAnswer(Answer):
 				sorted(self.question.get_term_labels(parsed.get(definition_id, set()))),
 				after_crash=after_crash)
 
-	def to_dict(self, context, language):
+	def _get_answer_dimensions(self, context, language):
 		answers = dict()
 
 		for definition_id, term_ids in self.current_answer.items():
@@ -143,7 +140,4 @@ class MatchingAnswer(Answer):
 			for term in self.question.get_term_labels(term_ids):
 				answers[(definition, term)] = True
 
-		return dict(
-			title=self.question.title,
-			answers=answers,
-			protocol=self.protocol.to_dict())
+		return answers

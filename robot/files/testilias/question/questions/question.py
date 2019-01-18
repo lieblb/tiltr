@@ -7,8 +7,8 @@
 
 
 class Question:
-	def __init__(self):
-		raise NotImplementedError()
+	def __init__(self, title):
+		self.title = title
 
 	def create_answer(self, driver, *args):
 		raise NotImplementedError()
