@@ -10,7 +10,6 @@ import time
 import itertools
 from contextlib import contextmanager
 
-from splinter import Browser
 import selenium
 
 from selenium.webdriver.support.ui import WebDriverWait
@@ -233,42 +232,98 @@ def try_submit(driver, css, f, allow_reload=True, allow_empty=True, n_tries=7, m
 	return True
 
 
-def create_browser(browser='firefox', resolution=None, **kwargs):
-	args = dict(headless=True)
+class BrowserContext:
+	def __init__(self, driver, is_singleton):
+		self.driver = driver
+		self._is_singleton = is_singleton
 
-	if browser == 'firefox':
-		for k in ('log_path', 'wait_time'):
-			if k in kwargs:
-				args[k] = kwargs[k]
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		if not self._is_singleton:
+			self.driver.close()
+
+
+class DriverFactory:
+	# save chrome driver refs as singletons. due to a bug in the chrome
+	# driver, opening and closing chrome will leads to thousands of chrome
+	# zombie processes that eventually kill the machine.
+	_singletons = dict()
+
+	@staticmethod
+	def create(browser_name, resolution, **kwargs):
+		if browser_name in DriverFactory._singletons:
+			driver = DriverFactory._singletons[browser_name]
+		else:
+			create_driver = dict(
+				firefox=DriverFactory._create_firefox,
+				chrome=DriverFactory._create_chrome
+			)
+
+			if browser_name not in create_driver:
+				raise RuntimeError("unsupported browser %s" % browser_name)
+
+			create = create_driver[browser_name]
+			driver = create(resolution=resolution, **kwargs)
+
+			if browser_name == 'chrome':
+				DriverFactory._singletons[browser_name] = driver
+
+		return BrowserContext(driver, browser_name in DriverFactory._singletons)
+
+	@staticmethod
+	def _configure_driver(driver, resolution):
+		try:
+			# we try to avoid the need to scroll. a large size can cause memory issues.
+			w = 1024
+			h = 1024
+
+			if resolution is not None and isinstance(resolution, str):
+				w, h = resolution.split('x')
+				w = int(w)
+				h = int(h)
+
+			driver.set_window_size(w, h)
+
+			driver.set_page_load_timeout(30)
+		except:
+			driver.close()
+			raise
+
+		return driver
+
+	@staticmethod
+	def _create_firefox(resolution, **kwargs):
+		options = selenium.webdriver.firefox.options.Options()
+
+		options.headless = True
 
 		# moz:webdriverClick needed for file uploads to work.
-		args['capabilities'] = {"moz:webdriverClick": False}
-	elif browser == 'chrome':
+		options.set_capability('moz:webdriverClick', False)
+
+		driver = selenium.webdriver.Firefox(
+			options=options,
+			log_path=kwargs.get('log_path'))
+		return DriverFactory._configure_driver(driver, resolution)
+
+	@staticmethod
+	def _create_chrome(resolution, **kwargs):
 		options = selenium.webdriver.chrome.options.Options()
-		options.add_argument('headless')
+
+		options.headless = True
+
 		options.add_argument('start-maximized')
 		options.add_argument('disable-infobars')
 		options.add_argument('disable-extensions')
 		options.add_argument('disable-dev-shm-usage')
 		options.add_argument('no-sandbox')
 		options.add_argument('disable-setuid-sandbox')
-		args['chrome_options'] = options
-	else:
-		raise Exception("unsupported browser %s" % browser)
+		options.add_argument('dns-prefetch-disable')
 
-	browser = Browser(browser, **args)
+		driver = selenium.webdriver.Chrome(options=options)
+		return DriverFactory._configure_driver(driver, resolution)
 
-	# we try to avoid the need to scroll. a large size can cause memory issues.
-	w = 1024
-	h = 1024
 
-	if resolution is not None and isinstance(resolution, str):
-		w, h = resolution.split('x')
-		w = int(w)
-		h = int(h)
-
-	browser.driver.set_window_size(w, h)
-
-	browser.driver.set_page_load_timeout(30)
-
-	return browser
+def create_browser(browser='firefox', resolution=None, **kwargs):
+	return DriverFactory.create(browser, resolution, **kwargs)

@@ -596,6 +596,7 @@ class Batch(threading.Thread):
 
 		self.batch_id = datetime.datetime.today().strftime('%Y%m%d%H%M%S-') + str(uuid.uuid4())
 		self._is_done = False
+		self._success = None
 
 		self.debug = False
 		self.ilias_url = None
@@ -642,6 +643,9 @@ class Batch(threading.Thread):
 	def is_done(self):
 		return self._is_done
 
+	def get_success(self):
+		return self._success
+
 	def report(self, origin, message):
 		if self.debug:  # don't dump to console, this only makes Docker logs big over time.
 			self.print_mutex.acquire()
@@ -687,6 +691,7 @@ class Batch(threading.Thread):
 
 	def report_done(self, success):
 		self._is_done = True
+		self._success = success
 
 		self.flush()
 

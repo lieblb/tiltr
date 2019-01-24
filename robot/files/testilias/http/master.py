@@ -15,11 +15,14 @@ import time
 import humanize
 import shutil
 import traceback
+import sys
+import selenium
 
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
 
+from selenium.common.exceptions import WebDriverException
 from .discovery import connect_machines
 from .utils import clear_tmp
 from .args import parse_args
@@ -38,12 +41,34 @@ class Looper(threading.Thread):
 		self.workarounds = workarounds
 		self.wait_time = wait_time
 		self.done = False
+		self.consecutive_fails = 0
+
+	def _check_success(self):
+		success = self.state.batch.get_success()
+		if success[0] == 'OK':
+			self.consecutive_fails = 0
+		else:
+			self.consecutive_fails += 1
+
+		if self.consecutive_fails >= 5:
+			# stop looping after too many consecutive fails.
+			print("too many consecutive fails")
+			self.state.is_looping = False
+
+			# usually, this happens when chrome/selenium drivers continue to
+			# crash which indicates that something is wrong with our Docker
+			# container. just shut down in this case.
+			sys.exit(1)
 
 	def run(self):
 		while self.state.is_looping:
 			try:
 				if self.state.batch and self.state.batch.is_done():
+					self._check_success()
 					self.state.batch = None
+
+				if not self.state.is_looping:
+					break
 
 				if self.state.batch is None:
 					self.state.start_batch(self.test, self.settings, self.workarounds, self.wait_time)
@@ -71,22 +96,26 @@ class GlobalState:
 		return self.ilias_url
 
 	def _fetch_ilias_version(self):
-		from splinter import Browser
-		from selenium.common.exceptions import WebDriverException
-
 		try:
 			log_path = "tmp/geckodriver.master.log"
 			open(log_path, 'w').close()  # empty log file
-			browser = Browser(headless=True, log_path=log_path, wait_time=15)
-			browser.visit(self.ilias_url)
 
-			# if this is the first startup of ILIAS, it can take quite some time, until it's available.
-			bdo = browser.find_by_css("footer bdo")
-			if bdo and len(bdo) == 1:
-				print("found ILIAS version text '%s'" % bdo.text)
-				s = re.split("\(|\)", bdo.text)
-				if len(s) >= 2:
-					return s[1]
+			options = selenium.webdriver.firefox.options.Options()
+			options.headless = True
+
+			driver = selenium.webdriver.Firefox(
+				options=options, log_path=log_path)
+			try:
+				driver.get(self.ilias_url)
+
+				bdo = driver.find_element_by_css_selector("footer bdo")
+				if bdo:
+					print("found ILIAS version text '%s'" % bdo.text)
+					s = re.split(r"\(|\)", bdo.text)
+					if len(s) >= 2:
+						return s[1]
+			finally:
+				driver.close()
 		except WebDriverException as e:
 			print("could not fetch ILIAS version", e)
 			return None
@@ -101,7 +130,7 @@ class GlobalState:
 	def get_ilias_version_tuple(self):
 		version = self.get_ilias_version()
 		if version:
-			m = re.search("^v(\d+\.\d+\.\d+)", version)
+			m = re.search(r"^v(\d+\.\d+\.\d+)", version)
 			if m:
 				return tuple(int(x) for x in m[1].split("."))
 		raise Exception("could not retrieve ILIAS version")
