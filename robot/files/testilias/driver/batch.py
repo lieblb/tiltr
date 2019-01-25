@@ -36,9 +36,11 @@ from testilias.question.coverage import Coverage
 from testilias.question import *  # needed for pickling
 from testilias.driver.exam_configuration import * # needed for pickling
 
+import pandora
+
 from .commands import TakeExamCommand
 from .drivers import Login, UsersBackend, UsersFactory, TestDriver, Test, verify_admin_settings
-from .utils import wait_for_page_load, create_browser
+from .utils import wait_for_page_load
 
 
 monitor_mutex = Lock()
@@ -160,7 +162,7 @@ def in_master(batch, protocol):
 		wait_time=batch.wait_time,
 		resolution=batch.settings.resolution)
 
-	with create_browser(**args) as browser:
+	with pandora.Browser(**args) as browser:
 		batch.report(
 			'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
 

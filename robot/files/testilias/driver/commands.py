@@ -150,7 +150,9 @@ class TakeExamCommand:
 
 		return Result.from_error(Origin.recorded, e.get_error_domain(), error, files)
 
-	def run(self, driver, master_report):
+	def run(self, browser, master_report):
+		driver = browser.driver
+
 		machine_info = "running test on machine #%s (%s)." % (self.machine_index, self.machine)
 		master_report(machine_info)
 

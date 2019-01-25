@@ -14,9 +14,10 @@ import time
 import tornado.ioloop
 import tornado.web
 
+import pandora
+
 from ..driver.commands import TakeExamCommand
 from .utils import clear_tmp
-from ..driver.utils import create_browser
 from .args import parse_args
 
 
@@ -28,7 +29,7 @@ class GlobalState:
 	def create_browser(machine_index, wait_time, browser, resolution):
 		log_path = "tmp/geckodriver.machine_%d.log" % machine_index
 		open(log_path, 'w').close()  # empty log file
-		browser = create_browser(
+		browser = pandora.Browser(
 			browser=browser,
 			log_path=log_path,
 			wait_time=wait_time,
@@ -75,7 +76,7 @@ class Runner(threading.Thread):
 
 		try:
 			report("machine browser has wait time %d." % self.wait_time)
-			expected_result = self.command.run(self.browser.driver, report)
+			expected_result = self.command.run(self.browser, report)
 			if expected_result is None:
 				self.messages.append(["ERROR", "no result obtained"])
 			else:
