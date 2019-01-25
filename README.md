@@ -1,11 +1,11 @@
 
 # TestILIAS
 
-TestILIAS is a software testing tool for verifying the correctness of essential functions of the Test & Assessment module of ILIAS 5.
+TestILIAS is an automatic software testing / quality assurance tool for verifying various essential functions of the Test & Assessment module of ILIAS 5:
 
 <img src="https://github.com/lieblb/testilias/blob/master/docs/sample-video.gif?raw=true">
 
-TestILIAS checks that:
+Specifically, TestILIAS checks that:
 
 * answers that are given in a test are saved reliably during the test (i.e. saved answers do not change upon revisiting the questions).
 * answers are reliably saved and exported reliably  after the test (i.e. the xls export representation exactly mirrors the answers given during the test).
