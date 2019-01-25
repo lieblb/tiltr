@@ -1,9 +1,9 @@
 
 # TestILIAS
 
-TestILIAS is an open source, portable, scalable software testing kit for verifying the correctness of essential functions of the Test & Assessment module of ILIAS 5.
+TestILIAS is a software testing tool for verifying the correctness of essential functions of the Test & Assessment module of ILIAS 5.
 
-It's self-contained, rather easy to install on a single local machine (tested so far on Linux and macOS) or a server, and allows to run tests using a configurable number of parallel test users.
+<img src="https://github.com/lieblb/testilias/blob/master/docs/sample-video.gif?raw=true">
 
 TestILIAS checks that:
 
@@ -22,6 +22,8 @@ TestILIAS works by importing and analyzing a given test (i.e. the test contents 
 * [Paint Questions](https://github.com/kyro46/assPaintQuestion)
 
 TestILIAS allows to work around a number of known problems in order to perform test without already known fails. It also supports running tests in a loop mode so you can keep running randomized tests for a longer time.
+
+To get an idea what data is generated for a test run, look at <a href="docs/sample-protocol.zip">a sample protocol and the accompanying XLS export file</a>.
 
 # Getting Started
 
