@@ -8,9 +8,11 @@
 from urllib.parse import urlparse, parse_qs
 import time
 import itertools
+import os
 from contextlib import contextmanager
 
 import selenium
+import splinter
 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
@@ -232,29 +234,29 @@ def try_submit(driver, css, f, allow_reload=True, allow_empty=True, n_tries=7, m
 	return True
 
 
-class BrowserContext:
-	def __init__(self, driver, is_singleton):
+class SingletonBrowserContext:
+	# keep this driver around and never quit. used for chrome:
+	# due to a bug in the chrome driver, opening and closing chrome
+	# eventually leads to thousands of chrome zombie processes that
+	# kill the whole machine (lack of resources/memory).
+
+	def __init__(self, driver):
 		self.driver = driver
-		self._is_singleton = is_singleton
 
 	def __enter__(self):
 		return self
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
-		if not self._is_singleton:
-			self.driver.close()
+		pass
 
 
 class DriverFactory:
-	# save chrome driver refs as singletons. due to a bug in the chrome
-	# driver, opening and closing chrome will leads to thousands of chrome
-	# zombie processes that eventually kill the machine.
 	_singletons = dict()
 
 	@staticmethod
 	def create(browser_name, resolution, **kwargs):
 		if browser_name in DriverFactory._singletons:
-			driver = DriverFactory._singletons[browser_name]
+			return DriverFactory._singletons[browser_name]
 		else:
 			create_driver = dict(
 				firefox=DriverFactory._create_firefox,
@@ -265,12 +267,14 @@ class DriverFactory:
 				raise RuntimeError("unsupported browser %s" % browser_name)
 
 			create = create_driver[browser_name]
-			driver = create(resolution=resolution, **kwargs)
+			browser = create(resolution=resolution, **kwargs)
 
-			if browser_name == 'chrome':
-				DriverFactory._singletons[browser_name] = driver
+			DriverFactory._configure_driver(browser.driver, resolution)
 
-		return BrowserContext(driver, browser_name in DriverFactory._singletons)
+			if browser is SingletonBrowserContext:
+				DriverFactory._singletons[browser_name] = browser
+
+			return browser
 
 	@staticmethod
 	def _configure_driver(driver, resolution):
@@ -288,24 +292,30 @@ class DriverFactory:
 
 			driver.set_page_load_timeout(30)
 		except:
-			driver.close()
+			driver.quit()
 			raise
 
 		return driver
 
 	@staticmethod
 	def _create_firefox(resolution, **kwargs):
-		options = selenium.webdriver.firefox.options.Options()
+		# use splinter to create the firefox driver - this yields
+		# much more reliable drivers - the pure selenium driver
+		# will crash after 5 to 10 iterations of start and quit.
 
-		options.headless = True
+		# for details, see
+		# https://github.com/cobrateam/splinter/blob/master/splinter/driver/webdriver/firefox.py
+
+		args = dict(headless=True)
+
+		for k in ('log_path', 'wait_time'):
+			if k in kwargs:
+				args[k] = kwargs[k]
 
 		# moz:webdriverClick needed for file uploads to work.
-		options.set_capability('moz:webdriverClick', False)
+		args['capabilities'] = {"moz:webdriverClick": False}
 
-		driver = selenium.webdriver.Firefox(
-			options=options,
-			log_path=kwargs.get('log_path'))
-		return DriverFactory._configure_driver(driver, resolution)
+		return splinter.Browser('firefox', **args)
 
 	@staticmethod
 	def _create_chrome(resolution, **kwargs):
@@ -321,8 +331,7 @@ class DriverFactory:
 		options.add_argument('disable-setuid-sandbox')
 		options.add_argument('dns-prefetch-disable')
 
-		driver = selenium.webdriver.Chrome(options=options)
-		return DriverFactory._configure_driver(driver, resolution)
+		return SingletonBrowserContext(selenium.webdriver.Chrome(options=options))
 
 
 def create_browser(browser='firefox', resolution=None, **kwargs):
