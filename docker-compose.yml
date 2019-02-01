@@ -25,9 +25,9 @@ services:
   master:
     build: robot
     ports:
-      - "${TESTILIAS_PORT}:80"
+      - "${TESTILIAS_PORT}:8080"
     expose:
-      - "80"
+      - "8080"
     volumes:
       - ./robot/files:/files
     working_dir: /files
@@ -49,6 +49,34 @@ services:
       - PYTHONIOENCODING='utf8'
     networks:
       - net
+
+  selenium-chrome:
+    image: selenium/standalone-chrome:3.141.59-europium
+    networks:
+    - net
+    expose:
+    - "4444"
+    shm_size: 2G
+    restart: always
+    environment:
+      JAVA_OPTS: "-Dselenium.LOGGER.level=WARNING"
+    volumes:
+      - /dev/shm:/dev/shm
+      - /tmp:/tmp
+
+  selenium-firefox:
+    image: selenium/standalone-firefox:3.141.59-europium
+    networks:
+    - net
+    expose:
+    - "4444"
+    shm_size: 2G
+    restart: always
+    environment:
+      JAVA_OPTS: "-Dselenium.LOGGER.level=WARNING"
+    volumes:
+      - /dev/shm:/dev/shm
+      - /tmp:/tmp
 
 networks:
   net:

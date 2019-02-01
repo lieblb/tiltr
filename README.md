@@ -128,6 +128,10 @@ This indicates a bug in ILIAS. Some data was not retrieved in the same state as 
 
 Commands like `docker ps` and `docker logs testilias_master_1` are your friend.
 
+If your tests are fine at the beginning, but the machine gets slower or your machine hangs after a while, it's probably
+a problem with chrome. Use `docker stats` and look inside the containers for zombie `chrome` instances. If this is the
+case, there's no easy fix.
+
 ## Recreating the docker-compose configuration
 
 Strange things happen with docker sometimes and you want to completely recreate the complete docker-compose setup. Here's one way to do this (note that this deletes all dangling volumes of all docker containers, so be very careful if you're not a dedicated machine):

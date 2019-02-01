@@ -48,31 +48,45 @@ class MatchingAnswer(Answer):
 				target_element.find_element_by_css_selector('.ilMatchingQuestionDefinition'),
 				self.question.get_definition_label(definition_id))
 
-			for term_id in term_ids:
-				if self.debug:
-					print("set_answer: %s [%s] -> %s [%s]" % (
-						self.question.get_term_label(term_id), term_id,
-						self.question.get_definition_label(definition_id), definition_id))
+			term_ids = set(list(term_ids))  # copy
 
-				source_element = source_area.find_element_by_css_selector(
-					'.draggable[data-type="term"][data-id="%s"]' % term_id)
+			n_retries = 0
+			while term_ids:
+				# sometimes drag and drop does not work on the first try. retry until all terms
+				# have been dragged and dropped onto their target.
 
-				_check_label(
-					'term',
-					source_element,
-					self.question.get_term_label(term_id))
+				n_retries += 1
+				if n_retries > 10:
+					raise InteractionException("drag and drop for matching question failed")
 
-				chain = ActionChains(self.driver)
-				chain.move_to_element(source_element)
-				chain.drag_and_drop(source_element, target_element)
-				chain.pause(1)
-				chain.perform()
+				for term_id in term_ids:
+					if self.debug:
+						print("set_answer: %s [%s] -> %s [%s]" % (
+							self.question.get_term_label(term_id), term_id,
+							self.question.get_definition_label(definition_id), definition_id))
 
-				if self.debug:
-					print(
-						"drag_and_drop:",
-						source_element.get_attribute('id'),
-						target_element.get_attribute('id'))
+					source_element = source_area.find_element_by_css_selector(
+						'.draggable[data-type="term"][data-id="%s"]' % term_id)
+
+					_check_label(
+						'term',
+						source_element,
+						self.question.get_term_label(term_id))
+
+					chain = ActionChains(self.driver)
+					chain.move_to_element(source_element)
+					chain.drag_and_drop(source_element, target_element)
+					chain.perform()
+
+					if self.debug:
+						print(
+							"drag_and_drop:",
+							source_element.get_attribute('id'),
+							target_element.get_attribute('id'))
+
+				for term in target_element.find_elements_by_css_selector('.draggable[data-type="term"]'):
+					term_ids.remove(term.get_attribute('data-id'))
+
 
 		if self.debug:
 			print("verify...")

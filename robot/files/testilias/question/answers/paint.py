@@ -8,10 +8,10 @@
 from .answer import Answer, Validness
 
 import io
+import time
 
 from selenium.webdriver.common.action_chains import ActionChains
 from PIL import Image
-from decimal import *
 
 
 class PaintAnswer(Answer):
@@ -25,41 +25,62 @@ class PaintAnswer(Answer):
 		return Validness.VALID
 
 	def _set_answer(self, answer, score):
-		clear = self.driver.find_element_by_name('clear')
-		clear.click()
+		# driver.capabilities['browserName'] == 'chrome'
 
-		# note that the following alert is not a standard feature, but currently
-		# only exists in https://github.com/lieblb/assPaintQuestion/tree/ur-tweaks
-		self.driver.switch_to.alert.accept()
+		for i in range(3):
+			clear = self.driver.find_element_by_name('clear')
+			clear.click()
 
-		canvas = self.driver.find_element_by_css_selector('#paintCanvas')
-		d = 5
+			# note that the following alert is not a standard feature, but currently
+			# only exists in https://github.com/lieblb/assPaintQuestion/tree/ur-tweaks
+			self.driver.switch_to.alert.accept()
 
-		x = d
-		y = d
+			canvas = self.driver.find_element_by_css_selector('#paintCanvas')
+			d = 5
 
-		chain = ActionChains(self.driver)
-		chain.move_to_element_with_offset(canvas, x, y)
-		chain.click_and_hold()
+			x = d
+			y = d
 
-		i = 0
-		while (answer >> i) > 0:
-			if ((answer >> i) & 1) > 0:
-				dx, dy = (d, 0)
-			else:
-				dx, dy = (0, d)
+			chain = None
+			split_chain = False
 
-			chain.move_by_offset(dx, dy)
+			i = 0
+			while (answer >> i) > 0:
+				if ((answer >> i) & 1) > 0:
+					dx, dy = (d, 0)
+				else:
+					dx, dy = (0, d)
 
-			i += 1
+				if chain is None:
+					chain = ActionChains(self.driver)
+					chain.move_to_element_with_offset(canvas, x, y)
+					chain.click_and_hold()
 
-		chain.release()
-		chain.perform()
+				chain.move_by_offset(dx, dy)
+
+				if split_chain:
+					chain.release()
+					chain.perform()
+					chain = None
+
+					x += dx
+					y += dy
+
+				i += 1
+
+			if chain:
+				chain.release()
+				chain.perform()
+
+			if self._parse_answer() == answer:
+				break
+
+			time.sleep(1)  # retry
 
 		self.current_answer = answer
 		self.current_score = score
 
-	def verify(self, context, after_crash=False):
+	def _parse_answer(self):
 		element = self.driver.find_element_by_id('paintCanvas')
 		location = element.location
 		size = element.size
@@ -105,7 +126,13 @@ class PaintAnswer(Answer):
 				break
 			n += 1
 
-		self.protocol.verify('canvas', bin(self.current_answer), bin(actual_answer), after_crash=after_crash)
+		return actual_answer
+
+	def verify(self, context, after_crash=False):
+		actual_answer = self._parse_answer()
+
+		self.protocol.verify(
+			'canvas', bin(self.current_answer), bin(actual_answer), after_crash=after_crash)
 
 	def _get_answer_dimensions(self, context, language):
 		return dict()

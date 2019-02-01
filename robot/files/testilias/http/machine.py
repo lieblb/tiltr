@@ -10,6 +10,7 @@ import traceback
 import sys
 import json
 import time
+import os
 
 import tornado.ioloop
 import tornado.web
@@ -25,67 +26,87 @@ class GlobalState:
 	def __init__(self):
 		self.runner = None
 
-	@staticmethod
-	def create_browser(machine_index, wait_time, browser, resolution):
-		log_path = "tmp/geckodriver.machine_%d.log" % machine_index
-		open(log_path, 'w').close()  # empty log file
-		browser = pandora.Browser(
-			browser=browser,
-			log_path=log_path,
-			wait_time=wait_time,
-			resolution=resolution)
-		return browser
-
 
 class Runner(threading.Thread):
 	def __init__(self, state, batch, command):
 		threading.Thread.__init__(self)
 		clear_tmp()
 
-		self.browser = state.create_browser(
-			command.machine_index,
-			command.wait_time,
-			command.settings.browser,
-			command.settings.resolution)
+		self.state = state
 		self.wait_time = command.wait_time
 		self.batch = batch
 		self.command = command
 
+		self.messages = []
 		self.screenshot = None
 		self.screenshot_valid_time = time.time()
 		self.screenshot_refresh_time = float(command.settings.screenshot_refresh_time)
-
-		self.messages = []
 
 	def get_batch(self):
 		return self.batch
 
 	def run(self):
-		def report(*args):
-			if time.time() > self.screenshot_valid_time:
-				try:
-					self.screenshot = self.browser.driver.get_screenshot_as_base64()
-					self.screenshot_valid_time = time.time() + self.screenshot_refresh_time
-				except:
-					pass # screenshot failed
+		# isolate the selenium driver from our main process through a fork. this fixes severe problems with
+		# chrome zomie processes piling up inside the selenium chrome docker container.
 
-			self.messages.append(["ECHO", " ".join("%s" % arg for arg in args)])
+		pipein, pipeout = os.pipe()
+		if os.fork() == 0:
 
-		report('running on user agent',
-			self.browser.driver.execute_script('return navigator.userAgent'))
+			os.close(pipein)
 
-		try:
-			report("machine browser has wait time %d." % self.wait_time)
-			expected_result = self.command.run(self.browser, report)
-			if expected_result is None:
-				self.messages.append(["ERROR", "no result obtained"])
-			else:
-				self.messages.append(["DONE", expected_result.to_json()])
-		except:
-			traceback.print_exc()
-			self.messages.append(["ERROR", traceback.format_exc()])
-		finally:
-			self.browser.quit()
+			def write(*args):
+				os.write(pipeout, (json.dumps(args) + "\n").encode('utf8'))
+
+			try:
+				with self._create_browser() as browser:
+					def report(*args):
+						if time.time() > self.screenshot_valid_time:
+							try:
+								screenshot = browser.driver.get_screenshot_as_base64()
+								self.screenshot_valid_time = time.time() + self.screenshot_refresh_time
+								write("SCREENSHOT", screenshot)
+							except:
+								pass  # screenshot failed
+
+						write("ECHO", " ".join("%s" % arg for arg in args))
+
+					report("machine browser has wait time %d." % self.wait_time)
+					report('running on user agent', browser.driver.execute_script('return navigator.userAgent'))
+
+					expected_result = self.command.run(browser, report)
+
+				if expected_result is None:
+					write("ERROR", "no result obtained")
+				else:
+					write("DONE", expected_result.to_json())
+			except:
+				traceback.print_exc()
+				write("ERROR", traceback.format_exc())
+
+			sys.exit(0)
+
+		else:
+			os.close(pipeout)
+
+			try:
+				with os.fdopen(pipein) as fdpipein:
+					while True:
+						line = fdpipein.readline()[:-1]
+						if not line:
+							break
+						data = json.loads(line)
+						if data[0] == 'SCREENSHOT':
+							self.screenshot = data[1]
+						else:
+							self.messages.append(data)
+			finally:
+				os.close(pipein)
+
+	def _create_browser(self):
+		return pandora.Browser(
+			browser=self.command.settings.browser,
+			wait_time=self.command.wait_time,
+			resolution=self.command.settings.resolution)
 
 	def get_messages(self, index):
 		return self.messages[index:]

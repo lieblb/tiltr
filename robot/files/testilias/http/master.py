@@ -16,13 +16,12 @@ import humanize
 import shutil
 import traceback
 import sys
-import selenium
+import pandora
 
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
 
-from selenium.common.exceptions import WebDriverException
 from .discovery import connect_machines
 from .utils import clear_tmp
 from .args import parse_args
@@ -32,9 +31,35 @@ from testilias.data.result import open_results
 from testilias.data.settings import Settings, Workarounds
 
 
+class FetchILIASVersion(threading.Thread):
+	def __init__(self, state):
+		super().__init__()
+		self.state = state
+
+	def run(self):
+		for i in range(10):  # try several times
+			try:
+				with pandora.Browser('firefox') as browser:
+					driver = browser.driver
+
+					driver.set_page_load_timeout(60)  # give up after this time
+					driver.get(self.state.ilias_url)
+
+					bdo = driver.find_element_by_css_selector("footer bdo")
+					if bdo:
+						print("found ILIAS version text '%s'" % bdo.text)
+						s = re.split(r"\(|\)", bdo.text)
+						if len(s) >= 2:
+							self.state.ilias_version = s[1]
+							return
+			except:
+				traceback.print_exc()
+				time.sleep(1)
+
+
 class Looper(threading.Thread):
 	def __init__(self, state, test, settings, workarounds, wait_time):
-		threading.Thread.__init__(self)
+		super().__init__()
 		self.state = state
 		self.test = test
 		self.settings = settings
@@ -86,45 +111,18 @@ class GlobalState:
 	def __init__(self, machines, args):
 		self.machines = machines
 		self.batch = None
-		self.ilias_version = None
 		self.looper = None
 		self._is_looping = False
 		self.args = args
 		self.ilias_url = args.ilias_url
 
+		self.ilias_version = None
+		FetchILIASVersion(self).start()
+
 	def get_ilias_url(self):
 		return self.ilias_url
 
-	def _fetch_ilias_version(self):
-		try:
-			log_path = "tmp/geckodriver.master.log"
-			open(log_path, 'w').close()  # empty log file
-
-			options = selenium.webdriver.firefox.options.Options()
-			options.headless = True
-
-			driver = selenium.webdriver.Firefox(
-				options=options, log_path=log_path)
-			try:
-				driver.get(self.ilias_url)
-
-				bdo = driver.find_element_by_css_selector("footer bdo")
-				if bdo:
-					print("found ILIAS version text '%s'" % bdo.text)
-					s = re.split(r"\(|\)", bdo.text)
-					if len(s) >= 2:
-						return s[1]
-			finally:
-				driver.close()
-		except WebDriverException as e:
-			print("could not fetch ILIAS version", e)
-			return None
-
-		return None
-
 	def get_ilias_version(self):
-		if self.ilias_version is None:
-			self.ilias_version = self._fetch_ilias_version()  # try again
 		return self.ilias_version
 
 	def get_ilias_version_tuple(self):
@@ -205,11 +203,15 @@ class AppHandler(tornado.web.RequestHandler):
 		return ilias_url
 
 	def get(self):
+		ilias_version = self.state.get_ilias_version()
 
-		self.render("master.html",
-			num_machines=len(self.state.machines),
-			ilias_url=self._get_ilias_url(),
-			ilias_version=self.state.get_ilias_version() or "unavailable")
+		if ilias_version is None:
+			self.render("booting.html")
+		else:
+			self.render("master.html",
+				num_machines=len(self.state.machines),
+				ilias_url=self._get_ilias_url(),
+				ilias_version=ilias_version or "unavailable")
 
 
 class StatusHandler(tornado.web.RequestHandler):
@@ -458,8 +460,9 @@ def run_master():
 		else:
 			print('%s: ***' % k)
 	with connect_machines() as machines:
+		expose_port = 8080
 		print("found %d machines." % len(machines))
 		app = make_app(machines, args)
-		app.listen(80)
-		print("now available at localhost:80/app.")
+		app.listen(expose_port)
+		print("now available at localhost:%d/app." % expose_port)
 		tornado.ioloop.IOLoop.current().start()

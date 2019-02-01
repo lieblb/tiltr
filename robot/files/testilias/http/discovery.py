@@ -10,6 +10,7 @@ import os
 import requests
 import time
 import json
+import traceback
 
 
 def verify_hello(machine):
@@ -62,10 +63,13 @@ class Machines:
 
 		print("waiting for machines to start up.")
 
-		responsive = dict()
-		for name, ip in machines.items():
-			if verify_hello(ip):
-				responsive[name] = ip
+		try:
+			responsive = dict()
+			for name, ip in machines.items():
+				if verify_hello(ip):
+					responsive[name] = ip
+		except:
+			traceback.print_exc()
 
 		if len(responsive) < len(machines):
 			print("!! %d machines did not respond and will be excluded from test runs." % (len(machines) - len(responsive)))

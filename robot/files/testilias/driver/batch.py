@@ -147,39 +147,6 @@ class MasterContext:
 		self.protocol(message)
 
 
-@contextmanager
-def in_master(batch, protocol):
-	context = MasterContext(batch, protocol)
-
-	log_path = "tmp/geckodriver.master.log"
-	open(log_path, 'w').close()  # empty log file
-
-	batch.report("master", "connecting to client browser.")
-
-	args = dict(
-		browser=batch.settings.browser,
-		log_path=log_path,
-		wait_time=batch.wait_time,
-		resolution=batch.settings.resolution)
-
-	with pandora.Browser(**args) as browser:
-		batch.report(
-			'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
-
-		context.driver = browser.driver
-
-		test_driver = TestDriver(
-			browser.driver, batch.test, batch.ilias_admin_user, batch.workarounds, batch.ilias_url, context.report)
-		context.test_driver = test_driver
-
-		login_args = [
-			browser.driver, context.report, batch.ilias_url, batch.ilias_admin_user, batch.ilias_admin_password]
-
-		with Login(*login_args) as login:
-			context.language = login.language
-			yield context
-
-
 def remove_trailing_zeros(s):
 	parts = s.split(".")
 	if len(parts) == 2 and all(x == "0" for x in parts[1]):
@@ -522,12 +489,12 @@ class Run:
 		t0 = time.time()
 
 		try:
-			with in_master(self.batch, self.protocol_master) as master:
+			with self.batch.in_master(self.protocol_master) as master:
 				self.prepare(master)
 
 			all_recorded_results = self.run_exams()
 
-			with in_master(self.batch, self.protocol_master) as master:
+			with self.batch.in_master(self.protocol_master) as master:
 				self.analyze(master, all_recorded_results)
 
 		except selenium.common.exceptions.WebDriverException as e:
@@ -553,7 +520,7 @@ class Run:
 
 			try:
 				if self.users:
-					with in_master(self.batch, self.protocol_master) as master:
+					with self.batch.in_master(self.protocol_master) as master:
 						self.cleanup(master)
 			except:
 				self.report("master", "cleanup failed: %s." % traceback.format_exc())
@@ -604,6 +571,34 @@ class Batch(threading.Thread):
 		self.ilias_url = None
 		self.ilias_admin_user = None
 		self.ilias_admin_password = None
+
+	@contextmanager
+	def in_master(self, protocol):
+		context = MasterContext(self, protocol)
+
+		self.report("master", "connecting to client browser.")
+
+		args = dict(
+			browser=self.settings.browser,
+			wait_time=self.wait_time,
+			resolution=self.settings.resolution)
+
+		with pandora.Browser(**args) as browser:
+			self.report(
+				'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
+
+			context.driver = browser.driver
+
+			test_driver = TestDriver(
+				browser.driver, self.test, self.ilias_admin_user, self.workarounds, self.ilias_url, context.report)
+			context.test_driver = test_driver
+
+			login_args = [
+				browser.driver, context.report, self.ilias_url, self.ilias_admin_user, self.ilias_admin_password]
+
+			with Login(*login_args) as login:
+				context.language = login.language
+				yield context
 
 	def get_id(self):
 		return self.batch_id
