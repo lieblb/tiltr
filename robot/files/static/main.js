@@ -561,6 +561,11 @@ $(function() {
 		});
     }
 
+    function connectionEstablished() {
+		$('#connected-ui').show();
+		$('#unconnected-ui').hide();
+	}
+
 	setInterval(updateScreenshots, 1000);
 
 	function report(machine, message) {
@@ -661,6 +666,7 @@ $(function() {
 		};
 
 		ws.onopen = function() {
+			connectionEstablished();
 		};
 
 		ws.onclose = function() {
@@ -721,6 +727,8 @@ $(function() {
 			$.getJSON(host + "/status.json", function(status) {
 				if (!connected && status.batchId) {
 					connect(status.batchId);
+				} else {
+					connectionEstablished();
 				}
 			});
 		}

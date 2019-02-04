@@ -81,7 +81,16 @@
 		  </div>
 		</section>
 		<section class="section">
-		    <div class="container">
+		    <div id="unconnected-ui" class="container">
+				<div class="sk-folding-cube">
+				  <div class="sk-cube1 sk-cube"></div>
+				  <div class="sk-cube2 sk-cube"></div>
+				  <div class="sk-cube4 sk-cube"></div>
+				  <div class="sk-cube3 sk-cube"></div>
+				</div>
+			</div>
+
+		    <div id="connected-ui" class="container" style="display:none;">
 				<div class="control" style="margin-bottom:2em;">
 					<div class="select is-medium">
 						<select id="select-browser">
@@ -91,7 +100,7 @@
 					</div>
 
 					<a class="button is-medium" id="start">Start</a>
-					
+
 					<a id="run-loop" class="button is-medium">Loop</a>
 
 					<div class="select is-medium">
