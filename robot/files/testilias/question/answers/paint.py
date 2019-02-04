@@ -12,6 +12,7 @@ import time
 
 from selenium.webdriver.common.action_chains import ActionChains
 from PIL import Image
+from testilias.data.exceptions import InteractionException
 
 
 class PaintAnswer(Answer):
@@ -27,7 +28,10 @@ class PaintAnswer(Answer):
 	def _set_answer(self, answer, score):
 		# driver.capabilities['browserName'] == 'chrome'
 
-		for i in range(3):
+		n_retries = 5
+		is_answer_ok = False
+
+		for i in range(n_retries):
 			clear = self.driver.find_element_by_name('clear')
 			clear.click()
 
@@ -73,9 +77,16 @@ class PaintAnswer(Answer):
 				chain.perform()
 
 			if self._parse_answer() == answer:
+				is_answer_ok = True
 				break
 
 			time.sleep(1)  # retry
+
+		# if we fail to draw the correct answer in the firs place,
+		# it's not an integrity but an interaction error.
+
+		if not is_answer_ok:
+			raise InteractionException("failed to paint requested answer")
 
 		self.current_answer = answer
 		self.current_score = score
