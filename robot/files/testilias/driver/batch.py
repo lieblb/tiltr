@@ -40,7 +40,7 @@ import pandora
 
 from .commands import TakeExamCommand
 from .drivers import Login, UsersBackend, UsersFactory, TestDriver, Test, verify_admin_settings
-from .utils import wait_for_page_load
+from .utils import wait_for_page_load, run_interaction
 
 
 monitor_mutex = Lock()
@@ -576,29 +576,31 @@ class Batch(threading.Thread):
 	def in_master(self, protocol):
 		context = MasterContext(self, protocol)
 
-		self.report("master", "connecting to client browser.")
+		with run_interaction():
+			self.report("master", "connecting to client browser.")
 
-		args = dict(
-			browser=self.settings.browser,
-			wait_time=self.wait_time,
-			resolution=self.settings.resolution)
+			args = dict(
+				browser=self.settings.browser,
+				wait_time=self.wait_time,
+				resolution=self.settings.resolution)
 
-		with pandora.Browser(**args) as browser:
-			self.report(
-				'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
+			with pandora.Browser(**args) as browser:
+				self.report(
+					'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
 
-			context.driver = browser.driver
+				context.driver = browser.driver
 
-			test_driver = TestDriver(
-				browser.driver, self.test, self.ilias_admin_user, self.workarounds, self.ilias_url, context.report)
-			context.test_driver = test_driver
+				test_driver = TestDriver(
+					browser.driver, self.test, self.ilias_admin_user, self.workarounds, self.ilias_url, context.report)
+				context.test_driver = test_driver
 
-			login_args = [
-				browser.driver, context.report, self.ilias_url, self.ilias_admin_user, self.ilias_admin_password]
+				login_args = [
+					browser.driver, context.report, self.ilias_url, self.ilias_admin_user, self.ilias_admin_password]
 
-			with Login(*login_args) as login:
-				context.language = login.language
-				yield context
+				with Login(*login_args) as login:
+					context.language = login.language
+
+					yield context
 
 	def get_id(self):
 		return self.batch_id

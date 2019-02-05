@@ -9,11 +9,10 @@ import pickle
 import traceback
 import json
 import base64
-import http
 
 from selenium.common.exceptions import WebDriverException
 
-from .utils import get_driver_error_details
+from .utils import get_driver_error_details, run_interaction
 from .drivers import Login, TestDriver, Test
 from testilias.data.result import Result, Origin
 from testilias.data.context import RegressionContext, RandomContext
@@ -157,41 +156,44 @@ class TakeExamCommand:
 		master_report(machine_info)
 
 		try:
-			with Login(driver, master_report, self.ilias_url, self.username, self.password):
-				test_driver = TestDriver(
-					driver, Test(self.test_id), self.username,
-					self.workarounds, self.ilias_url, master_report)
-				test_driver.goto(self.test_url)
+			with run_interaction():
 
-				if self.machine_index <= self.n_deterministic_machines:
-					# some machines can operate deterministically as a well-defined baseline regression test
-					context = RegressionContext(
-						self.machine_index * 73939133, self.questions, self.settings, self.workarounds)
-				else:
-					context = RandomContext(self.questions, self.settings, self.workarounds)
+				with Login(driver, master_report, self.ilias_url, self.username, self.password):
 
-				exam_driver = test_driver.start(context, self.questions, self.exam_configuration)
+					test_driver = TestDriver(
+						driver, Test(self.test_id), self.username,
+						self.workarounds, self.ilias_url, master_report)
+					test_driver.goto(self.test_url)
 
-				try:
-					exam_driver.add_protocol(machine_info)
+					if self.machine_index <= self.n_deterministic_machines:
+						# some machines can operate deterministically as a well-defined baseline regression test
+						context = RegressionContext(
+							self.machine_index * 73939133, self.questions, self.settings, self.workarounds)
+					else:
+						context = RandomContext(self.questions, self.settings, self.workarounds)
 
-					def report(s):
-						master_report(s)
-						exam_driver.add_protocol(s)
+					exam_driver = test_driver.start(context, self.questions, self.exam_configuration)
 
-					robot = ExamRobot(exam_driver, context, report, self.questions, self.settings)
-					robot.run(self.settings.test_passes)
+					try:
+						exam_driver.add_protocol(machine_info)
 
-				except TestILIASException as e:
-					traceback.print_exc()
-					r = self._create_result_with_details(driver, master_report, e, traceback.format_exc())
-					exam_driver.add_protocol_to_result(r)
-					return r
+						def report(s):
+							master_report(s)
+							exam_driver.add_protocol(s)
 
-				exam_driver.close()
+						robot = ExamRobot(exam_driver, context, report, self.questions, self.settings)
+						robot.run(self.settings.test_passes)
 
-				result = exam_driver.get_expected_result(self.admin_lang)
-				result.attach_coverage(context.coverage)
+					except TestILIASException as e:
+						traceback.print_exc()
+						r = self._create_result_with_details(driver, master_report, e, traceback.format_exc())
+						exam_driver.add_protocol_to_result(r)
+						return r
+
+					exam_driver.close()
+
+					result = exam_driver.get_expected_result(self.admin_lang)
+					result.attach_coverage(context.coverage)
 
 		except TestILIASException as e:
 			traceback.print_exc()
@@ -201,9 +203,6 @@ class TakeExamCommand:
 			traceback.print_exc()
 			master_report("test aborted: %s" % traceback.format_exc())
 			return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
-		except (BrokenPipeError, http.client.RemoteDisconnected):
-			master_report("test aborted: %s" % traceback.format_exc())
-			return Result.from_error(Origin.recorded, ErrorDomain.interaction, traceback.format_exc())
 		except:
 			traceback.print_exc()
 			master_report("test aborted with an unexpected error: %s" % traceback.format_exc())
