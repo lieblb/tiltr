@@ -16,6 +16,7 @@ import time
 import json
 import socket
 import fcntl
+import signal
 from threading import Thread
 from collections import defaultdict
 
@@ -235,12 +236,19 @@ def filter_log(s):
 
 
 def terminate():
-	subprocess.call(["docker-compose", "stop"])
 	global request_quit
+	if request_quit:
+		return
 	request_quit = True
+	subprocess.call(["docker-compose", "stop"])
 	if monitor_thread:
 		monitor_thread.join()
 	print('')
+
+def on_terminate_signal(signal, stack):
+	terminate()
+
+signal.signal(signal.SIGTERM, on_terminate_signal)
 
 try:
 	print("Waiting for docker-compose to start up.", end='')
@@ -258,6 +266,8 @@ try:
 					log.write(line)
 				if "apache2 -D FOREGROUND" in line:  # web server running?
 					break
+			elif request_quit:
+				sys.exit(0)
 			elif compose_stderr:
 				print("exiting due to Docker errors:")
 				print("\n".join(compose_stderr))
@@ -280,8 +290,8 @@ try:
 						"%s_machine_%d" % (docker_compose_name, (i + 1))]).strip()
 					if len(str(machine_ip)) == 0:
 						print("failed to lookup machine %d. shutting down." % i)
-						subprocess.call(["docker-compose", "stop"])
-						sys.exit()
+						terminate()
+						sys.exit(1)
 					break
 				except subprocess.CalledProcessError:
 					time.sleep(1)
@@ -320,7 +330,8 @@ try:
 	def print_docker_logs():
 		while True:
 			if not check_alive():
-				print("master has shut down unexpectedly. try to run: docker logs %s_master_1" % docker_compose_name)
+				if not request_quit:
+					print("master has shut down unexpectedly. try to run: docker logs %s_master_1" % docker_compose_name)
 				terminate()
 				break
 			line = compose.stdout.readline()
@@ -343,3 +354,4 @@ finally:
 	if not args.verbose:
 		log.close()
 
+sys.exit(0)

@@ -193,6 +193,22 @@ mysql -u dev -p dev
 mysql> use ilias;
 ```
 
+## Running TestILIAS with systemd
+
+Experimental.
+
+Copy `testilias.service` to `/etc/systemd/system/testilias.service`.
+
+Make sure you change `YOUR_USER_WITH_DOCKER_PRIVILEGES` and `/path/to/testilias`.
+
+Now you should be able to run these commands:
+
+```
+systemctl start testilias
+systemctl stop testilias
+journalctl -u testilias.service
+```
+
 ## Notes on the implementation
 
 The "master" container (see `docker-compose.yml`) provides the GUI for running tests and
