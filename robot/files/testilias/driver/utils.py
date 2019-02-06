@@ -27,7 +27,7 @@ from testilias.data.exceptions import *
 def run_interaction():
 	try:
 		yield
-	except (ConnectionError, IOError, http.client.RemoteDisconnected, urllib3.exceptions.Exception) as e:
+	except (ConnectionError, IOError, http.client.RemoteDisconnected, urllib3.exceptions.HTTPError) as e:
 		traceback.print_exc()
 		raise InteractionException("Failed to run operation in master: " + str(e))
 
