@@ -29,6 +29,7 @@ from testilias.driver.batch import Batch
 from testilias.driver.drivers import Test
 from testilias.data.result import open_results
 from testilias.data.settings import Settings, Workarounds
+from testilias.data.database import DB
 
 
 class FetchILIASVersion(threading.Thread):
@@ -375,7 +376,8 @@ class SettingsHandler(tornado.web.RequestHandler):
 
 		self.write(json.dumps(dict(
 			is_looping=self.state.is_looping,
-			host_disk_free=humanize.naturalsize(free))))
+			host_disk_free=humanize.naturalsize(free),
+			db_size=humanize.naturalsize(DB.get_size()))))
 
 		self.finish()
 
@@ -448,7 +450,7 @@ def make_app(machines, args):
 			"path": node_modules + "plotly.js"}),
 		(r"/static/default/(.*)", tornado.web.StaticFileHandler, {
 			"path": os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "static")}),
-	])
+	], template_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "html"))
 
 
 def run_master():

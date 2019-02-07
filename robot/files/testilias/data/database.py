@@ -40,6 +40,10 @@ class DB:
 	def __exit__(self, *args):
 		self.db.close()
 
+	@staticmethod
+	def get_size():
+		return os.path.getsize(os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "results.db"))
+
 	def put(self, batch_id, success, xls, protocol, num_users, elapsed_time):
 		c = self.db.cursor()
 		now = datetime.datetime.now()

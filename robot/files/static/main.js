@@ -686,6 +686,7 @@ $(function() {
 				$("#run-loop").removeClass("is-info is-selected");
 			}
 			$("#host_disk_free").text(settings.host_disk_free + " on host disk.");
+			$("#db_size").text(settings.db_size + " in results database.");
 		});
 	}
 	updateSettings();
