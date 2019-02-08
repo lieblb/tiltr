@@ -19,6 +19,8 @@ services:
       MYSQL_USER: dev
       MYSQL_PASSWORD: dev
       MYSQL_DATABASE: ilias
+    volumes:
+      - db-data-volume:/var/lib/mysql
     networks:
       - net
 
@@ -77,6 +79,9 @@ services:
     volumes:
       - /dev/shm:/dev/shm
       - /tmp:/tmp
+
+volumes:
+  db-data-volume:
 
 networks:
   net:
