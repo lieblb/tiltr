@@ -26,6 +26,9 @@ monitor_thread = None
 request_quit = False
 
 parser = argparse.ArgumentParser(description='Starts up the TestILIAS test environment.')
+
+parser.add_argument('command', nargs='?', default='start')
+
 parser.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
 parser.add_argument('--debug', help='output debugging information', action='store_true')
 parser.add_argument('--n', nargs='?', const=1, type=int, default=1)
@@ -35,6 +38,10 @@ parser.add_argument('--port', help='port to run TestILIAS on', nargs='?', const=
 parser.add_argument('--embedded-ilias-port', help='port to run embedded ILIAS on', nargs='?', const=1, type=int, default=11145)
 parser.add_argument('--rebuild', help='rebuild docker containers', action='store_true')
 parser.add_argument('--rebuild-no-cache', help='rebuild docker containers without cache', action='store_true')
+
+#parser.add_argument('--stop', help='stop all docker containers', action='store_true')
+#parser.add_argument('--ps', help='list all docker containers', action='store_true')
+
 args = parser.parse_args()
 
 os.environ['TESTILIAS_PORT'] = str(args.port)
@@ -45,7 +52,6 @@ if args.fork:
 	if pid != 0:
 		print("started up.py on pid %d." % pid)
 		sys.exit(0)
-
 
 def monitor_docker_stats(tmp_path, docker_compose_name):
 	stream = subprocess.Popen(["docker", "stats"], stdout=subprocess.PIPE)
@@ -174,6 +180,16 @@ def set_argument_environ(args):
 
 
 embedded_ilias = set_argument_environ(args)
+
+if args.command == 'stop':
+	subprocess.call(["docker-compose", "stop"])
+	sys.exit(0)
+elif args.command == 'ps':
+	subprocess.call(["docker-compose", "ps"])
+	sys.exit(0)
+elif args.command != 'start':
+	print("illegal command.")
+	sys.exit(1)
 
 if args.rebuild_no_cache:
 	subprocess.call(["docker-compose", "build", "--no-cache"])
@@ -340,6 +356,25 @@ try:
 			if line != '':
 				if filter_log(line):
 					log.write(line)
+
+	def get_docker_container_log_path(container_name):
+		path = subprocess.check_output([
+			"docker", "inspect", "-f", "{{.LogPath}}", '%s_%s' % (docker_compose_name, container_name)]).strip()
+		if py3:
+			path = path.decode("utf-8")
+		return path
+
+	def get_logs_size():
+		size = 0
+
+		size += get_docker_container_log_size('master_1')
+
+		for m in machines.keys():
+			size += get_docker_container_log_size(m)
+
+		size += get_docker_container_log_size('web_1')
+		size += get_docker_container_log_size('db_1')
+
 
 	monitor_thread = Thread(target=monitor_docker_stats, args=(tmp_path, docker_compose_name,))
 	monitor_thread.start()
