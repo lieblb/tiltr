@@ -38,7 +38,7 @@ class FetchILIASVersion(threading.Thread):
 		self.state = state
 
 	def run(self):
-		for i in range(10):  # try several times
+		while True:
 			try:
 				with pandora.Browser('firefox') as browser:
 					driver = browser.driver
