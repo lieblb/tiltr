@@ -569,30 +569,41 @@ $(function() {
 	setInterval(updateScreenshots, 1000);
 
 	function report(machine, message) {
-		var tag = $('<span class="tag is-light"></span>');
-
 		var machineNo = machine.match(/\d+/g);
 		if (machineNo == null) {
 			machineNo = 0;
 		} else {
 			machineNo = Number(machineNo[0]);
 		}
-		tag.css("background-color", hslToRgb(machineNo / 20, 0.5, 0.75));
 
-		tag.css("color", "black");
-		tag.text(machine);
-
-		var entry = $("<div></div>");
-		entry.append(tag);
-
-		var text = $("<span></span>");
-		text.text(" " + message);
-		entry.append(text);
+		var color = hslToRgb(machineNo / 20, 0.5, 0.75);
 
 		var log = $("#log");
 		var updateScroll = (
 			log.scrollTop() >= log[0].scrollHeight - log.height() - 50);
-		log.append(entry);
+
+		var lines = message.split("\n");
+		for (var i = 0; i < lines.length; i++) {
+			var line = lines[i];
+			var entry = $("<div></div>");
+
+			var tag = $('<span class="tag is-light"></span>');
+			tag.css("background-color", color);
+			tag.css("color", "black");
+			if (i == 0) {
+				tag.text(machine);
+			} else {
+				tag.text("#");
+			}
+			entry.append(tag);
+
+			var text = $("<span></span>");
+			text.text(" " + line);
+			entry.append(text);
+
+			log.append(entry);
+		}
+
 		if (updateScroll) {
 			log.scrollTop(log[0].scrollHeight - log.height());
 		}
