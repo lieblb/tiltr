@@ -8,6 +8,7 @@
 import os
 import sqlite3
 import json
+import base64
 import datetime
 import zipfile
 from collections import defaultdict
@@ -194,4 +195,7 @@ class DB:
 			z.writestr('/exported.xls', xls)
 			protocols = json.loads(protocol.decode("utf-8"))
 			for k, v in protocols.items():
-				z.writestr('/' + k, v.encode('utf-8'))
+				if k.endswith('.png'):
+					z.writestr('/' + k, base64.b64decode(v))
+				else:
+					z.writestr('/' + k, v.encode('utf-8'))

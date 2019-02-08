@@ -143,6 +143,11 @@ class TakeExamCommand:
 		if html:
 			files['error.html'] = html
 
+		try:
+			files['screen.png'] = driver.get_screenshot_as_base64()
+		except:
+			traceback.print_exc()
+
 		filenames = map(lambda s: '%s_%s' % (self.username, s), files.keys())
 		error = 'test failed on url %s. for details, see  %s.' % (url, ', '.join(filenames))
 		report(error)
