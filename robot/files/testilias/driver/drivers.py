@@ -733,7 +733,7 @@ class ExamDriver:
 		title = page_title.text
 
 		if title not in self.questions:
-			raise InteractionException("no question content found for '%s'." % page_title)
+			raise InteractionException("no question content found for '%s'." % title)
 
 		self.report('entering question "' + title + '"')
 
@@ -849,7 +849,7 @@ class TestDriver:
 		self.ilias_url = ilias_url
 		parsed_url = urlparse(self.ilias_url)
 		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
-		self.client_id = parse_qs(parsed_url.query)['client_id']
+		self.client_id = parse_qs(parsed_url.query)['client_id'][0]
 
 		self.report = report
 		self.autosave_time = 5
@@ -860,11 +860,16 @@ class TestDriver:
 
 		self.report("importing test.")
 
-		# goto Magazin.
-		driver.get(self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id))
+		# goto root ("Magazin")
+		root_url = self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id)
+		self.report("going to " + root_url)
+		with wait_for_page_load(driver):
+			driver.get(root_url)
 
 		# add new item: Test.
+		wait_for_css(driver, '.ilNewObjectSelector button')
 		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
+		wait_for_css(driver, '.ilNewObjectSelector #tst')
 		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
 		wait_for_css(driver, 'input[name="cmd[importFile]"]')
 
@@ -1136,7 +1141,7 @@ class TestDriver:
 			self.goto()
 		return self.test.cached_link
 
-	def goto(self, url=None):
+	def goto_or_fail(self, url=None):
 		if self.test.cached_link is None and url:
 			self.test.cached_link = url
 
@@ -1188,7 +1193,12 @@ class TestDriver:
 						return True
 			time.sleep(1)
 
-		raise InteractionException("test '%s' was not found in ILIAS" % self.test.get_title())
+		return False
+
+	def goto(self, url=None):
+		if not self.goto_or_fail(url):
+			raise InteractionException("test '%s' was not found in ILIAS" % self.test.get_title())
+		return True
 
 	def _try_start_or_resume(self, force_allow_resume=False):
 		resume_player = None

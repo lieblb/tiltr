@@ -357,7 +357,7 @@ class Run:
 
 		# print('switching to test "%s".' % test.get_title())
 		# goto test.
-		if not master.test_driver.goto():
+		if not master.test_driver.goto_or_fail():
 			# if test does not exist, add it first.
 			master.test_driver.import_test()
 		else:
