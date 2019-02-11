@@ -606,7 +606,8 @@ class Batch(threading.Thread):
 		return self.batch_id
 
 	def set_recycle_users(self, recycle):
-		self.users_factory.recycle = recycle
+		#self.users_factory.recycle = recycle
+		pass
 
 	def configure(self, args):
 		self.debug = args.debug
