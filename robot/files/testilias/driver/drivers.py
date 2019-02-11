@@ -510,6 +510,8 @@ class ExamDriver:
 		# simulate crash or loss of session.
 		answer.protocol.add("starting wait for simulated crash.")
 
+		self.report('waiting for %.1f seconds.' % wait)
+
 		t0 = time.time()
 		t1 = t0 + wait
 		while time.time() < t1:
