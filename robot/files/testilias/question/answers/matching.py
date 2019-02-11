@@ -103,6 +103,14 @@ class MatchingAnswer(Answer):
 		self.current_score = score
 
 	def _reset_answer_ui(self):
+		actions = self.driver.find_element_by_css_selector('#ilAdvSelListAnchorText_QuestionActions')
+		actions.click()
+
+		revert = self.driver.find_element_by_css_selector('#tst_revert_changes_action')
+		if revert.is_enabled():
+			revert.click()
+
+		'''
 		root = self.driver.find_element_by_css_selector('.ilc_question_MatchingQuestion')
 		source_area = root.find_element_by_css_selector('#sourceArea')
 		target_area = root.find_element_by_css_selector('#targetArea')
@@ -117,6 +125,7 @@ class MatchingAnswer(Answer):
 				chain.drag_and_drop(term, term_target)
 				chain.pause(1)
 				chain.perform()
+		'''
 
 
 	def _parse_ui(self):
