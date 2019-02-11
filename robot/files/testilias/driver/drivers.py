@@ -31,6 +31,7 @@ from .exam_configuration import *
 from testilias.question import *
 from testilias.data.result import *
 from testilias.question.protocol import AnswerProtocol
+from testilias.data.pdf import extract_pdf_scores
 
 
 class Login:
@@ -1006,6 +1007,58 @@ class TestDriver:
 
 		wb = load_workbook(filename=io.BytesIO(xls))
 		return xls, wb
+
+	def get_pdf_scores(self):
+		driver = self.driver
+
+		scores = dict()
+
+		row_index = 0
+
+		while True:
+			with wait_for_page_load(driver):
+				self.goto_participants()
+
+			trs = list(driver.find_elements_by_css_selector("#tst_participants_70 tbody tr"))
+			if row_index >= len(trs):
+				break
+			tr = trs[row_index]
+
+			tds = list(tr.find_elements_by_css_selector("td"))
+			if len(tds) < 2:
+				row_index += 1
+				continue
+
+			user_id = tds[2].find_element_by_css_selector("label").text.strip()
+			assert user_id not in scores
+
+			tr.find_element_by_css_selector("input[name='chbUser[]']").click()
+
+			with wait_for_page_load(driver):
+				select = Select(driver.find_element_by_css_selector(".ilTableCommandRowTop select"))
+				select.select_by_value("showDetailedResults")
+				driver.find_element_by_css_selector(".ilTableCommandRowTop input[type='submit']").click()
+
+			toolbar = self.driver.find_element_by_css_selector(".ilToolbarItems")
+			for navbar in toolbar.find_elements_by_css_selector(".navbar-form"):
+				if 'PDF' not in navbar.text:
+					continue
+
+				url = navbar.find_element_by_css_selector("a").get_attribute("href")
+				cookies = dict((cookie['name'], cookie['value']) for cookie in driver.get_cookies())
+				result = requests.get(url, cookies=cookies)
+
+				# debug
+				with open("/files/tmp/result.pdf", "wb") as f:
+					f.write(result.content)
+
+				scores[user_id] = extract_pdf_scores(io.BytesIO(result.content))
+				break
+
+			row_index += 1
+
+		return scores
+
 
 	def get_gui_scores(self, user_ids):
 		def fetch_scores():

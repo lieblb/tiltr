@@ -219,7 +219,11 @@ class Run:
 	def _check_results(self, index, master, workbook, all_recorded_results):
 		all_assertions_ok = True
 
-		gui_scores = master.test_driver.get_gui_scores([user.get_username() for user in self.users])
+		gui_scores = master.test_driver.get_gui_scores(
+			[user.get_username() for user in self.users])
+
+		master.report("exporting PDFs.")
+		pdf_scores = master.test_driver.get_pdf_scores()
 
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			master.report("checking results for user %s." % user.get_username())
@@ -232,6 +236,10 @@ class Run:
 
 			# check score via gui participants tab as well.
 			ilias_result.add(("exam", "score", "gui"), gui_scores[user.get_username()])
+
+			# add scores from pdf.
+			for k, v in pdf_scores[user.get_username()].items():
+				ilias_result.add(k, v)
 
 			def report(message):
 				if message:

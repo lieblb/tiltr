@@ -165,7 +165,7 @@ def workbook_to_result(wb, username, questions, workarounds, report):
 			result.add(Result.key("question", question_title, "answer", dimension_title), dimension_value)
 
 	for title, score in result_row.get_question_scores(workarounds).items():
-		result.add(("question", title, "score"), score)
+		result.add(("xls", "question", title, "score"), score)
 
 	result.add(("exam", "score", "total"), result_row.get_total_score())
 

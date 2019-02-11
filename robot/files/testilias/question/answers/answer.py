@@ -49,8 +49,9 @@ class Answer:
 
 		score = clip_answer_score(self.current_score)
 
-		result.add_as_formatted_score(
-			("question", self.question.title, "score"), score)
+		for channel in ("xls", "pdf"):
+			result.add_as_formatted_score(
+				(channel, "question", self.question.title, "score"), score)
 
 		return score
 
