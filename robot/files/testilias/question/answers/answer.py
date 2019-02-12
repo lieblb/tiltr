@@ -8,8 +8,7 @@
 from enum import Enum
 from collections import namedtuple
 
-from testilias.data.result import *
-
+from testilias.data.result import Result, Origin
 
 class Validness(Enum):
 	VALID = 1

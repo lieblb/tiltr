@@ -17,6 +17,10 @@ import tornado.web
 
 import pandora
 
+from selenium.common.exceptions import WebDriverException
+from testilias.data.exceptions import InteractionException
+from testilias.data.result import Result, Origin
+
 from ..driver.commands import TakeExamCommand
 from .utils import clear_tmp
 from .args import parse_args
@@ -58,22 +62,28 @@ class Runner(threading.Thread):
 				os.write(pipeout, (json.dumps(args) + "\n").encode('utf8'))
 
 			try:
-				with self._create_browser() as browser:
-					def report(*args):
-						if time.time() > self.screenshot_valid_time:
-							try:
-								screenshot = browser.driver.get_screenshot_as_base64()
-								self.screenshot_valid_time = time.time() + self.screenshot_refresh_time
-								write("SCREENSHOT", screenshot)
-							except:
-								pass  # screenshot failed
+				try:
+					with self._create_browser() as browser:
+						def report(*args):
+							if time.time() > self.screenshot_valid_time:
+								try:
+									screenshot = browser.driver.get_screenshot_as_base64()
+									self.screenshot_valid_time = time.time() + self.screenshot_refresh_time
+									write("SCREENSHOT", screenshot)
+								except:
+									pass  # screenshot failed
 
-						write("ECHO", " ".join("%s" % arg for arg in args))
+							write("ECHO", " ".join("%s" % arg for arg in args))
 
-					report("machine browser has wait time %d." % self.wait_time)
-					report('running on user agent', browser.driver.execute_script('return navigator.userAgent'))
+						report("machine browser has wait time %d." % self.wait_time)
+						report('running on user agent', browser.driver.execute_script('return navigator.userAgent'))
 
-					expected_result = self.command.run(browser, report)
+						expected_result = self.command.run(browser, report)
+				except WebDriverException as webdriver_error:
+					# we end up here in case our browser / selenium does not start and fails to close down.
+					e = InteractionException(str(webdriver_error))
+					traceback.print_exc()
+					expected_result = Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
 
 				if expected_result is None:
 					write("ERROR", "no result obtained")

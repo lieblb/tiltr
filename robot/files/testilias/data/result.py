@@ -10,7 +10,6 @@ from enum import Enum
 from decimal import *
 from collections import defaultdict
 
-from ..question.coverage import Coverage
 from .database import DB
 from .exceptions import ErrorDomain, most_severe
 
@@ -49,6 +48,8 @@ class Result:
 		return tuple(_flat(args))
 
 	def __init__(self, from_json=None, **kwargs):
+		from ..question.coverage import Coverage
+
 		if from_json:
 			data = json.loads(from_json)
 			self.origin = Origin[data["origin"]]
