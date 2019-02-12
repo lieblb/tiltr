@@ -1019,6 +1019,10 @@ class TestDriver:
 			with wait_for_page_load(driver):
 				self.goto_participants()
 
+			# set filter to display up to 800 participants.
+			driver.find_element_by_id("ilAdvSelListAnchorText_sellst_rows_tst_participants_70").click()
+			driver.find_element_by_id("sellst_rows_tst_participants_70_800").click()
+
 			trs = list(driver.find_elements_by_css_selector("#tst_participants_70 tbody tr"))
 			if row_index >= len(trs):
 				break
@@ -1058,7 +1062,6 @@ class TestDriver:
 			row_index += 1
 
 		return scores
-
 
 	def get_gui_scores(self, user_ids):
 		def fetch_scores():
