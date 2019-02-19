@@ -48,7 +48,7 @@ class Settings(ValueBag):
 			(
 				'resolution',
 				"""Pixel resolution of virtual browser windows.""",
-				"1024x1024"
+				"1024x1600"
 			),
 			(
 				'num_deterministic_machines',
