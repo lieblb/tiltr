@@ -5,10 +5,12 @@
 # GPLv3, see LICENSE
 #
 
+import selenium
 from selenium.webdriver.common.action_chains import ActionChains
 
 from .answer import Answer, Validness
 from testilias.data.exceptions import *
+from testilias.driver.utils import wait_for_css_visible
 
 
 def _check_label(kind, element, stored):
@@ -32,61 +34,82 @@ class MatchingAnswer(Answer):
 		self._set_answer(*self.question.get_random_answer(context))
 		return Validness.VALID
 
+	def _try_drag_terms(self, source_area, target_element, definition_id, term_ids):
+		term_ids = set(list(term_ids))  # copy
+		n_retries = 0
+
+		while term_ids:
+			# sometimes drag and drop does not work on the first try. retry until all terms
+			# have been dragged and dropped onto their target.
+
+			n_retries += 1
+			if n_retries > 3:
+				return False
+
+			for term_id in term_ids:
+				if self.debug:
+					print("set_answer: %s [%s] -> %s [%s]" % (
+						self.question.get_term_label(term_id), term_id,
+						self.question.get_definition_label(definition_id), definition_id))
+
+				source_element = source_area.find_element_by_css_selector(
+					'.draggable[data-type="term"][data-id="%s"]' % term_id)
+
+				_check_label(
+					'term',
+					source_element,
+					self.question.get_term_label(term_id))
+
+				chain = ActionChains(self.driver)
+				chain.move_to_element(source_element)
+				chain.drag_and_drop(source_element, target_element)
+				chain.perform()
+
+				if self.debug:
+					print(
+						"drag_and_drop:",
+						source_element.get_attribute('id'),
+						target_element.get_attribute('id'))
+
+			for term in target_element.find_elements_by_css_selector('.draggable[data-type="term"]'):
+				term_ids.remove(term.get_attribute('data-id'))
+
+		return True
+
 	def _set_answer(self, answer, score):
-		self._reset_answer_ui()
+		n_retries = 0
 
-		root = self.driver.find_element_by_css_selector('.ilc_question_MatchingQuestion')
-		source_area = root.find_element_by_css_selector('#sourceArea')
-		target_area = root.find_element_by_css_selector('#targetArea')
+		while True:
+			n_retries += 1
+			if n_retries > 3:
+				assignments = []
+				for definition_id, term_ids in answer.items():
+					assignments.append('%s: %s' % (
+						self.question.get_definition_label(definition_id), self.question.get_term_labels(term_ids)))
+				raise InteractionException("drag and drop in matching question failed: " + ", ".join(assignments))
 
-		for definition_id, term_ids in answer.items():
-			target_element = target_area.find_element_by_css_selector(
-				'.droparea[data-type="definition"][data-id="%s"]' % definition_id)
+			self._reset_answer_ui()
 
-			_check_label(
-				'definition',
-				target_element.find_element_by_css_selector('.ilMatchingQuestionDefinition'),
-				self.question.get_definition_label(definition_id))
+			root = self.driver.find_element_by_css_selector('.ilc_question_MatchingQuestion')
+			source_area = root.find_element_by_css_selector('#sourceArea')
+			target_area = root.find_element_by_css_selector('#targetArea')
 
-			term_ids = set(list(term_ids))  # copy
+			success = True
+			for definition_id, term_ids in answer.items():
+				target_element = target_area.find_element_by_css_selector(
+					'.droparea[data-type="definition"][data-id="%s"]' % definition_id)
 
-			n_retries = 0
-			while term_ids:
-				# sometimes drag and drop does not work on the first try. retry until all terms
-				# have been dragged and dropped onto their target.
+				_check_label(
+					'definition',
+					target_element.find_element_by_css_selector('.ilMatchingQuestionDefinition'),
+					self.question.get_definition_label(definition_id))
 
-				n_retries += 1
-				if n_retries > 10:
-					raise InteractionException("drag and drop for matching question failed")
+				if not self._try_drag_terms(source_area, target_element, definition_id, term_ids):
+					success = False
+					break
 
-				for term_id in term_ids:
-					if self.debug:
-						print("set_answer: %s [%s] -> %s [%s]" % (
-							self.question.get_term_label(term_id), term_id,
-							self.question.get_definition_label(definition_id), definition_id))
-
-					source_element = source_area.find_element_by_css_selector(
-						'.draggable[data-type="term"][data-id="%s"]' % term_id)
-
-					_check_label(
-						'term',
-						source_element,
-						self.question.get_term_label(term_id))
-
-					chain = ActionChains(self.driver)
-					chain.move_to_element(source_element)
-					chain.drag_and_drop(source_element, target_element)
-					chain.perform()
-
-					if self.debug:
-						print(
-							"drag_and_drop:",
-							source_element.get_attribute('id'),
-							target_element.get_attribute('id'))
-
-				for term in target_element.find_elements_by_css_selector('.draggable[data-type="term"]'):
-					term_ids.remove(term.get_attribute('data-id'))
-
+			if success:
+				break
 
 		if self.debug:
 			print("verify...")
@@ -103,12 +126,20 @@ class MatchingAnswer(Answer):
 		self.current_score = score
 
 	def _reset_answer_ui(self):
-		actions = self.driver.find_element_by_css_selector('#ilAdvSelListAnchorText_QuestionActions')
-		actions.click()
+		for _ in range(3):
+			try:
+				actions = self.driver.find_element_by_css_selector('#ilAdvSelListAnchorText_QuestionActions')
+				actions.click()
 
-		revert = self.driver.find_element_by_css_selector('#tst_revert_changes_action')
-		if revert.is_enabled():
-			revert.click()
+				wait_for_css_visible(self.driver, '#tst_revert_changes_action')
+
+				revert = self.driver.find_element_by_css_selector('#tst_revert_changes_action')
+				if revert.is_enabled():
+					revert.click()
+
+				break
+			except selenium.common.exceptions.TimeoutException:
+				self.driver.refresh()
 
 		'''
 		root = self.driver.find_element_by_css_selector('.ilc_question_MatchingQuestion')
