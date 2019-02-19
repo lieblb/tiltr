@@ -1106,7 +1106,7 @@ class TestDriver:
 			user_id = unassigned.get(key)
 			if user_id:
 				del unassigned[key]
-				score = re.split("\s+", columns[reached].text)
+				score = re.split(r"\s+", columns[reached].text)
 				scores[user_id] = Decimal(score[0])
 
 		if len(unassigned) > 0:
