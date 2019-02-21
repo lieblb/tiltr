@@ -20,34 +20,51 @@ import signal
 from threading import Thread
 from collections import defaultdict
 
+try:
+	import termcolor
+	cprint = termcolor.cprint
+except ImportError:
+	def cprint(text, *args):
+		print(text)
+
+
 py3 = sys.version_info >= (3, 0)
 
 monitor_thread = None
 request_quit = False
+compose = None
 
 parser = argparse.ArgumentParser(description='Starts up the TestILIAS test environment.')
 
-parser.add_argument('command', nargs='?', default='start')
+subparsers = parser.add_subparsers(help='command', dest='command')
+subparsers.required = True
 
-parser.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
-parser.add_argument('--debug', help='output debugging information', action='store_true')
-parser.add_argument('--n', nargs='?', const=1, type=int, default=1)
-parser.add_argument('--ilias', help='YAML file that specifies an external ILIAS installation to test against')
-parser.add_argument('--fork', help='fork up.py', action='store_true')
-parser.add_argument('--port', help='port to run TestILIAS on', nargs='?', const=1, type=int, default=11150)
-parser.add_argument('--embedded-ilias-port', help='port to run embedded ILIAS on', nargs='?', const=1, type=int, default=11145)
-parser.add_argument('--rebuild', help='rebuild docker containers', action='store_true')
-parser.add_argument('--rebuild-no-cache', help='rebuild docker containers without cache', action='store_true')
+up_parser = subparsers.add_parser('up', help='start TestILIAS')
+up_parser.set_defaults(command='up')
+stop_parser = subparsers.add_parser('stop', help='shutdown TestILIAS')
+stop_parser.set_defaults(command='stop')
 
-#parser.add_argument('--stop', help='stop all docker containers', action='store_true')
-#parser.add_argument('--ps', help='list all docker containers', action='store_true')
+ps_parser = subparsers.add_parser('ps', help='list all TestILIAS docker containers')
+ps_parser.set_defaults(command='ps')
+
+for p in (up_parser, stop_parser, ps_parser):
+	p.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
+	p.add_argument('--debug', help='output debugging information', action='store_true')
+	p.add_argument('--ilias', help='YAML file that specifies an external ILIAS installation to test against')
+	p.add_argument('--port', help='port to run TestILIAS on', nargs='?', const=1, type=int, default=11150)
+	p.add_argument('--embedded-ilias-port', help='port to run embedded ILIAS on', nargs='?', const=1, type=int, default=11145)
+
+up_parser.add_argument('--fork', help='fork up.py', action='store_true')
+up_parser.add_argument('--n', nargs='?', const=1, type=int, default=1)
+up_parser.add_argument('--rebuild', help='rebuild docker containers', action='store_true')
+up_parser.add_argument('--rebuild-no-cache', help='rebuild docker containers without cache', action='store_true')
 
 args = parser.parse_args()
 
 os.environ['TESTILIAS_PORT'] = str(args.port)
 os.environ['EMBEDDED_ILIAS_PORT'] = str(args.embedded_ilias_port)
 
-if args.fork:
+if hasattr(args, 'fork') and args.fork:
 	pid = os.fork()
 	if pid != 0:
 		print("started up.py on pid %d." % pid)
@@ -187,8 +204,8 @@ if args.command == 'stop':
 elif args.command == 'ps':
 	subprocess.call(["docker-compose", "ps"])
 	sys.exit(0)
-elif args.command != 'start':
-	print("illegal command.")
+elif args.command != 'up':
+	print("illegal command %s." % args.command)
 	sys.exit(1)
 
 if args.rebuild_no_cache:
@@ -217,12 +234,59 @@ def publish_machines(machines):
 		print("wrote machines.json at %s" % machines_path)
 
 
+class SpinningCursor:
+	def __init__(self):
+		self._spinner = SpinningCursor.spinning_cursor()
+		self._visible = False
+		self._spin_thread = None
+
+	@staticmethod
+	def spinning_cursor():
+		while True:
+			for cursor in '|/-\\':
+				yield cursor
+
+	def show(self):
+		if not self._visible:
+			sys.stdout.write(' ')
+			self.spin()
+			self._visible = True
+		if not self._spin_thread:
+			self._spin_thread = Thread(
+				target=self._trigger_spin, args=())
+			self._spin_thread.start()
+
+	def hide(self):
+		was_visible = self._visible
+		self._visible = False
+		if self._spin_thread:
+			self._spin_thread.join()
+			self._spin_thread = None
+		if was_visible:
+			sys.stdout.write('\b')
+			sys.stdout.write(' ')
+			sys.stdout.flush()
+
+	def spin(self):
+		if self._visible:
+			sys.stdout.write('\b')
+			sys.stdout.write(next(self._spinner))
+			sys.stdout.flush()
+
+	def _trigger_spin(self):
+		while self._visible:
+			self.spin()
+			time.sleep(0.5)
+
+
+spinning_cursor = SpinningCursor()
+
 def check_errors(pipe, output):
 	with pipe:
 		for line in iter(pipe.readline, b''):
 			s = line.decode('utf8').strip()
 			if s:
-				print('.', end='', flush=True)
+				spinning_cursor.spin()
 				output.append('# ' + s)
 
 
@@ -256,18 +320,33 @@ def terminate():
 	if request_quit:
 		return
 	request_quit = True
+
+	global compose
+	if compose:
+		compose.kill()
+		compose = None
+
+	spinning_cursor.hide()
+
+	print("")
+	print("Please wait while docker-compose is shutting down.", flush=True)
 	subprocess.call(["docker-compose", "stop"])
+
 	if monitor_thread:
 		monitor_thread.join()
-	print('')
+
+	sys.exit(0)
+
 
 def on_terminate_signal(signal, stack):
 	terminate()
 
+
 signal.signal(signal.SIGTERM, on_terminate_signal)
 
 try:
-	print("Waiting for docker-compose to start up.", end='')
+	print("Waiting for docker-compose to start up. ", end='', flush=True)
+	spinning_cursor.show()
 	Thread(target=check_errors, args=[compose.stderr, compose_stderr]).start()
 
 	def wait_for_apache():
@@ -291,6 +370,7 @@ try:
 
 
 	wait_for_apache()
+	spinning_cursor.hide()
 	print("")
 
 	def find_and_publish_machines():
@@ -330,11 +410,14 @@ try:
 	find_and_publish_machines()
 
 	if embedded_ilias:
-		print("Preparing ILIAS. This might take a while...")
-		subprocess.call(["docker-compose", "exec", "web", "ilias-startup.sh"])
-		print("Done.")
+		print("Preparing ILIAS. This might take a while. ", end='', flush=True)
+		spinning_cursor.show()
+		with open(os.devnull, 'w') as f:
+			subprocess.call(["docker-compose", "exec", "web", "ilias-startup.sh"], stdout=f)
+		spinning_cursor.hide()
+		print('')
 
-	print("TestILIAS is at http://%s:%d" % (socket.gethostname(), args.port))
+	cprint("TestILIAS is at http://%s:%d" % (socket.gethostname(), args.port), 'green')
 
 	def check_alive():
 		status = subprocess.check_output([
@@ -364,6 +447,7 @@ try:
 			path = path.decode("utf-8")
 		return path
 
+	'''
 	def get_logs_size():
 		size = 0
 
@@ -374,16 +458,14 @@ try:
 
 		size += get_docker_container_log_size('web_1')
 		size += get_docker_container_log_size('db_1')
+	'''
 
-
-	monitor_thread = Thread(target=monitor_docker_stats, args=(tmp_path, docker_compose_name,))
-	monitor_thread.start()
+	#monitor_thread = Thread(target=monitor_docker_stats, args=(tmp_path, docker_compose_name,))
+	#monitor_thread.start()
 
 	print_docker_logs()
 
 except KeyboardInterrupt:
-	print("")
-	print("Please wait while docker-compose is shutting down.", end='', flush=True)
 	terminate()
 finally:
 	if not args.verbose:

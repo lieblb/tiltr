@@ -7,7 +7,7 @@ Restart=always
 RestartSec=20
 TimeoutSec=infinity
 User=YOUR_USER_WITH_DOCKER_PRIVILEGES
-ExecStart=/path/to/testilias/up.py --n 10
+ExecStart=/path/to/testilias/compose.py up --n 10
 StandardOutput=journal
 [Install]
 WantedBy=multi-user.target

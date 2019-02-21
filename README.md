@@ -52,11 +52,11 @@ TestILIAS will instrument your ILIAS code on the first run and automatically bui
 
 ## Starting up TestILIAS
 
-Starting up TestILIAS happens via the `up.py` script, which takes the number of parallel client machines you want to start:
+Starting up TestILIAS happens via the `compose.py` script, which takes the number of parallel client machines you want to start:
 
 ```
 cd /path/to/testilias
-./up.py --n 5
+./compose.py up --n 5
 ```
 
 After TestILIAS started up, you should be able to access the TestILIAS main GUI under:
