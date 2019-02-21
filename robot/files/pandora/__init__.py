@@ -22,11 +22,9 @@ class Browser:
 				w = int(w)
 				h = int(h)
 
-			#driver.execute_script("window.resizeTo(%d,%d)" % (w, h))
-
 			driver.set_window_size(w, h)
 
-			#driver.set_page_load_timeout(30)
+			driver.set_page_load_timeout(30)
 
 		except:
 			driver.quit()
