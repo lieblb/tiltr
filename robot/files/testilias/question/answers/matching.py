@@ -19,6 +19,19 @@ def _check_label(kind, element, stored):
 		raise IntegrityException('displayed %s label "%s" != "%s"' % (kind, displayed, stored))
 
 
+def _robust_drag_and_drop(chain, source_element, target_element):
+	chain.move_to_element(source_element)
+	chain.pause(1)
+	chain.click_and_hold()
+	chain.pause(1)
+	chain.move_to_element(target_element)
+	chain.pause(1)
+	chain.move_by_offset(1, 1)
+	chain.pause(1)
+	chain.release()
+	chain.pause(1)
+
+
 class MatchingAnswer(Answer):
 	def __init__(self, driver, question, protocol):
 		super().__init__(driver, question, protocol)
@@ -57,19 +70,11 @@ class MatchingAnswer(Answer):
 					self.question.get_term_label(term_id))
 
 				chain = ActionChains(self.driver)
-				#chain.drag_and_drop(source_element, target_element)
-
-				chain.move_to_element(source_element)
-				chain.pause(1)
-				chain.click_and_hold()
-				chain.pause(1)
-				chain.move_to_element(target_element)
-				chain.pause(1)
-				chain.move_by_offset(1, 1)
-				chain.pause(1)
-				chain.release()
-				chain.pause(1)
-
+				if n_retries == 0:
+					chain.drag_and_drop(source_element, target_element)
+				else:
+					# use slower, but much more robust drag-and-drop on retries
+					_robust_drag_and_drop(chain, source_element, target_element)
 				chain.perform()
 
 				if self.debug:
