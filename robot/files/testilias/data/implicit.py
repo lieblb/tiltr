@@ -1,12 +1,16 @@
-def looks_like_an_unsigned_number(x):
-	return len(x) >= 1 and x.count('.') <= 1 and all(y.isdigit() or len(y) < 1 for y in x.split('.'))
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2018 Rechenzentrum, Universitaet Regensburg
+# GPLv3, see LICENSE
+#
+
+import re
 
 
 def looks_like_a_number(x):
-	if x and x[0] in ("-", "+"):
-		return looks_like_an_unsigned_number(x[1:])
-	else:
-		return looks_like_an_unsigned_number(x)
+	m = re.match(r'^((\+|\-)?(([0-9]+)|([0-9]+\.)|(\.[0-9]+)|([0-9]+\.[0-9]+)))$', x)
+	return m is not None
 
 
 def implicit_text_to_number(value):
@@ -19,9 +23,10 @@ def implicit_text_to_number(value):
 			# e.g. 0.637010 -> 0.63701
 			value = value[:-1]
 
-		if len(value) >= 2 and value.endswith("."):
-			# e.g. 13. -> 13
-			value = value[:-1]
+		integer_match = re.match(r'^((\+|\-)?[0-9]+)\.$', value)
+		if integer_match:
+			# e.g. 13. -> 13, but do not convert -. -> -
+			value = integer_match.group(1)
 		elif len(value) >= 2 and value.startswith("."):
 			# e.g. .17 -> 0.17
 			value = "0" + value
@@ -56,5 +61,8 @@ def implicit_text_to_number_xls(value):
 			# e.g. "0.0" -> "0".  note that other conversions, e.g. 597.0 -> 597, don't
 			# take place!
 			value = "0"
+
+	if value == '.':
+		value = '+.'  # don't ask
 
 	return value
