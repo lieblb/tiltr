@@ -62,7 +62,4 @@ def implicit_text_to_number_xls(value):
 			# take place!
 			value = "0"
 
-	if value == '.':
-		value = '+.'  # don't ask
-
 	return value
