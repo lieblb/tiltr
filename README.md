@@ -1,7 +1,7 @@
 
 # TestILIAS
 
-TestILIAS is an automatic software testing / quality assurance tool for verifying various essential functions of the Test & Assessment module of ILIAS 5:
+TestILIAS is an automatic software testing / quality assurance / fuzzing tool for verifying and stress testing various essential functions of the Test & Assessment module of ILIAS 5:
 
 <img src="https://github.com/lieblb/testilias/blob/master/docs/sample-video.gif?raw=true">
 
