@@ -22,7 +22,8 @@ class ErrorDomain(Enum):
 	interaction = 2
 	unexpected = 3
 	auto_save = 4
-	integrity = 5
+	invalid_save = 5
+	integrity = 6
 
 
 def most_severe(domains):
@@ -93,6 +94,16 @@ class UnexpectedErrorException(TestILIASException):
 class AutoSaveException(TestILIASException):
 	def __init__(self, *args):
 		super().__init__(ErrorDomain.auto_save, *args)
+
+
+# InvalidSaveException:
+
+# A save operation (seems to) have succeeded that should not have succeeded due to invalid form
+# values.
+
+class InvalidSaveException(TestILIASException):
+	def __init__(self, *args):
+		super().__init__(ErrorDomain.invalid_save, *args)
 
 
 # IntegrityException:

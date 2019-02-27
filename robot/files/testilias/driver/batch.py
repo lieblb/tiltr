@@ -500,7 +500,17 @@ class Run:
 			with self.batch.in_master(self.protocol_master) as master:
 				self.prepare(master)
 
-			all_recorded_results = self.run_exams()
+			try:
+				all_recorded_results = self.run_exams()
+			except TestILIASException as e:
+				# in case of an error, always export XLS for later analysis.
+				try:
+					with self.batch.in_master(self.protocol_master) as master:
+						xls, _ = master.test_driver.fetch_exported_workbook()
+						self.xls = xls
+				except:
+					pass  # ignore
+				raise e  # original
 
 			with self.batch.in_master(self.protocol_master) as master:
 				self.analyze(master, all_recorded_results)

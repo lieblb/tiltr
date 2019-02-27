@@ -28,6 +28,7 @@ from selenium.webdriver.common.by import By
 from .utils import *
 from .exam_configuration import *
 
+from testilias.data.exceptions import *
 from testilias.question import *
 from testilias.data.result import *
 from testilias.question.protocol import AnswerProtocol
@@ -620,7 +621,7 @@ class ExamDriver:
 
 			if err_text:
 				self.protocol.append((time.time(), "test", err_text))
-				raise IntegrityException(err_text)
+				raise InvalidSaveException(err_text)
 
 	def has_next_question(self):
 		try:
