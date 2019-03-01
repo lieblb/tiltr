@@ -1,17 +1,20 @@
 
 # TestILIAS
 
-TestILIAS is an automatic software testing / quality assurance / fuzzing tool for verifying and stress testing various essential functions of the Test & Assessment module of ILIAS 5:
+TestILIAS is a generation-based, smart, black-box fuzzer for the Test & Assessment module of ILIAS 5.
+
+It will import and analyze a given test and then execute random test runs with a configurable number of robot participants in parallel:
 
 <img src="https://github.com/lieblb/testilias/blob/master/docs/sample-video.gif?raw=true">
 
-Specifically, TestILIAS checks that:
+Using its built-in test oracle it tries to assess the correct implementation of various essential functions (note that it can _not_ achieve anything like full coverage):
 
-* answers that are given in a test are saved reliably during the test (i.e. saved answers do not change upon revisiting the questions).
-* answers are reliably saved and exported reliably  after the test (i.e. the xls export representation exactly mirrors the answers given during the test).
-* the computed scores are correctly computed according to the question definition.
+| verified function                 | while in assessment         | in xls export  | in pdf export | in scoring adjusment |
+| --------------------------------- |:---------------------------:| --------------:| -------------:| --------------------:| 
+| user input and saved answer match | &#x2022;                    | &#x2022;       |               |                      |
+| computed scores are correct       |                             | &#x2022;       | &#x2022;      | &#x2022;             |
 
-TestILIAS works by importing and analyzing a given test (i.e. the test contents are not hard coded) and then executing random test runs with a configurable number of robot participants in parallel. Currently the following question types are supported:
+Currently the following question types are supported:
 
 * Single Choice
 * Multiple Choice
@@ -22,6 +25,8 @@ TestILIAS works by importing and analyzing a given test (i.e. the test contents 
 * [Paint Questions](https://github.com/kyro46/assPaintQuestion)
 
 TestILIAS allows to work around a number of known problems in order to perform test without already known fails. It also supports running tests in a loop mode so you can keep running randomized tests for a longer time.
+
+A portion of tests can be specified to run in a deterministic manner, which is suitable for regression tests.
 
 To get an idea what data is generated for a test run, look at <a href="docs/sample-protocol.zip">a sample protocol and the accompanying XLS export file</a>.
 
