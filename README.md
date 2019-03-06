@@ -7,14 +7,24 @@ It will import and analyze a given test and then execute random test runs with a
 
 <img src="https://github.com/lieblb/testilias/blob/master/docs/sample-video.gif?raw=true">
 
+## Areas of Verification
+
 Using its built-in test oracle it tries to assess the correct implementation of various essential functions (note that it can _not_ achieve anything like full coverage):
 
-| verified function                 | while in assessment         | in xls export  | in pdf export | in scoring adjusment |
-| --------------------------------- |:---------------------------:| --------------:| -------------:| --------------------:| 
-| user input and saved answer match | &#x2022;                    | &#x2022;       |               |                      |
-| computed scores are correct       |                             | &#x2022;       | &#x2022;      | &#x2022;             |
+|                      | Responses         | Computed Score  | Computed Total Score |
+| ---------------------|:-----------------:| ---------------:| --------------------:| 
+| **During the Test**  |                   |                 |                      |
+|                      | &#x2713;          | -               | -                    |
+| **After the Test**   |                   |                 |                      |
+| via Web UI           | -                 | -               | &#x2713;             |
+| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             |
+| via PDF Export       | -                 | &#x2713;        | -                    |
+| **Adjustments**      |                   |                 |                      |
+| Optional, Basic      | -                 | &#x2713;        | &#x2713;             |
 
-Currently the following question types are supported:
+## Supported Question Types
+
+TestILIAS can operate on any test you provide it with. Currently the following question types are (partially) supported:
 
 * Single Choice
 * Multiple Choice
@@ -23,12 +33,6 @@ Currently the following question types are supported:
 * Long Text ("Essay") Question
 * Matching Questions
 * [Paint Questions](https://github.com/kyro46/assPaintQuestion)
-
-TestILIAS allows to work around a number of known problems in order to perform test without already known fails. It also supports running tests in a loop mode so you can keep running randomized tests for a longer time.
-
-A portion of tests can be specified to run in a deterministic manner, which is suitable for regression tests.
-
-To get an idea what data is generated for a test run, look at <a href="docs/sample-protocol.zip">a sample protocol and the accompanying XLS export file</a>.
 
 # Getting Started
 
@@ -74,19 +78,36 @@ Be patient during the first setup, it may take some time. If your installation i
 
 # The TestILIAS UI
 
-## Starting Test Runs
+## Workarounds
+
+TestILIAS will work around a number of known problems in order to perform tests that focus on new, yet unknown issues.
+
+Each box below represents some known issue with ILIAS's current behaviour. Turning off one of these boxes will
+mean that TestILIAS will report these issues sooner or later in some test run. Turning these boxes on means: "I know about these
+issues, please work around them and don't report them". All boxes are on by default.
 
 <img src="https://github.com/lieblb/testilias/blob/master/docs/main-ui.jpg?raw=true">
 
-Start an automatic test run via the "Start" button. "Loop" allows to to run test runs indefinitely (i.e. start a new run as soon as one ends). Workarounds gives you a list of problems currently known in ILIAS. Turning one of these checkboxes on will mean that your tests will fail sooner or later.
+## Starting Test Runs
+
+Start an automatic test run via the "Start" button. "Loop" allows to to run test runs indefinitely (i.e. start a new run as soon as one ends).
+
+A portion of tests can be specified to run in a deterministic manner, which is suitable for regression tests (use the `num_deterministic_machines`setting).
+
+The results table gives you detailed protocols of each test run as well as the exported XLS. Note that all this data gets deleted permanently as soon as you hit the Delete button in the UI.
+
+To get an idea what data is generated for a test run, look at <a href="docs/sample-protocol.zip">a sample protocol and the accompanying XLS export file</a>.
+
+## Embedded ILIAS instance
 
 Clicking on the ILIAS link below the header will bring you to TestILIAS' internal ILIAS installation. You can login as root using the password "odysseus".
-
-The results table gives you detailed protocols of each test run as well as the exported XLS. Note that all this data gets deleted permanently as soon as you hit the close button in the UI.
 
 ## Response Times
 
 <img src="https://github.com/lieblb/testilias/blob/master/docs/response-times-ui.jpg?raw=true">
+
+This gathers response times (in seconds) the various robot users experience with the configured ILIAS
+installation (i.e. durations of each web requests).
 
 ## Status
 
