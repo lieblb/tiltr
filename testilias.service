@@ -1,5 +1,5 @@
 [Unit]
-Description=TestILIAS
+Description=TiltR
 After=network.target
 StartLimitIntervalSec=0
 [Service]
@@ -7,7 +7,7 @@ Restart=always
 RestartSec=20
 TimeoutSec=infinity
 User=YOUR_USER_WITH_DOCKER_PRIVILEGES
-ExecStart=/path/to/testilias/compose.py up --n 10
+ExecStart=/path/to/tiltr/compose.py up --n 10
 StandardOutput=journal
 [Install]
 WantedBy=multi-user.target

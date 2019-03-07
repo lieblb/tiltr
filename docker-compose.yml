@@ -25,13 +25,13 @@ services:
   master:
     build: robot
     ports:
-      - "${TESTILIAS_PORT}:8080"
+      - "${TILTR_PORT}:8080"
     expose:
       - "8080"
     volumes:
       - ./robot/files:/files
     working_dir: /files
-    entrypoint: python3 -m testilias --master $ILIASTEST_ARGUMENTS
+    entrypoint: python3 -m tiltr --master $ILIASTEST_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'
@@ -43,7 +43,7 @@ services:
     volumes:
       - ./robot/files:/files
     working_dir: /files
-    entrypoint: python3 -m testilias --machine $ILIASTEST_ARGUMENTS
+    entrypoint: python3 -m tiltr --machine $ILIASTEST_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'

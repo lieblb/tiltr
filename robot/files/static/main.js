@@ -44,7 +44,7 @@ $(function() {
 		var isChecked = {};
 
 		function setIsChecked(tile, checked) {
-			var enabledClass = 'is-primary';
+			var enabledClass = 'is-warning';
 			$(tile).removeClass('is-light ' + enabledClass);
 			$(tile).addClass(checked ? enabledClass : 'is-light');
 			var key = $(tile).attr('data-toggle-key');
@@ -334,7 +334,7 @@ $(function() {
 			$("#toggle-performance").removeClass("is-loading");
 		}
 
-		if (panels.longterm) {
+		/*if (panels.longterm) {
 			$("#message-results-longterm .message-body").show();
 
 			$.getJSON(host + "/results-longterm.json", function(longterm) {
@@ -377,7 +377,7 @@ $(function() {
 		} else {
 			$("#toggle-longterm").removeClass("is-loading");
             $("#message-results-longterm .message-body").hide();
-        }
+        }*/
 	}
 
 	function updateResults() {
@@ -421,6 +421,15 @@ $(function() {
 		updatePanels();
 	}
 
+
+	$("#toggle-workarounds").on("click", function() {
+		$("[data-workarounds-content]").toggle();
+	});
+
+	$("#toggle-settings").on("click", function() {
+		$("[data-settings-content]").toggle();
+	});
+
 	$("#toggle-coverage").on("click", function() {
 		$("#toggle-coverage").addClass("is-loading");
 		panels.coverage = !panels.coverage;
@@ -439,11 +448,11 @@ $(function() {
 		updatePanels();
 	});
 
-	$("#toggle-longterm").on("click", function() {
+	/*$("#toggle-longterm").on("click", function() {
 		$("#toggle-longterm").addClass("is-loading");
 		panels.longterm = !panels.longterm;
 		updatePanels();
-	});
+	});*/
 
 	$("#delete-results").click(function() {
 		$("#delete-results").addClass("is-loading");
@@ -497,7 +506,7 @@ $(function() {
 			//img = document.createElement("img");
 			img = $(link).find("img");
             $(img).attr("id", "screen_" + machine);
-			$(img).attr("style", "width: 85%; padding-bottom: 0.5em;");
+			$(img).attr("style", "padding-bottom: 0.5em;");
 
             $(link).append(img);
 			$(body).append(link);
@@ -623,6 +632,7 @@ $(function() {
 
 		$("#status").show();
 		$("#workarounds").hide();
+		$("#settings").hide();
 
 		$("#start").attr("disabled", true);
 		$("#start").addClass("is-loading");
@@ -657,6 +667,7 @@ $(function() {
 				$("#status").removeClass("is-active");
 				$("#workarounds").removeClass("disabled");
 				$("#workarounds").show();
+				$("#settings").show();
 
 				$("#select-browser").attr("disabled", false);
 				$("#select-test").attr("disabled", false);
@@ -750,8 +761,11 @@ $(function() {
 	$("#start").on("click", restart);
 	$("#status").hide();
 
-	setScreenshot("master", "/static/default/screen.svg");
+	setScreenshot("master", "/static/default/screen.png");
 	for (var i = 1; i <= NUM_MACHINES; i++) {
-		setScreenshot("machine_" + i.toString(), "/static/default/screen.svg");
+		setScreenshot("machine_" + i.toString(), "/static/default/screen.png");
 	}
+
+	$("[data-workarounds-content]").hide();
+	$("[data-settings-content]").hide();
 });

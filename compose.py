@@ -17,6 +17,7 @@ import json
 import socket
 import fcntl
 import signal
+import webbrowser
 from threading import Thread
 from collections import defaultdict
 
@@ -34,24 +35,24 @@ monitor_thread = None
 request_quit = False
 compose = None
 
-parser = argparse.ArgumentParser(description='Starts up the TestILIAS test environment.')
+parser = argparse.ArgumentParser(description='Starts up the TiltR testing toolkit.')
 
 subparsers = parser.add_subparsers(help='command', dest='command')
 subparsers.required = True
 
-up_parser = subparsers.add_parser('up', help='start TestILIAS')
+up_parser = subparsers.add_parser('up', help='start TiltR')
 up_parser.set_defaults(command='up')
-stop_parser = subparsers.add_parser('stop', help='shutdown TestILIAS')
+stop_parser = subparsers.add_parser('stop', help='shutdown TiltR')
 stop_parser.set_defaults(command='stop')
 
-ps_parser = subparsers.add_parser('ps', help='list all TestILIAS docker containers')
+ps_parser = subparsers.add_parser('ps', help='list all TiltR docker containers')
 ps_parser.set_defaults(command='ps')
 
 for p in (up_parser, stop_parser, ps_parser):
 	p.add_argument('--verbose', help='verbose output of docker compose logs', action='store_true')
 	p.add_argument('--debug', help='output debugging information', action='store_true')
 	p.add_argument('--ilias', help='YAML file that specifies an external ILIAS installation to test against')
-	p.add_argument('--port', help='port to run TestILIAS on', nargs='?', const=1, type=int, default=11150)
+	p.add_argument('--port', help='port to run TiltR on', nargs='?', const=1, type=int, default=11150)
 	p.add_argument('--embedded-ilias-port', help='port to run embedded ILIAS on', nargs='?', const=1, type=int, default=11145)
 
 up_parser.add_argument('--fork', help='fork up.py', action='store_true')
@@ -61,7 +62,7 @@ up_parser.add_argument('--rebuild-no-cache', help='rebuild docker containers wit
 
 args = parser.parse_args()
 
-os.environ['TESTILIAS_PORT'] = str(args.port)
+os.environ['TILTR_PORT'] = str(args.port)
 os.environ['EMBEDDED_ILIAS_PORT'] = str(args.embedded_ilias_port)
 
 if hasattr(args, 'fork') and args.fork:
@@ -159,7 +160,7 @@ def set_argument_environ(args):
 	if args.debug:
 		entrypoint_args.append('--debug')
 
-	entrypoint_args.extend(['--testilias-port', str(args.port)])
+	entrypoint_args.extend(['--tiltr-port', str(args.port)])
 
 	if args.ilias:
 		embedded_ilias = False
@@ -417,7 +418,11 @@ try:
 		spinning_cursor.hide()
 		print('')
 
-	cprint("TestILIAS is at http://%s:%d" % (socket.gethostname(), args.port), 'green')
+	cprint("TiltR is at http://%s:%d" % (socket.gethostname(), args.port), 'green')
+	try:
+		webbrowser.open_new("http://%s:%d" % (socket.gethostname(), args.port))
+	except:
+		pass  # ignore
 
 	def check_alive():
 		status = subprocess.check_output([

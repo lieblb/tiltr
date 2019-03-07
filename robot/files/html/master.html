@@ -72,8 +72,14 @@
 		  <div class="hero-body">
 			<div class="container">
 			  <h1 class="title">
-				TestILIAS
+				  <a href="https://github.com/lieblb/tiltr"><img src="/static/default/tiltr.png" alt="TiltR" width="200"></a>
 			  </h1>
+
+				<span class="is-pulled-right">
+					{{ num_machines }} machines connected.<br>
+					<span id="host_disk_free"></span><br>
+				</span>
+
 			  <h2 class="subtitle">
 				  <a href="{{ilias_url}}" target="_blank">ILIAS {{ ilias_version }}</a>
 			  </h2>
@@ -107,22 +113,39 @@
 						<select id="select-test">
 						</select>
 					</div>
-
-					<span class="is-pulled-right">
-						{{ num_machines }} machines connected.<br>
-						<span id="host_disk_free"></span><br>
-					</span>
 				</div>
 
 				<article id="workarounds" class="message is-info">
 					<div class="message-header">
-						<p>Robot Configuration</p>
+						<p>Workarounds</p>
+						<span class="is-pulled-right" data-workarounds-content="true">
+							Disable boxes below to report known errors
+						</span>
+						<a id="toggle-workarounds" class="button">
+							<span class="oi iconic-size-lg" data-glyph="chevron-bottom" style="font-size:1em;">
+							</span>
+						</a>
 					</div>
-					<div class="message-body">
+					<div class="message-body" data-workarounds-content="true">
 						<section class="section">
 							<div id="workarounds-dashboard">
 							</div>
 						</section>
+					</div>
+				</article>
+
+				<article id="settings" class="message is-info">
+					<div class="message-header">
+						<p>Settings</p>
+						<span class="is-pulled-right" data-settings-content="true">
+							Configure what TiltR should do in more detail
+						</span>
+						<a id="toggle-settings" class="button">
+							<span class="oi iconic-size-lg" data-glyph="chevron-bottom" style="font-size:1em;">
+							</span>
+						</a>
+					</div>
+					<div class="message-body" data-settings-content="true">
 						<section class="section">
 							<div id="settings-dashboard">
 							</div>
@@ -217,6 +240,7 @@
 					</div>
 				</article>
 
+				<!--
 				<article id="message-results-longterm" class="message is-info" style="margin-top:2em;">
 					<div class="message-header">
 						<p>Longterm</p>
@@ -276,6 +300,8 @@
 
 					</div>
 				</article>
+				-->
+
 			</div>
 		</section>
 	</body>
