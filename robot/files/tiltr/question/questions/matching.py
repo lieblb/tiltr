@@ -124,7 +124,7 @@ class MatchingQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, random, report):
-		pass
+		return False
 
 	def compute_score(self, answers, context):
 		score = Decimal(0)

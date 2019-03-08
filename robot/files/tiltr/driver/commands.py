@@ -173,9 +173,17 @@ class TakeExamCommand:
 					if self.machine_index <= self.n_deterministic_machines:
 						# some machines can operate deterministically as a well-defined baseline regression test
 						context = RegressionContext(
-							self.machine_index * 73939133, self.questions, self.settings, self.workarounds)
+							self.machine_index * 73939133,
+							self.questions,
+							self.settings,
+							self.workarounds,
+							self.admin_lang)
 					else:
-						context = RandomContext(self.questions, self.settings, self.workarounds)
+						context = RandomContext(
+							self.questions,
+							self.settings,
+							self.workarounds,
+							self.admin_lang)
 
 					exam_driver = test_driver.start(context, self.questions, self.exam_configuration)
 

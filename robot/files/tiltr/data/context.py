@@ -47,7 +47,7 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 
 
 class TestContext:
-	def __init__(self, questions, settings, workarounds):
+	def __init__(self, questions, settings, workarounds, language):
 		self.settings = settings
 		self.workarounds = workarounds
 		self.cloze_random_chars = get_random_chars(
@@ -59,6 +59,7 @@ class TestContext:
 			allow_dollar=True,
 			allow_clamps=True)
 		self.coverage = Coverage(questions, self)
+		self.language = language
 
 	def _random_text(self, n, random_chars, allow_numbers=True):
 		if allow_numbers and self.random.random() < self.settings.numbers_in_text_fields_p:

@@ -31,7 +31,7 @@ class CodeQuestion(Question):
 		return text, self.compute_score(text, context)
 
 	def readjust_scores(self, driver, random, report):
-		pass
+		return False
 
 	def compute_score(self, answers, context):
 		return Decimal(0)

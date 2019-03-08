@@ -210,8 +210,10 @@ def verify_admin_setting(name, value, expected, log):
 	log.append("%s is %s." % (name, expected))
 
 
-def verify_admin_settings(driver, workarounds, ilias_url, report):
+def verify_admin_settings(driver, workarounds, settings, ilias_url, report):
 	log = []
+
+	# test admin settings.
 
 	goto_test_administration(driver, ilias_url)
 	report("verifying test admin settings.")
@@ -238,6 +240,20 @@ def verify_admin_settings(driver, workarounds, ilias_url, report):
 		driver.find_element_by_id("export_essay_qst_with_html").is_selected(),
 		True,
 		log)
+
+	if int(settings.num_readjustments) > 0:
+		def checked(css):
+			return [e.is_selected() for e in driver.find_elements_by_css_selector(css)]
+
+		enabled = checked('input[name="chb_scoring_adjustment[]"]')
+		enabled.extend(checked("#il_prop_cont_chb_scoring_adjust input"))
+
+		if not all(enabled):
+			raise InteractionException(
+				"in order to verify readjustments, please enable readjustments "
+				"for all question types in the T&A administration")
+
+	# editor admin settings.
 
 	goto_editor_administration(driver, ilias_url)
 	report("verifying editor admin settings.")
@@ -864,15 +880,13 @@ class TestDriver:
 		url = self.driver.current_url
 		return int(http_get_parameters(url)["ref_id"])
 
-
-	def import_test(self):
+	def import_test(self, path):
 		driver = self.driver
 
 		self.report("importing test.")
 
 		# goto root ("Magazin")
 		root_url = self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id)
-		self.report("going to " + root_url)
 		with wait_for_page_load(driver):
 			driver.get(root_url)
 
@@ -903,7 +917,7 @@ class TestDriver:
 			raise InteractionException("test import button not found.")
 		with wait_for_page_load(driver):
 			#driver.execute_script("document.getElementById('xmldoc').value = arguments[0]", self.test.get_path())
-			driver.find_element_by_id("xmldoc").send_keys(self.test.get_path())
+			driver.find_element_by_id("xmldoc").send_keys(path)
 			import_button.click()
 
 		self.report("importing.")
@@ -912,6 +926,9 @@ class TestDriver:
 			driver.find_element_by_name("cmd[importVerifiedFile]").click()
 
 		self.report("done importing test.")
+
+	def import_test_from_template(self):
+		self.import_test(self.test.get_path())
 
 	def configure(self):
 		self.make_online()
@@ -973,6 +990,8 @@ class TestDriver:
 
 	def goto_scoring_adjustment(self):
 		assert self.goto()
+		# if this fails, it might mean we have readjustments deactivated in the
+		# administration settings. should have been checked by verify_admin_settings().
 		self.driver.find_element_by_css_selector("#tab_scoringadjust a").click()
 
 	def _clean_exports(self):
@@ -1195,16 +1214,20 @@ class TestDriver:
 		self.report("deleting all test participants.")
 
 		found = False
-		for a in self.driver.find_elements_by_css_selector("a.btn"):
-			if "cmd=deleteAllUserResults" in a.get_attribute("href"):
-				a.click()
-				found = True
+		for form in self.driver.find_elements_by_css_selector(".navbar-form"):
+			for a in form.find_elements_by_css_selector("a.btn"):
+				if "cmd=deleteAllUserResults" in a.get_attribute("href"):
+					a.click()
+					found = True
+					break
+			if found:
 				break
 
 		if not found:  # no participants in test
 			return
 
-		self.driver.find_element_by_css_selector('input[name="cmd[confirmDeleteAllUserResults]"]').click()
+		self.driver.find_element_by_css_selector(
+			'input[name="cmd[confirmDeleteAllUserResults]"]').click()
 
 	def get_test_url(self):
 		if not self.test.cached_link:

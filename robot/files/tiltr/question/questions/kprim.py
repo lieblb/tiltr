@@ -82,4 +82,4 @@ class KPrimQuestion(Question):
 		return answers, self.compute_score_by_indices(answers)
 
 	def readjust_scores(self, driver, random, report):
-		pass
+		return False

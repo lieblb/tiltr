@@ -19,10 +19,11 @@ Using its built-in test oracle TiltR tries to assess the correct implementation 
 | via Web UI           | -                 | -               | &#x2713;             |
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             |
 | via PDF Export       | -                 | &#x2713;        | -                    |
-| **Adjustments**      |                   |                 |                      |
-| Optional, Patchy     | -                 | &#x2713;        | &#x2713;             |
+| **Readjustments**    |                   |                 |                      |
+| Optional             | -                 | SC Only         | SC Only              |
 
-To enable basic Adjustments testing, set `num_readjustments` to > 0.
+To enable basic Adjustments testing, set `num_readjustments` to > 0 (note that this will change the test scores
+on each run currently).
 
 ## Supported Question Types
 

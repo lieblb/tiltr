@@ -48,10 +48,8 @@ class Answer:
 
 		score = clip_answer_score(self.current_score)
 
-		title = Result.normalize_question_title(self.question.title)
-		for channel in ("xls", "pdf"):
-			result.add_as_formatted_score(
-				(channel, "question", title, "score"), score)
+		for key in Result.score_keys(self.question.title):
+			result.add_as_formatted_score(key, score)
 
 		return score
 

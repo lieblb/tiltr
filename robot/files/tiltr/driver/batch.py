@@ -15,6 +15,8 @@ import datetime
 import uuid
 import base64
 import io
+import os
+import tempfile
 from decimal import *
 
 from multiprocessing.dummy import Pool as ThreadPool
@@ -25,7 +27,6 @@ from collections import defaultdict
 from contextlib import contextmanager
 
 import selenium
-from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from openpyxl import load_workbook
 
@@ -42,7 +43,7 @@ from tiltr.driver.exam_configuration import * # needed for pickling
 import pandora
 
 from .commands import TakeExamCommand
-from .drivers import Login, UsersBackend, UsersFactory, TestDriver, Test, verify_admin_settings
+from .drivers import Login, UsersBackend, UsersFactory, TestDriver, verify_admin_settings
 from .utils import wait_for_page_load, run_interaction
 
 
@@ -104,7 +105,8 @@ def take_exam(args):
 	except TiltrException as e:
 		traceback.print_exc()
 		try:
-			report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+			report("error", "machine %s failed." % machine)
+			report("traceback", traceback.format_exc())
 		except:
 			print("report failed.")
 		return Result.from_error(Origin.recorded, e.get_error_domain(), traceback.format_exc())
@@ -112,7 +114,8 @@ def take_exam(args):
 	except requests.exceptions.ConnectionError:
 		traceback.print_exc()
 		try:
-			report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+			report("error", "machine %s failed." % machine)
+			report("traceback", traceback.format_exc())
 		except:
 			print("report failed.")
 		return Result.from_error(Origin.recorded, ErrorDomain.interaction, traceback.format_exc())
@@ -120,7 +123,8 @@ def take_exam(args):
 	except:
 		traceback.print_exc()
 		try:
-			report("master", "machine %s failed: %s" % (machine, traceback.format_exc()))
+			report("error", "machine %s failed." % machine)
+			report("traceback", traceback.format_exc())
 		except:
 			print("report failed.")
 		return Result.from_error(Origin.recorded, ErrorDomain.integrity, traceback.format_exc())
@@ -136,6 +140,7 @@ class MasterContext:
 		self.driver = None
 		self.test_driver = None
 		self.screenshot_url = None
+		self.language = None
 
 	def report(self, message):
 		try:
@@ -262,7 +267,10 @@ class Run:
 
 		return all_assertions_ok
 
-	def _check_readjustment(self, index, master, all_recorded_results):
+	def _apply_readjustment(self, index, master, all_recorded_results):
+		# note that this will destroy the original test's scores. keep this in mind for future
+		# test runs on this test.
+
 		protocol = self.protocols["readjustment"]
 
 		def report(s):
@@ -274,6 +282,7 @@ class Run:
 
 		index = 0
 		retries = 0
+		modified_questions = set()
 
 		while True:
 			with wait_for_page_load(master.driver):
@@ -302,11 +311,12 @@ class Run:
 			random = rnd.SystemRandom()
 
 			try:
-				question.readjust_scores(master.driver, random, report)
+				if question.readjust_scores(master.driver, random, report):
+					modified_questions.add(question_title)
 
-				master.report("trying to save.")
-				with wait_for_page_load(master.driver):
-					master.driver.find_element_by_name("cmd[savescoringfortest]").click()
+					master.report("saving.")
+					with wait_for_page_load(master.driver):
+						master.driver.find_element_by_name("cmd[savescoringfortest]").click()
 			except TimeoutException:
 				retries += 1
 				if retries >= 1:
@@ -319,28 +329,35 @@ class Run:
 			retries = 0
 
 		report("")
-		context = RandomContext(self.questions, self.workarounds)
+		context = RandomContext(self.questions, self.settings, self.workarounds, self.language)
 
 		# recompute user score's for all questions.
 		for question_title, question in self.questions.items():
+
+			if not question_title in modified_questions:
+				continue
+
 			for user, result in zip(self.users, all_recorded_results):
 				answers = dict()
 				for key, value in result.properties.items():
 					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
 						dimension = key[3]
 						answers[dimension] = value
+
 				score = question.compute_score(answers, context)
 				score = remove_trailing_zeros(str(score))
-				result.update(("question", question_title, "score"), score)
+
+				for key in Result.score_keys(question_title):
+					result.update(key, score)
+
 				report("recomputed score for %s / %s as %s based on answer %s" % (
 					user.get_username(), question_title, score, json.dumps(answers)))
 
 		# recompute total scores.
 		for result in all_recorded_results:
 			score = Decimal(0)
-			for key, value in result.properties.items():
-				if key[0] == "question" and key[2] == "score":
-					score += Decimal(value)
+			for value in result.scores():
+				score += Decimal(value)
 			score = remove_trailing_zeros(str(score))
 			result.update(("exam", "score", "total"), score)
 			result.update(("exam", "score", "gui"), score)
@@ -366,7 +383,12 @@ class Run:
 		header.append("")
 
 		self.protocols["settings"].extend(
-			verify_admin_settings(master.driver, self.workarounds, self.batch.ilias_url, master.report))
+			verify_admin_settings(
+				master.driver,
+				self.workarounds,
+				self.settings,
+				self.batch.ilias_url,
+				master.report))
 
 		self.users = self.users_factory.acquire(self._users_backend(master))
 
@@ -374,7 +396,7 @@ class Run:
 		# goto test.
 		if not master.test_driver.goto_or_fail():
 			# if test does not exist, add it first.
-			master.test_driver.import_test()
+			master.test_driver.import_test_from_template()
 		else:
 			master.test_driver.delete_all_participants()
 		master.test_driver.configure()
@@ -425,51 +447,76 @@ class Run:
 			return all_recorded_results
 		except:
 			traceback.print_exc()
-			self.report("master", "one of the machines failed: %s." % traceback.format_exc())
+			self.report("error", "one of the machines failed.")
+			self.report("traceback", traceback.format_exc())
 			raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
+	def _verify_reimport(self, master):
+		xmlres_zip = master.test_driver.export_xmlres()
+		self.files["exported_xmlres.zip"] = xmlres_zip
+
+		with tempfile.NamedTemporaryFile() as temp:
+			temp.write(xmlres_zip)
+			temp.flush()
+
+			#master.test_driver.import_test(temp.name)
+
+	def _verify_xls(self, master, all_recorded_results):
+		num_readjustments = max(0, int(self.settings.num_readjustments))
+		all_assertions_ok = False
+
+		for readjustment_round in range(num_readjustments + 1):
+			xls = master.test_driver.export_xls()
+			workbook = load_workbook(filename=io.BytesIO(xls))
+
+			try:
+				check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
+			except:
+				raise IntegrityException("failed to check workbook consistency: %s." % traceback.format_exc())
+
+			if readjustment_round == 0:
+				self.xls = xls
+			else:
+				self.files["exported_xls_round_%d.xlsx" % readjustment_round] = xls
+
+			all_assertions_ok = self._check_results(
+				readjustment_round, master, workbook, all_recorded_results)
+			if not all_assertions_ok:
+				break
+
+			if readjustment_round == 0:
+				self._verify_reimport(master)
+
+			if readjustment_round < num_readjustments:
+				self._apply_readjustment(
+					readjustment_round, master, all_recorded_results)
+
+		return "OK" if all_assertions_ok else "FAIL"
+
 	def analyze(self, master, all_recorded_results):
+		# gather coverage data.
 		coverage = self.coverage
 		for recorded_result in all_recorded_results:
 			coverage.extend(recorded_result.coverage)
+		self.add_to_protocol("result", "coverage estimated at %d%%." % coverage.get_percentage())
 
+		# copy protocols and files.
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			self.protocols[user.get_username()] = recorded_result.protocol
 			for k, v in recorded_result.files.items():
 				self.files[user.get_username() + '_' + k] = v
 
+		# gather performance data.
 		for recorded_result in all_recorded_results:
 			self.performance_data.extend(recorded_result.performance)
 
+		# abort if any errors.
 		worst = get_most_severe_error(all_recorded_results)
 		if worst.value > ErrorDomain.none.value:
 			raise TiltrException(worst)
 
-		num_readjustments = max(0, int(self.settings.num_readjustments))
-		all_assertions_ok = False
-
-		for i in range(num_readjustments + 1):
-			xls = master.test_driver.export_xls()
-			workbook = load_workbook(filename=io.BytesIO(xls))
-			try:
-				check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
-			except:
-				raise IntegrityException("failed to check workbook consistency: %s." % traceback.format_exc())
-			if i == 0:
-				self.xls = xls
-
-			all_assertions_ok = self._check_results(
-				i, master, workbook, all_recorded_results)
-			if not all_assertions_ok:
-				break
-
-			if i < num_readjustments:
-				self._check_readjustment(
-					i, master, all_recorded_results)
-
-		self.add_to_protocol("result", "coverage estimated at %d%%." % coverage.get_percentage())
-
-		if all_assertions_ok:
+		# detailed integrity checks.
+		if self._verify_xls(master, all_recorded_results) == "OK":
 			self.success = ("OK",)
 		else:
 			raise IntegrityException("integrity assertions failed")
@@ -525,19 +572,22 @@ class Run:
 		except selenium.common.exceptions.WebDriverException as e:
 			self.success = ("FAIL", "interaction")
 			traceback.print_exc()
-			self.report("master", "exception received: %s." % traceback.format_exc())
+			self.report("error", str(e))
+			self.report("traceback", traceback.format_exc())
 			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
 
 		except TiltrException as e:
 			self.success = ("FAIL", e.get_error_domain_name())
 			traceback.print_exc()
-			self.report("master", "exception received: %s." % traceback.format_exc())
+			self.report("error", str(e))
+			self.report("traceback", traceback.format_exc())
 			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
 
 		except:
 			self.success = ("FAIL", "unknown")
 			traceback.print_exc()
-			self.report("master", "unexpected exception received: %s." % traceback.format_exc())
+			self.report("error", "unexpected exception received. please inspect traceback.")
+			self.report("traceback", traceback.format_exc())
 			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
 
 		finally:
@@ -548,13 +598,15 @@ class Run:
 					with self.batch.in_master(self.protocol_master) as master:
 						self.cleanup(master)
 			except:
-				self.report("master", "cleanup failed: %s." % traceback.format_exc())
+				self.report("error", "cleanup failed")
+				self.report("traceback", traceback.format_exc())
 				traceback.print_exc()
 
 			try:
 				self.store_into_database(time.time() - t0)
 			except:
-				self.report("master", "error saving result to db: %s." % traceback.format_exc())
+				self.report("error", "could not save results to db")
+				self.report("traceback", traceback.format_exc())
 			finally:
 				self.report("master", "finished with status %s." % encode_success(self.success))
 
@@ -583,7 +635,9 @@ class Batch(threading.Thread):
 
 		self.machines_lookup = dict((v, k) for k, v in machines.items())
 		self.machines_lookup["master"] = "master"
-	
+		self.machines_lookup["error"] = "error"
+		self.machines_lookup["traceback"] = "traceback"
+
 		self.test = test
 		self.users_factory = UsersFactory(test, len(machines))
 

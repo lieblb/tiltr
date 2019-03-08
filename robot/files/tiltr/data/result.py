@@ -54,6 +54,17 @@ class Result:
 	def normalize_question_title(title):
 		return re.sub(r'\s+', '', title)
 
+	@staticmethod
+	def score_keys(question_title):
+		normed_title = Result.normalize_question_title(question_title)
+		for channel in ("xls", "pdf"):
+			yield (channel, "question", normed_title, "score")
+
+	def scores(self, channel="xls"):
+		for k, v in self.properties.items():
+			if len(k) == 4 and k[0] == channel and k[1] == "question" and k[3] == "score":
+				yield v
+
 	def __init__(self, from_json=None, **kwargs):
 		from ..question.coverage import Coverage
 

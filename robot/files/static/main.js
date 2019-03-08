@@ -591,22 +591,34 @@ $(function() {
 		var updateScroll = (
 			log.scrollTop() >= log[0].scrollHeight - log.height() - 50);
 
+		if (machine == "error") {
+			$("#status-error-text").text(message);
+			$("#status-error").css("display", "block");
+		}
+
 		var lines = message.split("\n");
 		for (var i = 0; i < lines.length; i++) {
 			var line = lines[i];
 			var entry = $("<div></div>");
 
-			var tag = $('<span class="tag is-light"></span>');
-			tag.css("background-color", color);
-			tag.css("color", "black");
-			if (i == 0) {
-				tag.text(machine);
-			} else {
-				tag.text("#");
+			if (machine != "traceback") {
+				var tag = $('<span class="tag is-light"></span>');
+				tag.css("background-color", color);
+				tag.css("color", "black");
+				if (i == 0) {
+					tag.text(machine);
+				} else {
+					tag.text("#");
+				}
+				entry.append(tag);
 			}
-			entry.append(tag);
 
 			var text = $("<span></span>");
+			if (machine == "error") {
+				text.addClass("has-text-danger");
+			} else if (machine == "traceback") {
+				text.addClass("has-text-grey-light");
+			}
 			text.text(" " + line);
 			entry.append(text);
 
@@ -617,9 +629,11 @@ $(function() {
 			log.scrollTop(log[0].scrollHeight - log.height());
 		}
 
-		if (!screenshots.dirty[machine]) {
-			screenshots.dirty[machine] = true;
-			screenshots.machines.push(machine);
+		if (machine == "master" || machineNo > 0) {
+			if (!screenshots.dirty[machine]) {
+				screenshots.dirty[machine] = true;
+				screenshots.machines.push(machine);
+			}
 		}
 	}
 
@@ -726,6 +740,7 @@ $(function() {
 
 	restart = function() {
 		if (!$("#start").attr("disabled")) {
+			$("#status-error").css("display", "none");
 
 			$.ajax({
 				method: "POST",
@@ -737,7 +752,7 @@ $(function() {
                 })
 			}).done(function(batchId) {
 				if (batchId == "error") {
-					alert("ILIAS is not available. Please try again later.")
+					alert("The TiltR server reported an error.")
 				} else {
 					connect(batchId);
 				}

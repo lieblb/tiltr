@@ -89,6 +89,8 @@ class SingleChoiceQuestion(Question):
 		self._set_ui(driver, choices)
 		self.choices = choices
 
+		return True
+
 	def compute_score(self, answers, context):
 		score = Decimal(0)
 		for label, checked in answers.items():

@@ -387,12 +387,12 @@ class ClozeQuestion(Question):
 				return answers, valid, self.compute_score_by_indices(answers, context)
 
 	def readjust_scores(self, driver, random, report):
-		pass
+		return False
 
 	def compute_score(self, answers, context):
 		name_to_index = dict()
 		for gap in self.gaps.values():
-			name_to_index[gap.get_export_name()] = gap.index
+			name_to_index[gap.get_export_name(context.language)] = gap.index
 
 		indexed_answers = dict()
 		for name, value in answers.items():
