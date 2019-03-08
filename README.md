@@ -7,9 +7,11 @@ TiltR imports and analyzes a given test and then execute random test runs with a
 
 TiltR tests run against well-defined browser environments based on Selenium docker images. It supports testing against Chrome and Firefox.
 
-## Areas of Verification
+## Scope of Verification
 
-Using its built-in test oracle TiltR tries to assess the correct implementation of various essential functions (note that it can _not_ achieve anything like full coverage):
+Using its built-in test oracle TiltR can help institutions that rely on ILIAS for performing e-assessments
+assert that some of the most essential functionality they fundamentally rely on as correct is indeed that.
+Note however that it can _not_ achieve anything like full coverage.
 
 |                      | Responses         | Computed Score  | Computed Total Score |
 | ---------------------|:-----------------:| ---------------:| --------------------:| 
@@ -21,6 +23,8 @@ Using its built-in test oracle TiltR tries to assess the correct implementation 
 | via PDF Export       | -                 | &#x2713;        | -                    |
 | **Readjustments**    |                   |                 |                      |
 | Optional             | -                 | SC Only         | SC Only              |
+| **Re-Imported**      |                   |                 |                      |
+| via XLS Export       | (soon)            | (soon)          | (soon)            |
 
 To enable basic Adjustments testing, set `num_readjustments` to > 0 (note that this will change the test scores
 on each run currently).

@@ -74,7 +74,7 @@ class Settings(ValueBag):
 			(
 				"num_readjustments",
 				"""Number of readjustment rounds after each exam (very patchy support).""",
-				0
+				1
 			),
 			(
 				"modify_answer_frequency",

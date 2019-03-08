@@ -15,7 +15,6 @@ import datetime
 import uuid
 import base64
 import io
-import os
 import tempfile
 from decimal import *
 
@@ -133,6 +132,51 @@ def take_exam(args):
 	return Result(from_json=result_json)
 
 
+def _patch_exam_name(path, new_title, output_dir):
+	import zipfile
+	import os
+	import re
+	import xml.etree.ElementTree as ET
+	from functools import partial
+
+	def patch_xml(patch, data):
+		root = ET.fromstring(data.decode('utf8'))
+		patch(root)
+		return ET.tostring(root, encoding='utf8', method='xml')
+
+	def noop(data):
+		return data
+
+	def patch_tst(root):
+		for element in root.findall(".//Title"):
+			element.text = new_title
+
+	def patch_qti(root):
+		assessment = root.find(".//assessment")
+		assessment.set("title", new_title)
+
+	with zipfile.ZipFile(path, 'r') as zip_ref:
+
+		export_name, _ = os.path.split(zip_ref.namelist()[0])
+
+		def full_xml_name(name):
+			return "%s/%s.xml" % (export_name, name)
+
+		modifiers = dict()
+		modifiers[full_xml_name(export_name)] = partial(patch_xml, patch_tst)
+		modifiers[full_xml_name(export_name.replace('_tst_', '_qti_'))] = partial(patch_xml, patch_qti)
+
+		modified_path = os.path.join(output_dir, "%s.zip" % export_name)
+
+		with zipfile.ZipFile(modified_path, 'w') as out_zip_ref:
+			for name in zip_ref.namelist():
+				data = zip_ref.read(name)
+				data = modifiers.get(name, noop)(data)
+				out_zip_ref.writestr(name, data)
+
+	return modified_path
+
+
 class MasterContext:
 	def __init__(self, batch, protocol):
 		self.batch = batch
@@ -171,6 +215,12 @@ def remove_trailing_zeros(s):
 
 def get_most_severe_error(results):
 	return most_severe(r.get_most_severe_error() for r in results)
+
+
+def create_temp_test_name():
+	now = datetime.datetime.now()
+	now_str = now.strftime("%Y_%m_%d_%H_%M_%S")
+	return "TiltR_temp_%s_%d" % (now_str, now.microsecond)
 
 
 class Run:
@@ -301,8 +351,6 @@ class Run:
 			with wait_for_page_load(master.driver):
 				link.click()
 
-			master.report('readjusting scores for question "%s"' % question.title)
-
 			# close stats window.
 			master.driver.execute_script("""
 			document.getElementsByClassName("ilOverlay")[0].style.display = "none";
@@ -312,7 +360,9 @@ class Run:
 
 			try:
 				if question.readjust_scores(master.driver, random, report):
-					modified_questions.add(question_title)
+					master.report('readjusting scores for question "%s"' % question.title)
+
+					modified_questions.add(question.title)
 
 					master.report("saving.")
 					with wait_for_page_load(master.driver):
@@ -334,7 +384,7 @@ class Run:
 		# recompute user score's for all questions.
 		for question_title, question in self.questions.items():
 
-			if not question_title in modified_questions:
+			if question_title not in modified_questions:
 				continue
 
 			for user, result in zip(self.users, all_recorded_results):
@@ -392,8 +442,13 @@ class Run:
 
 		self.users = self.users_factory.acquire(self._users_backend(master))
 
-		# print('switching to test "%s".' % test.get_title())
-		# goto test.
+		'''		
+		with tempfile.TemporaryDirectory() as tmpdir:
+			temp_test_name = create_temp_test_name()
+			test_path = _patch_exam_name(master.test_driver.test.get_path(), temp_test_name, tmpdir)
+			master.test_driver.import_test(test_path)
+		'''
+
 		if not master.test_driver.goto_or_fail():
 			# if test does not exist, add it first.
 			master.test_driver.import_test_from_template()
@@ -451,7 +506,7 @@ class Run:
 			self.report("traceback", traceback.format_exc())
 			raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
-	def _verify_reimport(self, master):
+	def _verify_reimport(self, master, all_recorded_results):
 		xmlres_zip = master.test_driver.export_xmlres()
 		self.files["exported_xmlres.zip"] = xmlres_zip
 
@@ -459,7 +514,16 @@ class Run:
 			temp.write(xmlres_zip)
 			temp.flush()
 
-			#master.test_driver.import_test(temp.name)
+			with tempfile.TemporaryDirectory() as tmpdir:
+				temp_test_name = create_temp_test_name()
+				test_path = _patch_exam_name(temp.name, temp_test_name, tmpdir)
+				master.test_driver.import_test(test_path)
+				try:
+					xls = master.test_driver.export_xls()
+				finally:
+					master.test_driver.delete_test(temp_test_name)
+
+		return True
 
 	def _verify_xls(self, master, all_recorded_results):
 		num_readjustments = max(0, int(self.settings.num_readjustments))
@@ -472,7 +536,7 @@ class Run:
 			try:
 				check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
 			except:
-				raise IntegrityException("failed to check workbook consistency: %s." % traceback.format_exc())
+				raise IntegrityException("failed to check workbook consistency")
 
 			if readjustment_round == 0:
 				self.xls = xls
@@ -485,7 +549,7 @@ class Run:
 				break
 
 			if readjustment_round == 0:
-				self._verify_reimport(master)
+				all_assertions_ok = all_assertions_ok and self._verify_reimport(master, all_recorded_results)
 
 			if readjustment_round < num_readjustments:
 				self._apply_readjustment(

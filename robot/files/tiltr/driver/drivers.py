@@ -930,6 +930,42 @@ class TestDriver:
 	def import_test_from_template(self):
 		self.import_test(self.test.get_path())
 
+	def delete_test(self, test_name):
+		self._search(test_name)
+
+		self.report("deleting test '%s'." % test_name)
+
+		rows = list(self.driver.find_elements_by_css_selector(".ilObjListRow"))
+		if len(rows) != 1:
+			raise InteractionException("excepted exactly 1 test to delete, got %d", len(rows))
+
+		row = rows[0]
+		link_text = row.find_element_by_css_selector("a.il_ContainerItemTitle").text.strip()
+		if link_text != test_name:
+			raise InteractionException("link text mismatch")
+
+		button = row.find_element_by_css_selector(".dropdown-toggle")
+		button.click()
+
+		#wait_for_css_visible(self.driver, "ul.dropdown-menu")  # let's hope there's only one
+
+		found_link = False
+		for _ in range(5):
+			menu = row.find_element_by_css_selector("ul.dropdown-menu")
+			for link in menu.find_elements_by_css_selector("a"):
+				if "cmd=delete" in link.get_attribute("href"):
+					with wait_for_page_load(self.driver):
+						link.click()
+						found_link = True
+					break
+			if found_link:
+				break
+			time.sleep(1)
+
+		delete_button = self.driver.find_element_by_css_selector('input[name="cmd[performDelete]"]')
+		with wait_for_page_load(self.driver):
+			delete_button.click()
+
 	def configure(self):
 		self.make_online()
 		self.configure_autosave()
@@ -1234,15 +1270,7 @@ class TestDriver:
 			self.goto()
 		return self.test.cached_link
 
-	def goto_or_fail(self, url=None):
-		if self.test.cached_link is None and url:
-			self.test.cached_link = url
-
-		if self.test.cached_link is not None:
-			with wait_for_page_load(self.driver):
-				self.driver.get(self.test.cached_link)
-			return True
-
+	def _search(self, test_name):
 		driver = self.driver
 
 		self.report("preparing to search.")
@@ -1255,7 +1283,7 @@ class TestDriver:
 				driver.find_element_by_css_selector('#mm_search_form input[type="submit"]').click()
 
 			#self.browser.visit(self.ilias_url + "/ilias.php?baseClass=ilSearchController")
-			self.report('searching for test "%s".' % self.test.get_title())
+			self.report('searching for test "%s".' % test_name)
 
 			search_input = None
 
@@ -1269,7 +1297,7 @@ class TestDriver:
 				pass
 
 			if search_input:
-				set_element_value(driver, search_input, self.test.get_title())
+				set_element_value(driver, search_input, test_name)
 				break
 
 		# note: one reason this might fail is that the test we search for is still "offline."
@@ -1277,6 +1305,19 @@ class TestDriver:
 		self.report("performing search.")
 		with wait_for_page_load(driver):
 			driver.find_element_by_css_selector("input[name='cmd[performSearch]']").click()
+
+	def goto_or_fail(self, url=None):
+		if self.test.cached_link is None and url:
+			self.test.cached_link = url
+
+		if self.test.cached_link is not None:
+			with wait_for_page_load(self.driver):
+				self.driver.get(self.test.cached_link)
+			return True
+
+		self._search(self.test.get_title())
+
+		driver = self.driver
 		for i in range(10):
 			for link in driver.find_elements_by_partial_link_text(self.test.get_title()):
 				if link.is_displayed():
