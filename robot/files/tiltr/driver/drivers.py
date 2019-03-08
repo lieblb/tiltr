@@ -14,7 +14,6 @@ import traceback
 from urllib.parse import urlparse, parse_qs
 from decimal import *
 
-from openpyxl import load_workbook
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element, SubElement, tostring
@@ -321,12 +320,12 @@ class UsersBackend:
 		self.driver = driver
 		self.ilias_url = ilias_url
 		self.report = report
-		self.as_batch = True
+		self.batch_limit = 2
 
 	def create(self, prefix, n):
 		self.report("creating %d users." % n)
 		users = []
-		if self.as_batch:
+		if n >= self.batch_limit:
 			users = self._create_n_users(prefix, n)
 		else:
 			for i in range(n):
@@ -335,7 +334,7 @@ class UsersBackend:
 		return users
 
 	def destroy(self, prefix, users):
-		if self.as_batch:
+		if len(users) >= self.batch_limit:
 			self._delete_n_users(prefix, users)
 		else:
 			for user in users:
@@ -369,6 +368,8 @@ class UsersBackend:
 
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_xpath("//a[contains(@href, 'cmd=importUserForm')]").click()
+
+		self.report("uploading xml user file with %d users." % n)
 
 		import_button = self.driver.find_element_by_name('cmd[importUserRoleAssignment]')
 
@@ -859,6 +860,11 @@ class TestDriver:
 		self.autosave_time = 5
 		self.allow_resume = False
 
+	def _get_ref_id(self):
+		url = self.driver.current_url
+		return int(http_get_parameters(url)["ref_id"])
+
+
 	def import_test(self):
 		driver = self.driver
 
@@ -877,16 +883,21 @@ class TestDriver:
 		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
 		wait_for_css(driver, 'input[name="cmd[importFile]"]')
 
+		self.report("looking for import button.")
+
 		# click on import to get dedicated import mask.
 		import_button = None
-		for accordion in driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"):
-			accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
-			try:
-				wait_for_css_visible(driver, 'input[name="cmd[importFile]"]')
-				import_button = accordion.find_element_by_name("cmd[importFile]")
+		for _ in range(5):
+			for accordion in driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"):
+				accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
+				try:
+					wait_for_css_visible(driver, 'input[name="cmd[importFile]"]', timeout=1)
+					import_button = accordion.find_element_by_name("cmd[importFile]")
+					break
+				except (NoSuchElementException, TimeoutException):
+					pass
+			if import_button:
 				break
-			except (NoSuchElementException, TimeoutException):
-				pass
 
 		if not import_button:
 			raise InteractionException("test import button not found.")
@@ -895,11 +906,7 @@ class TestDriver:
 			driver.find_element_by_id("xmldoc").send_keys(self.test.get_path())
 			import_button.click()
 
-		# now import.
-		#with wait_for_page_load(driver):
-		#	driver.find_element_by_css_selector(".ilCreationFormSection #xmldoc")
-		#	set_element_value_by_css(driver, "#xmldoc", self.test.get_path())
-		#	driver.find_element_by_name("cmd[importFile]").click()
+		self.report("importing.")
 
 		with wait_for_page_load(driver):
 			driver.find_element_by_name("cmd[importVerifiedFile]").click()
@@ -968,11 +975,7 @@ class TestDriver:
 		assert self.goto()
 		self.driver.find_element_by_css_selector("#tab_scoringadjust a").click()
 
-	def fetch_exported_workbook(self):
-		self.goto_export()
-
-		driver = self.driver
-
+	def _clean_exports(self):
 		self.report("cleaning current exports.")
 		select_all = None
 		try:
@@ -980,38 +983,50 @@ class TestDriver:
 		except NoSuchElementException:
 			pass
 		if select_all:
-			with wait_for_page_load(driver):
+			with wait_for_page_load(self.driver):
 				select_all_id = select_all.find_element_by_css_selector("input").get_attribute("id")
-				driver.execute_script('document.getElementById("%s").click()' % select_all_id)
-				driver.find_element_by_name("cmd[confirmDeletion]").click()
-			with wait_for_page_load(driver):
-				driver.find_element_by_name("cmd[delete]").click()
+				self.driver.execute_script('document.getElementById("%s").click()' % select_all_id)
+				self.driver.find_element_by_name("cmd[confirmDeletion]").click()
+			with wait_for_page_load(self.driver):
+				self.driver.find_element_by_name("cmd[delete]").click()
 
-		self.report("exporting as XLS.")
-		with wait_for_page_load(driver):
-			Select(driver.find_element_by_name("format")).select_by_value("csv")
-			driver.find_element_by_name("cmd[createExportFile]").click()
+	def _export(self, format, filetype):
+		self.goto_export()
+
+		self._clean_exports()
+
+		self.report("exporting %s." % format)
+		with wait_for_page_load(self.driver):
+			Select(self.driver.find_element_by_name("format")).select_by_value(format)
+			self.driver.find_element_by_name("cmd[createExportFile]").click()
 
 		url = None
-		for a in driver.find_elements_by_css_selector("table a"):
+		for a in self.driver.find_elements_by_css_selector("table a"):
 			params = http_get_parameters(a.get_attribute("href"))
-			if params.get('cmd', '') == "download" and params.get('file', '').endswith(".xlsx"):
+			if params.get('cmd', '') == "download" and params.get('file', '').endswith(".%s" % filetype):
 				url = a.get_attribute("href")
 				break
 
-		assert url is not None
+		if url is None:
+			raise InteractionException("could not find exported %s." % format)
 
-		self.report("downloading XLS.")
+		self.report("downloading exported %s." % format)
 
-		cookies = dict((cookie['name'], cookie['value']) for cookie in driver.get_cookies())
+		cookies = dict((cookie['name'], cookie['value']) for cookie in self.driver.get_cookies())
 		result = requests.get(url, cookies=cookies)
-		xls = result.content
+		return result.content
 
-		wb = load_workbook(filename=io.BytesIO(xls))
-		return xls, wb
+	def export_xmlres(self):
+		return self._export("xmlres", "zip")
 
-	def get_pdfs(self):
+	def export_xls(self):
+		return self._export("csv", "xlsx")
+
+	def export_pdf(self):
+		self.report("exporting PDFs.")
+
 		driver = self.driver
+		ref_id = self._get_ref_id()
 
 		pdfs = dict()
 		row_index = 0
@@ -1020,10 +1035,11 @@ class TestDriver:
 				self.goto_participants()
 
 			# set filter to display up to 800 participants.
-			driver.find_element_by_id("ilAdvSelListAnchorText_sellst_rows_tst_participants_70").click()
-			driver.find_element_by_id("sellst_rows_tst_participants_70_800").click()
+			dropdown = driver.find_element_by_id("ilAdvSelListAnchorText_sellst_rows_tst_participants_%d" % ref_id)
+			dropdown.click()
+			driver.find_element_by_id("sellst_rows_tst_participants_%d_800" % ref_id).click()
 
-			trs = list(driver.find_elements_by_css_selector("#tst_participants_70 tbody tr"))
+			trs = list(driver.find_elements_by_css_selector("#tst_participants_%d tbody tr" % ref_id))
 			if row_index >= len(trs):
 				break
 			tr = trs[row_index]
@@ -1206,6 +1222,7 @@ class TestDriver:
 
 		driver = self.driver
 
+		self.report("preparing to search.")
 		for i in range(5):
 			with wait_for_page_load(driver):
 				driver.get(self.ilias_url)

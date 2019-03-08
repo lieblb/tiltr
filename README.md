@@ -271,9 +271,8 @@ Chrome through CEF and https://github.com/cztomczak/cefpython.
 
 ## First Setup
 
-...is still cumbersome. Here are some known problems:
+...can still be cumbersome. Here are some known problems:
 
-* first launch takes very long (no progress display while db tables are imported)
-* first test import takes very long
+* first launch takes very long (look at db table count on landing page)
 * sometimes you need to stop and restart all containers
-* random timeouts on user creation
+* sometimes there are random timeouts on user creation

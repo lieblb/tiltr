@@ -14,6 +14,7 @@ import time
 import datetime
 import uuid
 import base64
+import io
 from decimal import *
 
 from multiprocessing.dummy import Pool as ThreadPool
@@ -26,6 +27,7 @@ from contextlib import contextmanager
 import selenium
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
+from openpyxl import load_workbook
 
 from tiltr.data.exceptions import *
 from tiltr.data.result import Result, Origin
@@ -223,8 +225,7 @@ class Run:
 		gui_scores = master.test_driver.get_gui_scores(
 			[user.get_username() for user in self.users])
 
-		master.report("exporting PDFs.")
-		pdfs = master.test_driver.get_pdfs()
+		pdfs = master.test_driver.export_pdf()
 
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			master.report("checking results for user %s." % user.get_username())
@@ -242,9 +243,10 @@ class Run:
 			for question_title, score in pdfs[user.get_username()].scores.items():
 				ilias_result.add(("pdf", "question", Result.normalize_question_title(question_title), "score"), score)
 
-			# save pdf in database.
+			# save pdf in tiltr database.
 			self.files["%s.pdf" % user.get_username()] = pdfs[user.get_username()].bytes
 
+			# perform response checks.
 			def report(message):
 				if message:
 					self.protocols[user.get_username()].append(message)
@@ -253,6 +255,7 @@ class Run:
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				all_assertions_ok = False
 
+			# add coverage info.
 			for question_title, answers in ilias_result.get_answers().items():
 				question = self.questions[question_title]
 				question.add_export_coverage(self.coverage, answers, self.language)
@@ -446,7 +449,8 @@ class Run:
 		all_assertions_ok = False
 
 		for i in range(num_readjustments + 1):
-			xls, workbook = master.test_driver.fetch_exported_workbook()
+			xls = master.test_driver.export_xls()
+			workbook = load_workbook(filename=io.BytesIO(xls))
 			try:
 				check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
 			except:
@@ -510,8 +514,7 @@ class Run:
 				# in case of an error, always export XLS for later analysis.
 				try:
 					with self.batch.in_master(self.protocol_master) as master:
-						xls, _ = master.test_driver.fetch_exported_workbook()
-						self.xls = xls
+						self.xls = master.test_driver.export_xls()
 				except:
 					pass  # ignore
 				raise e  # original
