@@ -32,6 +32,32 @@ from tiltr.data.settings import Settings, Workarounds
 from tiltr.data.database import DB
 
 
+def _query_database_table_count():
+	try:
+		import pymysql
+
+		connection = pymysql.connect(
+			host='db',
+			user='dev',
+			password='dev',
+			db='ilias',
+			charset='utf8mb4',
+			cursorclass=pymysql.cursors.DictCursor)
+
+		try:
+			with connection.cursor() as cursor:
+				sql = "SELECT COUNT(*) AS n_tables FROM information_schema.tables WHERE table_schema=%s"
+				cursor.execute(sql, ('ilias',))
+				n_tables = cursor.fetchone()["n_tables"]
+
+		finally:
+			connection.close()
+
+		return n_tables
+	except:
+		return "n/a"
+
+
 class FetchILIASVersion(threading.Thread):
 	def __init__(self, state):
 		super().__init__()
@@ -207,9 +233,12 @@ class AppHandler(tornado.web.RequestHandler):
 		ilias_version = self.state.get_ilias_version()
 
 		if ilias_version is None:
-			self.render("booting.html")
+			self.render(
+				"booting.html",
+				num_db_tables=_query_database_table_count())
 		else:
-			self.render("master.html",
+			self.render(
+				"master.html",
 				num_machines=len(self.state.machines),
 				ilias_url=self._get_ilias_url(),
 				ilias_version=ilias_version or "unavailable")
