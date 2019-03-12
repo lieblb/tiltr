@@ -34,7 +34,7 @@ class ValueBag:
 
 	def print_status(self, report):
 		for key in self.keys:
-			report("  %s = %s" % (key, getattr(self, key)))
+			report("%s = %s" % (key, getattr(self, key)))
 
 
 class Settings(ValueBag):

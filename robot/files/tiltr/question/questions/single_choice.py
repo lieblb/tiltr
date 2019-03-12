@@ -72,7 +72,9 @@ class SingleChoiceQuestion(Question):
 		return choice, self.choices[choice]
 
 	def readjust_scores(self, driver, random, report):
-		report("checking readjustment for %s." % self.title)
+		report('### READJUSTING QUESTION "%s"' % self.title.upper())
+		report('')
+
 		choices = self._get_ui(driver)
 
 		if len(choices) != len(self.choices):

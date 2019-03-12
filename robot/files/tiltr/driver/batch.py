@@ -16,6 +16,7 @@ import uuid
 import base64
 import io
 import tempfile
+import itertools
 from decimal import *
 
 from multiprocessing.dummy import Pool as ThreadPool
@@ -247,28 +248,27 @@ class Run:
 		self.questions = self.test.cache.questions
 		self.exam_configuration = self.test.cache.exam_configuration
 
-	def _make_protocol(self, users):
+	def _make_protocol(self):
 		sections = [
 			"header",
-			"result",
-			"preferences-workarounds",
-			"preferences-settings",
-			"master",
-			"readjustment",
-			"log"]
-		sections.extend(user.get_username() for user in self.users)
+			"log",
+
+			"preferences/workarounds",
+			"preferences/settings"]
 
 		parts = list()
 
 		for section in sections:
 			part = self.protocols[section]
 			if part:
-				parts.append("-" * 80)
-				parts.append(section)
-				parts.append("-" * 80)
-				parts.append("")
-				parts.extend(part)
-				parts.append("")
+				if section == "header":
+					parts.extend(part)
+					parts.append("")
+				else:
+					parts.append("# " + section.upper())
+					parts.append("")
+					parts.extend(part)
+					parts.append("")
 
 		return "\n".join(parts)
 
@@ -303,9 +303,11 @@ class Run:
 			# perform response checks.
 			def report(message):
 				if message:
-					self.protocols[prefix + user.get_username()].append(message)
+					self.protocols[user.get_username()].append(message)
 
-			self.protocols[user.get_username()].extend(["", "- results for evaluation %d:" % index])
+			self.protocols[user.get_username()].extend(["", "# VERIFICATION%s%s" % (
+				(" FOR READJUSTMENT ROUND %d" % index) if index > 0 else "",
+				" (FOR REIMPORTED VERSION)" if is_reimport else ""), ""])
 
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				all_assertions_ok = False
@@ -322,14 +324,15 @@ class Run:
 		# note that this will destroy the original test's scores. keep this in mind for future
 		# test runs on this test.
 
-		protocol = self.protocols["readjustment"]
+		protocol = self.protocols["readjustments"]
 
 		def report(s):
 			protocol.append(s)
 
 		if protocol:
 			report("")
-		report("-- readjustment #%d" % (index + 1))
+		report("## READJUSTMENT ROUND %d" % (index + 1))
+		report("")
 
 		index = 0
 		retries = 0
@@ -379,10 +382,13 @@ class Run:
 			index += 1
 			retries = 0
 
-		report("")
 		context = RandomContext(self.questions, self.settings, self.workarounds, self.language)
 
 		# recompute user score's for all questions.
+		report("")
+		report("## REASSESSING EXPECTED USER SCORES")
+		report("")
+
 		for question_title, question in self.questions.items():
 
 			if question_title not in modified_questions:
@@ -401,7 +407,7 @@ class Run:
 				for key in Result.score_keys(question_title):
 					result.update(key, score)
 
-				report("recomputed score for %s / %s as %s based on answer %s" % (
+				report("recomputed expected score for %s / %s as %s based on answer %s" % (
 					user.get_username(), question_title, score, json.dumps(answers)))
 
 		# recompute total scores.
@@ -422,16 +428,15 @@ class Run:
 
 		master.report("running with workarounds:")
 		self.workarounds.print_status(master.report)
-		self.workarounds.print_status(self.protocols["preferences-workarounds"].append)
+		self.workarounds.print_status(self.protocols["preferences/workarounds"].append)
 
 		master.report("running with settings:")
 		self.settings.print_status(master.report)
-		self.settings.print_status(self.protocols["preferences-settings"].append)
+		self.settings.print_status(self.protocols["preferences/settings"].append)
 
 		header = self.protocols["header"]
 		header.append("Tested on ILIAS %s." % self.ilias_version)
 		header.append('Using test "%s".' % self.test.get_title())
-		header.append("")
 
 		self.protocols["settings"].extend(
 			verify_admin_settings(
@@ -567,11 +572,13 @@ class Run:
 		coverage = self.coverage
 		for recorded_result in all_recorded_results:
 			coverage.extend(recorded_result.coverage)
-		self.add_to_protocol("result", "coverage estimated at %d%%." % coverage.get_percentage())
+		self.add_to_protocol("header", "Coverage estimated at %d%%." % coverage.get_percentage())
 
 		# copy protocols and files.
 		for user, recorded_result in zip(self.users, all_recorded_results):
-			self.protocols[user.get_username()] = recorded_result.protocol
+			header = ["# TEST RUN FOR %s" % user.get_username().upper(), ""]
+			self.protocols[user.get_username()] = header + recorded_result.protocol
+
 			for k, v in recorded_result.files.items():
 				self.files[user.get_username() + '_' + k] = v
 
@@ -598,7 +605,13 @@ class Run:
 
 	def store_into_database(self, elapsed_time):
 		files = self.files.copy()
-		files['protocol.txt'] = self._make_protocol(self.users).encode('utf8')
+		files['protocol.txt'] = self._make_protocol().encode('utf8')
+
+		if self.protocols["readjustments"]:
+			files['readjustments.txt'] = ("\n".join(self.protocols["readjustments"])).encode('utf8')
+
+		for part in itertools.chain(["master"], (user.get_username() for user in self.users)):
+			files['machines/%s.txt' % part] = ("\n".join(self.protocols[part])).encode('utf8')
 
 		files_data = dict((k, base64.b64encode(v).decode('utf8')) for k, v in files.items())
 
@@ -676,24 +689,24 @@ class Run:
 			traceback.print_exc()
 			self.report("error", str(e))
 			self.report("traceback", traceback.format_exc())
-			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
+			self.add_to_protocol("header", "Error: %s" % traceback.format_exc())
 
 		except TiltrException as e:
 			self.success = ("FAIL", e.get_error_domain_name())
 			traceback.print_exc()
 			self.report("error", str(e))
 			self.report("traceback", traceback.format_exc())
-			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
+			self.add_to_protocol("header", "Error: %s" % traceback.format_exc())
 
 		except:
 			self.success = ("FAIL", "unknown")
 			traceback.print_exc()
 			self.report("error", "unexpected exception received. please inspect traceback.")
 			self.report("traceback", traceback.format_exc())
-			self.add_to_protocol("result", "error: %s" % traceback.format_exc())
+			self.add_to_protocol("header", "Error: %s" % traceback.format_exc())
 
 		finally:
-			self.add_to_protocol("result", "done with status %s." % encode_success(self.success))
+			self.add_to_protocol("header", "Finished with status %s." % encode_success(self.success))
 
 			if temp_test:
 				try:
@@ -714,6 +727,7 @@ class Run:
 			try:
 				self.store_into_database(time.time() - t0)
 			except:
+				traceback.print_exc()
 				self.report("error", "could not save results to db")
 				self.report("traceback", traceback.format_exc())
 			finally:
