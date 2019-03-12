@@ -73,7 +73,7 @@ class Settings(ValueBag):
 			),
 			(
 				"num_readjustments",
-				"""Number of readjustment rounds after each exam (very patchy support).""",
+				"""Number of readjustment rounds after each exam (only some question types).""",
 				1
 			),
 			(

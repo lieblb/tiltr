@@ -3,32 +3,28 @@
 
 TiltR (**T**esting toolkit for the **IL**IAS **T**est & Assessment module **R**egensburg) is a generation-based, smart, black-box fuzzer for the Test & Assessment module of ILIAS 5.
 
-TiltR imports and analyzes a given test and then execute random test runs with a configurable number of automatic robot participants in parallel.
+TiltR imports and analyzes a given test and then performs random test runs with a configurable number of automatic robot participants in parallel.
 
-TiltR tests run against well-defined browser environments based on Selenium docker images. It supports testing against Chrome and Firefox.
+TiltR tests run against well-defined browser environments based on Selenium docker images (you can choose from Chrome and Firefox).
 
 ## Scope of Verification
 
 Using its built-in test oracle TiltR can help institutions that rely on ILIAS for performing e-assessments
 assert that some of the most essential functionality they fundamentally rely on as correct is indeed that.
-Note however that it can _not_ achieve anything like full coverage and some areas are not tested at all at
-the moment (final computation of grades, for example).
+Note however that it can _not_ achieve anything like full coverage and some areas are not tested at all.
 
-|                      | Responses         | Computed Score  | Computed Total Score |
-| ---------------------|:-----------------:| ---------------:| --------------------:| 
+|                      | Responses         | Scores          | Total Score          | Grade       |
+| ---------------------|:-----------------:| ---------------:| --------------------:| -----------:|
 | **During the Test**  |                   |                 |                      |
-|                      | &#x2713;          | -               | -                    |
+|                      | &#x2713;          | -               | -                    | -
 | **After the Test**   |                   |                 |                      |
-| via Web UI           | -                 | -               | &#x2713;             |
-| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             |
-| via PDF Export       | -                 | &#x2713;        | -                    |
+| via Web UI           | -                 | -               | &#x2713;             | -
+| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | -
+| via PDF Export       | -                 | &#x2713;        | -                    | -
 | **Readjustments**    |                   |                 |                      |
-| Optional             | -                 | SC, MC          | SC, MC               |
+|                      | -                 | SC, MC          | SC, MC               | -
 | **Re-Imported**      |                   |                 |                      |
-| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             |
-
-To enable basic Adjustments testing, set `num_readjustments` to > 0 (note that this will change the test scores
-on each run currently).
+| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | -
 
 ## Supported Question Types
 
