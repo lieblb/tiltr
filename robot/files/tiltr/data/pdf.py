@@ -46,14 +46,13 @@ def _extract_pdf_scores(stream):
 	boxes = []
 	table_head_y = None	 # y position of result table header
 
+	order_name = "Reihenfolge"  # FIXME localize
+
 	for element in layout:
 		if isinstance(element, LTTextBoxHorizontal):
 			boxes.append(element)
-			if 'Reihenfolge' in element.get_text().strip():
+			if order_name in element.get_text().strip():
 				table_head_y = element.y0
-
-	for box in boxes:
-		print(box)
 
 	tboxes = list(filter(lambda box: box.y0 == table_head_y, boxes))
 
@@ -61,7 +60,7 @@ def _extract_pdf_scores(stream):
 	# results table's text now.
 	table = tboxes[0].get_text().replace('\t', '')
 
-	table = table[table.find('Reihenfolge'):]
+	table = table[table.find(order_name):]
 
 	# note: question titles might lack spaces; this is no problem
 	# since we compare question names and scores only through
