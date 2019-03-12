@@ -13,7 +13,7 @@ from tiltr.data.exceptions import *
 from tiltr.driver.utils import set_element_value
 
 
-def readjust_score(random, score):
+def _readjust_score(random, score):
 	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
 	score += delta
 	score = max(score, Decimal(0))
@@ -49,7 +49,6 @@ class SingleChoiceQuestion(Question):
 
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
-
 		self.choices = self._get_ui(driver)
 
 	def create_answer(self, driver, *args):
@@ -84,7 +83,7 @@ class SingleChoiceQuestion(Question):
 				raise IntegrityException("wrong choice score in readjustment.")
 
 		for key, score in list(choices.items()):
-			new_score = readjust_score(random, score)
+			new_score = _readjust_score(random, score)
 			choices[key] = new_score
 			report('readjusted score for "%s / %s" from %s to %s.' % (self.title, key, score, new_score))
 

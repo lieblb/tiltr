@@ -11,7 +11,8 @@ TiltR tests run against well-defined browser environments based on Selenium dock
 
 Using its built-in test oracle TiltR can help institutions that rely on ILIAS for performing e-assessments
 assert that some of the most essential functionality they fundamentally rely on as correct is indeed that.
-Note however that it can _not_ achieve anything like full coverage.
+Note however that it can _not_ achieve anything like full coverage and some areas are not tested at all at
+the moment (final computation of grades, for example).
 
 |                      | Responses         | Computed Score  | Computed Total Score |
 | ---------------------|:-----------------:| ---------------:| --------------------:| 
@@ -22,7 +23,7 @@ Note however that it can _not_ achieve anything like full coverage.
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             |
 | via PDF Export       | -                 | &#x2713;        | -                    |
 | **Readjustments**    |                   |                 |                      |
-| Optional             | -                 | SC Only         | SC Only              |
+| Optional             | -                 | SC, MC          | SC, MC               |
 | **Re-Imported**      |                   |                 |                      |
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             |
 

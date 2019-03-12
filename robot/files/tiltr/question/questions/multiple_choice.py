@@ -12,29 +12,63 @@ from collections import namedtuple
 from selenium.common.exceptions import NoSuchElementException
 
 from .question import Question
+from tiltr.driver.utils import set_element_value
 
 
 MultipleChoiceItem = namedtuple('MultipleChoiceItem', ['checked_score', 'unchecked_score'])
 
 
-class MultipleChoiceQuestion(Question):
-	def __init__(self, driver, title, settings):
-		super().__init__(title)
+def _readjust_score(random, score):
+	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
+	score += delta
+	score = max(score, Decimal(0))
+	return score
 
-		self.choices = dict()
+
+def _readjust_choice_item(random, scores):
+	return MultipleChoiceItem(*[_readjust_score(random, scores[i]) for i in range(2)])
+
+
+class MultipleChoiceQuestion(Question):
+	@staticmethod
+	def _get_ui(driver):
+		choices = dict()
 
 		while True:
 			try:
-				choice = driver.find_element_by_name("choice[answer][%d]" % len(self.choices))
+				choice = driver.find_element_by_name("choice[answer][%d]" % len(choices))
 			except NoSuchElementException:
 				break
 
-			points = driver.find_element_by_name("choice[points][%d]" % len(self.choices))
-			points_unchecked = driver.find_element_by_name("choice[points_unchecked][%d]" % len(self.choices))
+			values = []
+			for name in ('points', 'points_unchecked'):
+				points = driver.find_element_by_name("choice[%s][%d]" % (name, len(choices)))
+				values.append(Decimal(points.get_attribute("value")))
 
-			self.choices[choice.get_attribute("value")] = MultipleChoiceItem(
-				checked_score=Decimal(points.get_attribute("value")),
-				unchecked_score=Decimal(points_unchecked.get_attribute("value")))
+			choices[choice.get_attribute("value")] = MultipleChoiceItem(*values)
+
+		return choices
+
+	@staticmethod
+	def _set_ui(driver, choices):
+		i = 0
+		while True:
+			try:
+				choice = driver.find_element_by_name("choice[answer][%d]" % i)
+			except NoSuchElementException:
+				break
+
+			item = choices[choice.get_attribute("value")]
+
+			for name, value in (('points', item.checked_score), ('points_unchecked', item.unchecked_score)):
+				points = driver.find_element_by_name("choice[%s][%d]" % (name, i))
+				set_element_value(driver, points, str(value))
+
+			i += 1
+
+	def __init__(self, driver, title, settings):
+		super().__init__(title)
+		self.choices = self._get_ui(driver)
 
 	def create_answer(self, driver, *args):
 		from ..answers.multiple_choice import MultipleChoiceAnswer
@@ -96,7 +130,26 @@ class MultipleChoiceQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, random, report):
-		return False
+		report('### READJUSTING QUESTION "%s"' % self.title.upper())
+		report('')
+
+		choices = self._get_ui(driver)
+
+		if len(choices) != len(self.choices):
+			raise IntegrityException("wrong number of choices in readjustment.")
+		for key, score in self.choices.items():
+			if choices[key] != score:
+				raise IntegrityException("wrong choice score in readjustment.")
+
+		for key, score in list(choices.items()):
+			new_score = _readjust_choice_item(random, score)
+			choices[key] = new_score
+			report('readjusted score for "%s / %s" from %s to %s.' % (self.title, key, score, new_score))
+
+		self._set_ui(driver, choices)
+		self.choices = choices
+
+		return True
 
 	def compute_score(self, answers, context):
 		score = Decimal(0)
