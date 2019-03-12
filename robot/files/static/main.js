@@ -572,7 +572,7 @@ $(function() {
 
     function connectionEstablished() {
 		$('#connected-ui').show();
-		$('#unconnected-ui').hide();
+		$('.unconnected-ui').hide();
 	}
 
 	setInterval(updateScreenshots, 1000);
@@ -736,6 +736,21 @@ $(function() {
 		}).done(function() {
 			updateSettings();
 		});
+	});
+
+	$("#logo").click(function() {
+		var logoTime = new Date().getTime();
+		var logoAnim = setInterval(function () {
+			var m = 5 * Math.PI;
+			var t = 10 * ((new Date().getTime()) - logoTime) / 1000;
+			t = Math.min(m, t);
+			var phi = Math.abs(Math.sin(t) * 40 * Math.pow(Math.cos(Math.PI / 2 * t / m), 2));
+			$("#logo").css("transform", "rotate(" + phi.toString() + "deg)");
+			if (t >= m) {
+				clearInterval(logoAnim);
+				window.open("https://github.com/lieblb/tiltr");
+			}
+		}, 25);
 	});
 
 	restart = function() {

@@ -72,11 +72,12 @@
 		  <div class="hero-body">
 			<div class="container">
 			  <h1 class="title">
-				  <a href="https://github.com/lieblb/tiltr"><img src="/static/default/tiltr.png" alt="TiltR" width="200"></a>
+				  <img id="logo" src="/static/default/tiltr.png" alt="TiltR" width="200">
+				  <span class="unconnected-ui">&nbsp; is connecting.</span>
 			  </h1>
 
 				<span class="is-pulled-right">
-					{{ num_machines }} machines connected.<br>
+					{{ num_machines }} machine{% if num_machines != 1 %}s{% end %} connected.<br>
 					<span id="host_disk_free"></span><br>
 				</span>
 
@@ -87,7 +88,7 @@
 		  </div>
 		</section>
 		<section class="section">
-		    <div id="unconnected-ui" class="container">
+		    <div class="unconnected-ui container">
 				<div class="sk-folding-cube">
 				  <div class="sk-cube1 sk-cube"></div>
 				  <div class="sk-cube2 sk-cube"></div>
