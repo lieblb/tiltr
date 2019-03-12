@@ -24,7 +24,7 @@ Note however that it can _not_ achieve anything like full coverage.
 | **Readjustments**    |                   |                 |                      |
 | Optional             | -                 | SC Only         | SC Only              |
 | **Re-Imported**      |                   |                 |                      |
-| via XLS Export       | (soon)            | (soon)          | (soon)            |
+| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             |
 
 To enable basic Adjustments testing, set `num_readjustments` to > 0 (note that this will change the test scores
 on each run currently).

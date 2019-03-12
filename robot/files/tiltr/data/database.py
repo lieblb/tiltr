@@ -45,11 +45,11 @@ class DB:
 	def get_size():
 		return os.path.getsize(os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "results.db"))
 
-	def put(self, batch_id, success, xls, protocol, num_users, elapsed_time):
+	def put(self, batch_id, success, protocol, num_users, elapsed_time):
 		c = self.db.cursor()
 		now = datetime.datetime.now()
 		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers, elapsed) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			(now, batch_id.encode(), success.encode(), sqlite3.Binary(xls), protocol.encode(), num_users, elapsed_time))
+			(now, batch_id.encode(), success.encode(), sqlite3.Binary(b""), protocol.encode(), num_users, elapsed_time))
 
 		success_code = dict(OK=1, FAIL=0).get(success.split("/")[0], 0)
 		c.execute("INSERT INTO longterm (created, success, detail, nusers) VALUES (?, ?, ?, ?)", (now, success_code, success, num_users));
@@ -188,11 +188,10 @@ class DB:
 
 	def get_zipfile(self, batch_id, file):
 		c = self.db.cursor()
-		c.execute("SELECT xls, protocol FROM results WHERE batch=?", (batch_id.encode("utf-8"),))
-		xls, protocol = c.fetchone()
+		c.execute("SELECT protocol FROM results WHERE batch=?", (batch_id.encode("utf-8"),))
+		protocol = c.fetchone()[0]
 
 		with zipfile.ZipFile(file, "w") as z:
-			z.writestr('/exported.xls', xls)
 			protocols = json.loads(protocol.decode("utf-8"))
 			for k, v in protocols.items():
 				z.writestr('/' + k, base64.b64decode(v))

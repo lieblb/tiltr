@@ -13,7 +13,7 @@ import base64
 from selenium.common.exceptions import WebDriverException
 
 from .utils import get_driver_error_details, run_interaction
-from .drivers import Login, TestDriver, Test
+from .drivers import UserDriver, PackagedTest
 from tiltr.data.result import Result, Origin
 from tiltr.data.context import RegressionContext, RandomContext
 from tiltr.data.exceptions import ErrorDomain, TiltrException, InteractionException
@@ -135,16 +135,16 @@ class TakeExamCommand:
 
 	def _create_result_with_details(self, driver, report, e, trace):
 		files = dict()
-		files['error_trace.txt'] = trace.encode('utf8')
+		files['error/trace.txt'] = trace.encode('utf8')
 
 		url, html, alert = get_driver_error_details(driver)
 		if alert:
-			files['error_alert.txt'] = alert.encode('utf8')
+			files['error/alert.txt'] = alert.encode('utf8')
 		if html:
-			files['error_page.html'] = html.encode('utf8')
+			files['error/page.html'] = html.encode('utf8')
 
 		try:
-			files['error_screen.png'] = base64.b64decode(driver.get_screenshot_as_base64())
+			files['error/screen.png'] = base64.b64decode(driver.get_screenshot_as_base64())
 		except:
 			traceback.print_exc()
 
@@ -163,11 +163,11 @@ class TakeExamCommand:
 		try:
 			with run_interaction():
 
-				with Login(driver, master_report, self.ilias_url, self.username, self.password):
+				user_driver = UserDriver(driver, self.ilias_url, master_report)
 
-					test_driver = TestDriver(
-						driver, Test(self.test_id), self.username,
-						self.workarounds, self.ilias_url, master_report)
+				with user_driver.login(self.username, self.password):
+
+					test_driver = user_driver.create_test_driver(PackagedTest(self.test_id))
 					test_driver.goto(self.test_url)
 
 					if self.machine_index <= self.n_deterministic_machines:
@@ -185,7 +185,8 @@ class TakeExamCommand:
 							self.workarounds,
 							self.admin_lang)
 
-					exam_driver = test_driver.start(context, self.questions, self.exam_configuration)
+					exam_driver = test_driver.start(
+						self.username, context, self.questions, self.exam_configuration)
 
 					try:
 						exam_driver.add_protocol(machine_info)

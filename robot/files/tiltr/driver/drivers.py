@@ -35,10 +35,10 @@ from tiltr.data.pdf import PDF
 
 
 class Login:
-	def __init__(self, driver, report, url, username, password):
-		self.driver = driver
-		self.report = report
-		self.url = url
+	def __init__(self, user_driver, username, password):
+		self.driver = user_driver.driver
+		self.report = user_driver.report
+		self.url = user_driver.ilias_url
 		self.username = username
 		self.password = password
 		self.language = None
@@ -437,12 +437,12 @@ class UsersFactory:
 		self.prefix = datetime.datetime.today().strftime('tu_%Y%m%d%H%M%S') + '_'
 		self.users = None
 
-		if self.test.recycled_users:
-			prefix, users = self.test.recycled_users
+		if self.test.cache.recycled_users:
+			prefix, users = self.test.cache.recycled_users
 			if len(users) == n:
 				self.prefix = prefix
 				self.users = users
-				self.test.recycled_users = None
+				self.test.cache.recycled_users = None
 
 		self.recycle = False
 
@@ -454,7 +454,7 @@ class UsersFactory:
 
 	def release(self, make_backend):
 		if self.recycle:
-			self.test.recycled_users = (self.prefix, self.users)
+			self.test.cache.recycled_users = (self.prefix, self.users)
 		else:
 			make_backend().destroy(self.prefix, self.users)
 
@@ -826,19 +826,38 @@ class ExamDriver:
 		return result
 
 
-class Test:
-	def __init__(self, test_id):
-		self.test_id = test_id
-		self.path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", test_id + ".zip"))
-		with ZipFile(self.path, 'r') as zf:
-			root = ET.fromstring(zf.read("%s/%s.xml" % (test_id, test_id)))
-		self.title = root.findall(".//Title")[0].text
-
+class TestCache:
+	def __init__(self):
+		self.cached_link = None
+		self.recycled_users = None
 		self.questions = None
 		self.exam_configuration = None
 
-		self.cached_link = None
-		self.recycled_users = None
+	def transfer_invariants(self, cache):
+		# transfer those attributes from "cache" that are invariant wrt
+		# test runs (i.e. won't change on reimports).
+		self.questions = cache.questions
+		self.exam_configuration = cache.exam_configuration
+
+
+class AbstractTest:
+	def __init__(self):
+		self.cache = TestCache()
+
+	def get_title(self):
+		raise NotImplementedError()
+
+
+class PackagedTest(AbstractTest):
+	def __init__(self, test_id):
+		super().__init__()
+
+		self.test_id = test_id
+		self.path = os.path.abspath(os.path.join(
+			os.path.dirname(__file__), "..", "..", "tests", test_id + ".zip"))
+		with ZipFile(self.path, 'r') as zf:
+			root = ET.fromstring(zf.read("%s/%s.xml" % (test_id, test_id)))
+		self.title = root.findall(".//Title")[0].text
 
 	def get_id(self):
 		return self.test_id
@@ -855,24 +874,31 @@ class Test:
 		path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests"))
 		for filename in os.listdir(path):
 			if filename.endswith(".zip"):
-				test = Test(os.path.splitext(filename)[0])
+				test = PackagedTest(os.path.splitext(filename)[0])
 				tests[test.get_title()] = test.get_id()
 		return tests
 
 
+class ImportedTest(AbstractTest):
+	def __init__(self, title):
+		super().__init__()
+		self.title = title
+
+	def get_title(self):
+		return self.title
+
+
 class TestDriver:
-	def __init__(self, driver, test, username, workarounds, ilias_url, report):
-		self.driver = driver
+	def __init__(self, user_driver, test):
+		self.driver = user_driver.driver
+		self.user_driver = user_driver
 		self.test = test
-		self.username = username
-		self.workarounds = workarounds
 
-		self.ilias_url = ilias_url
-		parsed_url = urlparse(self.ilias_url)
-		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
-		self.client_id = parse_qs(parsed_url.query)['client_id'][0]
+		self.ilias_url = user_driver.ilias_url
+		self.ilias_base_url = user_driver.ilias_base_url
+		self.client_id = user_driver.client_id
 
-		self.report = report
+		self.report = user_driver.report
 		self.autosave_time = 5
 		self.allow_resume = False
 
@@ -880,95 +906,12 @@ class TestDriver:
 		url = self.driver.current_url
 		return int(http_get_parameters(url)["ref_id"])
 
-	def import_test(self, path):
-		driver = self.driver
-
-		self.report("importing test.")
-
-		# goto root ("Magazin")
-		root_url = self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id)
-		with wait_for_page_load(driver):
-			driver.get(root_url)
-
-		# add new item: Test.
-		wait_for_css(driver, '.ilNewObjectSelector button')
-		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
-		wait_for_css(driver, '.ilNewObjectSelector #tst')
-		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
-		wait_for_css(driver, 'input[name="cmd[importFile]"]')
-
-		self.report("looking for import button.")
-
-		# click on import to get dedicated import mask.
-		import_button = None
-		for _ in range(5):
-			for accordion in driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"):
-				accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
-				try:
-					wait_for_css_visible(driver, 'input[name="cmd[importFile]"]', timeout=1)
-					import_button = accordion.find_element_by_name("cmd[importFile]")
-					break
-				except (NoSuchElementException, TimeoutException):
-					pass
-			if import_button:
-				break
-
-		if not import_button:
-			raise InteractionException("test import button not found.")
-		with wait_for_page_load(driver):
-			#driver.execute_script("document.getElementById('xmldoc').value = arguments[0]", self.test.get_path())
-			driver.find_element_by_id("xmldoc").send_keys(path)
-			import_button.click()
-
-		self.report("importing.")
-
-		with wait_for_page_load(driver):
-			driver.find_element_by_name("cmd[importVerifiedFile]").click()
-
-		self.report("done importing test.")
-
 	def import_test_from_template(self):
-		self.import_test(self.test.get_path())
+		self.user_driver.import_test(self.test.get_path())
 
-	def delete_test(self, test_name):
-		self._search(test_name)
-
-		self.report("deleting test '%s'." % test_name)
-
-		rows = list(self.driver.find_elements_by_css_selector(".ilObjListRow"))
-		if len(rows) != 1:
-			raise InteractionException("excepted exactly 1 test to delete, got %d", len(rows))
-
-		row = rows[0]
-		link_text = row.find_element_by_css_selector("a.il_ContainerItemTitle").text.strip()
-		if link_text != test_name:
-			raise InteractionException("link text mismatch")
-
-		button = row.find_element_by_css_selector(".dropdown-toggle")
-		button.click()
-
-		#wait_for_css_visible(self.driver, "ul.dropdown-menu")  # let's hope there's only one
-
-		found_link = False
-		for _ in range(5):
-			menu = row.find_element_by_css_selector("ul.dropdown-menu")
-			for link in menu.find_elements_by_css_selector("a"):
-				if "cmd=delete" in link.get_attribute("href"):
-					with wait_for_page_load(self.driver):
-						link.click()
-						found_link = True
-					break
-			if found_link:
-				break
-			time.sleep(1)
-
-		delete_button = self.driver.find_element_by_css_selector('input[name="cmd[performDelete]"]')
-		with wait_for_page_load(self.driver):
-			delete_button.click()
-
-	def configure(self):
+	def configure(self, workarounds):
 		self.make_online()
-		self.configure_autosave()
+		self.configure_autosave(workarounds)
 
 	def make_online(self):
 		# now activate the Test by setting it online.
@@ -982,11 +925,11 @@ class TestDriver:
 
 		self.report("setting test online.")
 
-	def configure_autosave(self):
+	def configure_autosave(self, workarounds):
 		self.goto_settings()
 
 		autosave = self.driver.find_element_by_id("autosave")
-		if self.workarounds.enable_autosave:
+		if workarounds.enable_autosave:
 			if not autosave.is_selected():
 				self.driver.execute_script('document.getElementById("autosave").click()')
 			wait_for_css_visible(self.driver, "#autosave_ival")
@@ -1266,11 +1209,168 @@ class TestDriver:
 			'input[name="cmd[confirmDeleteAllUserResults]"]').click()
 
 	def get_test_url(self):
-		if not self.test.cached_link:
+		if not self.test.cache.cached_link:
 			self.goto()
-		return self.test.cached_link
+		return self.test.cache.cached_link
 
-	def _search(self, test_name):
+	def goto_or_fail(self, url=None):
+		if self.test.cache.cached_link is None and url:
+			self.test.cache.cached_link = url
+
+		if self.test.cache.cached_link is not None:
+			with wait_for_page_load(self.driver):
+				self.driver.get(self.test.cache.cached_link)
+			return True
+
+		self.user_driver.search_test(self.test.get_title())
+
+		driver = self.driver
+		for i in range(10):
+			for link in driver.find_elements_by_partial_link_text(self.test.get_title()):
+				if link.is_displayed():
+					if link.text.strip() == self.test.get_title():
+						with wait_for_page_load(driver):
+							link.click()
+						self.test.cache.cached_link = driver.current_url
+						return True
+			time.sleep(1)
+
+		return False
+
+	def goto(self, url=None):
+		if not self.goto_or_fail(url):
+			raise InteractionException("test '%s' was not found in ILIAS" % self.test.get_title())
+		return True
+
+	def _try_start_or_resume(self, force_allow_resume=False):
+		resume_player = None
+		try:
+			resume_player = self.driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
+		except NoSuchElementException:
+			pass
+
+		if resume_player:
+			if not (self.allow_resume or force_allow_resume):
+				raise InteractionException("test has already been started by this user. aborting.")
+			with wait_for_page_load(self.driver):
+				resume_player.click()
+				return True
+		else:
+			try:
+				try_submit(self.driver, "input[name='cmd[startPlayer]']", lambda button: button.click())
+				return True
+			except NoSuchElementException:
+				return False
+
+	def start(self, username, context, questions, exam_configuration, allow_resume=False):
+		self.report("starting test.")
+		self.allow_resume = allow_resume
+		if not self._try_start_or_resume():
+			raise InteractionException("user does not have rights to start this test. aborting.")
+		return ExamDriver(self.driver, self.ilias_url, username, self.report, context, questions, exam_configuration)
+
+
+class UserDriver:
+	def __init__(self, driver, ilias_url, report):
+		self.driver = driver
+
+		self.ilias_url = ilias_url
+		parsed_url = urlparse(self.ilias_url)
+		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
+		self.client_id = parse_qs(parsed_url.query)['client_id'][0]
+
+		self.report = report
+
+	def login(self, username, password):
+		return Login(self, username, password)
+
+	def import_test(self, path):
+		driver = self.driver
+
+		self.report('importing test from file "%s".' % os.path.basename(path))
+
+		# goto root ("Magazin")
+		root_url = self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id)
+		with wait_for_page_load(driver):
+			driver.get(root_url)
+
+		# add new item: Test.
+		wait_for_css(driver, '.ilNewObjectSelector button')
+		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
+		wait_for_css(driver, '.ilNewObjectSelector #tst')
+		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
+		wait_for_css(driver, 'input[name="cmd[importFile]"]')
+
+		self.report("looking for import button.")
+
+		def roll(l):  # we know it's the second accordion, usually.
+			return l[1:] + l[:1]
+
+		# click on import to get dedicated import mask.
+		import_button = None
+		for _ in range(5):
+			for accordion in roll(list(driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"))):
+				accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
+				try:
+					wait_for_css_visible(driver, 'input[name="cmd[importFile]"]', timeout=1)
+					import_button = accordion.find_element_by_name("cmd[importFile]")
+					break
+				except (NoSuchElementException, TimeoutException):
+					pass
+			if import_button:
+				break
+
+		if not import_button:
+			raise InteractionException("test import button not found.")
+		with wait_for_page_load(driver):
+			#driver.execute_script("document.getElementById('xmldoc').value = arguments[0]", self.test.get_path())
+			driver.find_element_by_id("xmldoc").send_keys(path)
+			import_button.click()
+
+		self.report("importing.")
+
+		with wait_for_page_load(driver):
+			driver.find_element_by_name("cmd[importVerifiedFile]").click()
+
+		self.report("done importing test.")
+
+	def delete_test(self, test_name):
+		self.search_test(test_name)
+
+		self.report('deleting test "%s".' % test_name)
+
+		rows = list(self.driver.find_elements_by_css_selector(".ilObjListRow"))
+		if len(rows) != 1:
+			raise InteractionException("excepted exactly 1 test to delete, got %d", len(rows))
+
+		row = rows[0]
+		link_text = row.find_element_by_css_selector("a.il_ContainerItemTitle").text.strip()
+		if link_text != test_name:
+			raise InteractionException("link text mismatch")
+
+		button = row.find_element_by_css_selector(".dropdown-toggle")
+		button.click()
+
+		#wait_for_css_visible(self.driver, "ul.dropdown-menu")  # let's hope there's only one
+
+		found_link = False
+		for _ in range(5):
+			menu = row.find_element_by_css_selector("ul.dropdown-menu")
+			for link in menu.find_elements_by_css_selector("a"):
+				if "cmd=delete" in link.get_attribute("href"):
+					with wait_for_page_load(self.driver):
+						link.click()
+						found_link = True
+					break
+			if found_link:
+				break
+			time.sleep(1)
+
+		delete_button = self.driver.find_element_by_css_selector('input[name="cmd[performDelete]"]')
+		with wait_for_page_load(self.driver):
+			delete_button.click()
+
+	def search_test(self, test_name):
 		driver = self.driver
 
 		self.report("preparing to search.")
@@ -1306,59 +1406,5 @@ class TestDriver:
 		with wait_for_page_load(driver):
 			driver.find_element_by_css_selector("input[name='cmd[performSearch]']").click()
 
-	def goto_or_fail(self, url=None):
-		if self.test.cached_link is None and url:
-			self.test.cached_link = url
-
-		if self.test.cached_link is not None:
-			with wait_for_page_load(self.driver):
-				self.driver.get(self.test.cached_link)
-			return True
-
-		self._search(self.test.get_title())
-
-		driver = self.driver
-		for i in range(10):
-			for link in driver.find_elements_by_partial_link_text(self.test.get_title()):
-				if link.is_displayed():
-					if link.text.strip() == self.test.get_title():
-						with wait_for_page_load(driver):
-							link.click()
-						self.test.cached_link = driver.current_url
-						return True
-			time.sleep(1)
-
-		return False
-
-	def goto(self, url=None):
-		if not self.goto_or_fail(url):
-			raise InteractionException("test '%s' was not found in ILIAS" % self.test.get_title())
-		return True
-
-	def _try_start_or_resume(self, force_allow_resume=False):
-		resume_player = None
-		try:
-			resume_player = self.driver.find_element_by_css_selector("input[name='cmd[resumePlayer]']")
-		except NoSuchElementException:
-			pass
-
-		if resume_player:
-			if not (self.allow_resume or force_allow_resume):
-				raise InteractionException("test has already been started by this user. aborting.")
-			with wait_for_page_load(self.driver):
-				resume_player.click()
-				return True
-		else:
-			try:
-				try_submit(self.driver, "input[name='cmd[startPlayer]']", lambda button: button.click())
-				return True
-			except NoSuchElementException:
-				return False
-
-	def start(self, context, questions, exam_configuration, allow_resume=False):
-		self.report("starting test.")
-		self.allow_resume = allow_resume
-		if not self._try_start_or_resume():
-			raise InteractionException("user does not have rights to start this test. aborting.")
-		return ExamDriver(self.driver, self.ilias_url, self.username, self.report, context, questions, exam_configuration)
-
+	def create_test_driver(self, test):
+		return TestDriver(self, test)

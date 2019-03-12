@@ -42,7 +42,7 @@ from tiltr.driver.exam_configuration import * # needed for pickling
 import pandora
 
 from .commands import TakeExamCommand
-from .drivers import Login, UsersBackend, UsersFactory, TestDriver, verify_admin_settings
+from .drivers import UsersBackend, UsersFactory, UserDriver, verify_admin_settings, ImportedTest
 from .utils import wait_for_page_load, run_interaction
 
 
@@ -182,7 +182,6 @@ class MasterContext:
 		self.batch = batch
 		self.protocol = protocol
 		self.driver = None
-		self.test_driver = None
 		self.screenshot_url = None
 		self.language = None
 
@@ -227,7 +226,6 @@ class Run:
 	def __init__(self, batch):
 		self.success = ("FAIL", "unknown")
 
-		self.xls = b""
 		self.performance_data = []
 		self.coverage = Coverage()
 		self.users = []
@@ -246,8 +244,8 @@ class Run:
 		self.wait_time = batch.wait_time
 
 		self.test = batch.test
-		self.questions = self.test.questions
-		self.exam_configuration = self.test.exam_configuration
+		self.questions = self.test.cache.questions
+		self.exam_configuration = self.test.cache.exam_configuration
 
 	def _make_protocol(self, users):
 		sections = [
@@ -274,13 +272,14 @@ class Run:
 
 		return "\n".join(parts)
 
-	def _check_results(self, index, master, workbook, all_recorded_results):
+	def _check_results(self, index, master, test_driver, workbook, all_recorded_results, is_reimport):
 		all_assertions_ok = True
 
-		gui_scores = master.test_driver.get_gui_scores(
+		gui_scores = test_driver.get_gui_scores(
 			[user.get_username() for user in self.users])
 
-		pdfs = master.test_driver.export_pdf()
+		pdfs = test_driver.export_pdf()
+		prefix = 'reimport/' if is_reimport else 'original/'
 
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			master.report("checking results for user %s." % user.get_username())
@@ -299,25 +298,27 @@ class Run:
 				ilias_result.add(("pdf", "question", Result.normalize_question_title(question_title), "score"), score)
 
 			# save pdf in tiltr database.
-			self.files["%s.pdf" % user.get_username()] = pdfs[user.get_username()].bytes
+			self.files[prefix + "%s.pdf" % user.get_username()] = pdfs[user.get_username()].bytes
 
 			# perform response checks.
 			def report(message):
 				if message:
-					self.protocols[user.get_username()].append(message)
+					self.protocols[prefix + user.get_username()].append(message)
 
 			self.protocols[user.get_username()].extend(["", "- results for evaluation %d:" % index])
+
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				all_assertions_ok = False
 
-			# add coverage info.
-			for question_title, answers in ilias_result.get_answers().items():
-				question = self.questions[question_title]
-				question.add_export_coverage(self.coverage, answers, self.language)
+			if not is_reimport:
+				# add coverage info.
+				for question_title, answers in ilias_result.get_answers().items():
+					question = self.questions[question_title]
+					question.add_export_coverage(self.coverage, answers, self.language)
 
 		return all_assertions_ok
 
-	def _apply_readjustment(self, index, master, all_recorded_results):
+	def _apply_readjustment(self, index, master, test_driver, all_recorded_results):
 		# note that this will destroy the original test's scores. keep this in mind for future
 		# test runs on this test.
 
@@ -336,7 +337,7 @@ class Run:
 
 		while True:
 			with wait_for_page_load(master.driver):
-				master.test_driver.goto_scoring_adjustment()
+				test_driver.goto_scoring_adjustment()
 
 			links = []
 			for a in master.driver.find_element_by_name("questionbrowser").find_elements_by_css_selector("table a"):
@@ -415,7 +416,7 @@ class Run:
 	def _users_backend(self, master):
 		return lambda: UsersBackend(master.driver, self.batch.ilias_url, master.report)
 
-	def prepare(self, master):
+	def prepare(self, master, test_driver):
 		self.language = master.language
 		master.report("running with admin language '%s'" % self.language)
 
@@ -442,32 +443,25 @@ class Run:
 
 		self.users = self.users_factory.acquire(self._users_backend(master))
 
-		'''		
-		with tempfile.TemporaryDirectory() as tmpdir:
-			temp_test_name = create_temp_test_name()
-			test_path = _patch_exam_name(master.test_driver.test.get_path(), temp_test_name, tmpdir)
-			master.test_driver.import_test(test_path)
-		'''
-
-		if not master.test_driver.goto_or_fail():
+		if not test_driver.goto_or_fail():
 			# if test does not exist, add it first.
-			master.test_driver.import_test_from_template()
+			test_driver.import_test_from_template()
 		else:
-			master.test_driver.delete_all_participants()
-		master.test_driver.configure()
+			test_driver.delete_all_participants()
+		test_driver.configure(self.workarounds)
 
 		# grab exam configuration from UI.
 		if self.exam_configuration is None:
-			self.exam_configuration = master.test_driver.parse_exam_configuration()
-			self.test.exam_configuration = self.exam_configuration
+			self.exam_configuration = test_driver.parse_exam_configuration()
+			self.test.cache.exam_configuration = self.exam_configuration
 
 		# grab question definitions from UI.
 		if self.questions is None:
-			self.questions = master.test_driver.parse_question_definitions(self.settings)
-			self.test.questions = self.questions
+			self.questions = test_driver.parse_question_definitions(self.settings)
+			self.test.cache.questions = self.questions
 
 		# find URL of test, since this saves us a lot of time in the clients.
-		self.test_url = master.test_driver.get_test_url()
+		self.test_url = test_driver.get_test_url()
 
 	def run_exams(self):
 		# now run exams.
@@ -506,9 +500,9 @@ class Run:
 			self.report("traceback", traceback.format_exc())
 			raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
-	def _verify_reimport(self, master, all_recorded_results):
-		xmlres_zip = master.test_driver.export_xmlres()
-		self.files["exported_xmlres.zip"] = xmlres_zip
+	def _verify_reimport(self, master, test_driver, all_recorded_results):
+		xmlres_zip = test_driver.export_xmlres()
+		self.files["original/xmlres.zip"] = xmlres_zip
 
 		with tempfile.NamedTemporaryFile() as temp:
 			temp.write(xmlres_zip)
@@ -517,20 +511,30 @@ class Run:
 			with tempfile.TemporaryDirectory() as tmpdir:
 				temp_test_name = create_temp_test_name()
 				test_path = _patch_exam_name(temp.name, temp_test_name, tmpdir)
-				master.test_driver.import_test(test_path)
+				master.user_driver.import_test(test_path)
 				try:
-					xls = master.test_driver.export_xls()
+					reimported_test = ImportedTest(temp_test_name)
+					reimported_test_driver = master.user_driver.create_test_driver(reimported_test)
+
+					verify_result = self._verify_xls(
+						master, reimported_test_driver, all_recorded_results, is_reimport=True)
+
 				finally:
-					master.test_driver.delete_test(temp_test_name)
+					master.user_driver.delete_test(temp_test_name)
 
-		return True
+		return verify_result
 
-	def _verify_xls(self, master, all_recorded_results):
-		num_readjustments = max(0, int(self.settings.num_readjustments))
+	def _verify_xls(self, master, test_driver, all_recorded_results, is_reimport=False):
+		if not is_reimport:
+			num_readjustments = max(0, int(self.settings.num_readjustments))
+		else:
+			num_readjustments = 0
+		prefix = 'reimport/' if is_reimport else 'original/'
+
 		all_assertions_ok = False
 
 		for readjustment_round in range(num_readjustments + 1):
-			xls = master.test_driver.export_xls()
+			xls = test_driver.export_xls()
 			workbook = load_workbook(filename=io.BytesIO(xls))
 
 			try:
@@ -539,25 +543,26 @@ class Run:
 				raise IntegrityException("failed to check workbook consistency")
 
 			if readjustment_round == 0:
-				self.xls = xls
-			else:
-				self.files["exported_xls_round_%d.xlsx" % readjustment_round] = xls
+				self.files[prefix + "exported_r%d.xlsx" % readjustment_round] = xls
 
 			all_assertions_ok = self._check_results(
-				readjustment_round, master, workbook, all_recorded_results)
+				readjustment_round, master, test_driver, workbook, all_recorded_results, is_reimport)
 			if not all_assertions_ok:
 				break
 
-			if readjustment_round == 0:
-				all_assertions_ok = all_assertions_ok and self._verify_reimport(master, all_recorded_results)
+			if readjustment_round == 0 and not is_reimport:
+				all_assertions_ok = all_assertions_ok and self._verify_reimport(
+					master, test_driver, all_recorded_results) == "OK"
+			if not all_assertions_ok:
+				break
 
 			if readjustment_round < num_readjustments:
 				self._apply_readjustment(
-					readjustment_round, master, all_recorded_results)
+					readjustment_round, master, test_driver, all_recorded_results)
 
 		return "OK" if all_assertions_ok else "FAIL"
 
-	def analyze(self, master, all_recorded_results):
+	def analyze(self, master, test_driver, all_recorded_results):
 		# gather coverage data.
 		coverage = self.coverage
 		for recorded_result in all_recorded_results:
@@ -580,7 +585,7 @@ class Run:
 			raise TiltrException(worst)
 
 		# detailed integrity checks.
-		if self._verify_xls(master, all_recorded_results) == "OK":
+		if self._verify_xls(master, test_driver, all_recorded_results) == "OK":
 			self.success = ("OK",)
 		else:
 			raise IntegrityException("integrity assertions failed")
@@ -601,7 +606,6 @@ class Run:
 			db.put(
 				batch_id=self.batch_id,
 				success=encode_success(self.success),
-				xls=self.xls,
 				protocol=json.dumps(files_data),
 				num_users=len(self.users),
 				elapsed_time=elapsed_time)
@@ -615,23 +619,57 @@ class Run:
 	def run(self):
 		t0 = time.time()
 
+		# we copy the test for each run, since checking readjustments will
+		# destroy the test and would influence following test runs.
+		copy_test = True
+
+		temp_test = None  # the temporary copy of the test (deleted soon).
+		used_test = None  # the test actually used (copied or not, depends).
+
 		try:
 			with self.batch.in_master(self.protocol_master) as master:
-				self.prepare(master)
+
+				if copy_test:
+					with tempfile.TemporaryDirectory() as tmpdir:
+						temp_test_name = create_temp_test_name()
+						test_path = _patch_exam_name(
+							self.test.get_path(), temp_test_name, tmpdir)
+						master.user_driver.import_test(test_path)
+
+					temp_test = ImportedTest(temp_test_name)
+					used_test = temp_test
+
+					temp_test.cache.transfer_invariants(self.test.cache)
+				else:
+					used_test = self.test
+
+				test_driver = master.user_driver.create_test_driver(used_test)
+				self.prepare(master, test_driver)
+
+				if temp_test:
+					self.test.cache.transfer_invariants(temp_test.cache)
 
 			try:
 				all_recorded_results = self.run_exams()
 			except TiltrException as e:
-				# in case of an error, always export XLS for later analysis.
+				# in case of an error, always try to export XLS for later analysis.
 				try:
 					with self.batch.in_master(self.protocol_master) as master:
-						self.xls = master.test_driver.export_xls()
+						test_driver = master.user_driver.create_test_driver(used_test)
+						self.files["error/exported.xlsx"] = test_driver.export_xls()
 				except:
 					pass  # ignore
-				raise e  # original
+				raise e  # original exception
 
 			with self.batch.in_master(self.protocol_master) as master:
-				self.analyze(master, all_recorded_results)
+				test_driver = master.user_driver.create_test_driver(used_test)
+				self.analyze(master, test_driver, all_recorded_results)
+
+				if temp_test:
+					master.user_driver.delete_test(temp_test.get_title())
+					temp_test = None
+
+				# FIXME. take over cached stuff.
 
 		except selenium.common.exceptions.WebDriverException as e:
 			self.success = ("FAIL", "interaction")
@@ -656,6 +694,13 @@ class Run:
 
 		finally:
 			self.add_to_protocol("result", "done with status %s." % encode_success(self.success))
+
+			if temp_test:
+				try:
+					with self.batch.in_master(self.protocol_master) as master:
+						master.user_driver.delete_test(temp_test.get_title())
+				except:
+					traceback.print_exc()
 
 			try:
 				if self.users:
@@ -733,15 +778,9 @@ class Batch(threading.Thread):
 					'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
 
 				context.driver = browser.driver
+				context.user_driver = UserDriver(browser.driver, self.ilias_url, context.report)
 
-				test_driver = TestDriver(
-					browser.driver, self.test, self.ilias_admin_user, self.workarounds, self.ilias_url, context.report)
-				context.test_driver = test_driver
-
-				login_args = [
-					browser.driver, context.report, self.ilias_url, self.ilias_admin_user, self.ilias_admin_password]
-
-				with Login(*login_args) as login:
+				with context.user_driver.login(self.ilias_admin_user, self.ilias_admin_password) as login:
 					context.language = login.language
 
 					yield context

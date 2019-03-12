@@ -26,7 +26,7 @@ from .discovery import connect_machines
 from .utils import clear_tmp
 from .args import parse_args
 from tiltr.driver.batch import Batch
-from tiltr.driver.drivers import Test
+from tiltr.driver.drivers import PackagedTest
 from tiltr.data.result import open_results
 from tiltr.data.settings import Settings, Workarounds
 from tiltr.data.database import DB
@@ -262,7 +262,7 @@ class TestsHandler(tornado.web.RequestHandler):
 		self.state = state
 
 	def get(self):
-		self.write(json.dumps(Test.list()))
+		self.write(json.dumps(PackagedTest.list()))
 		self.flush()
 
 
@@ -274,13 +274,15 @@ class StartBatchHandler(tornado.web.RequestHandler):
 		data = json.loads(self.request.body)
 
 		workarounds_dict = data["workarounds"]
-		Workarounds.disable_solved(workarounds_dict, self.state.get_ilias_version_tuple())
+		Workarounds.disable_solved(
+			workarounds_dict, self.state.get_ilias_version_tuple())
 
 		settings = Settings(from_dict=data["settings"])
 		workarounds = Workarounds(from_dict=workarounds_dict)
 		test_id = data["test"]
 		wait_time = 0
-		batch_id = self.state.start_batch(Test(test_id), settings, workarounds, wait_time)
+		batch_id = self.state.start_batch(
+			PackagedTest(test_id), settings, workarounds, wait_time)
 
 		if batch_id is None:
 			self.write("error")
