@@ -32,6 +32,9 @@ class ClozeQuestionGap:
 		self.question = question
 		self.index = index
 
+	def get_maximum_score(self):
+		raise NotImplementedError()
+
 	def get_export_name(self, language):
 		return ClozeQuestionGap._export_names[language] + " " + str(self.index + 1)
 
@@ -45,6 +48,9 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		self.options = options
 		self.comparator = comparator
 		self.size = size
+
+	def get_maximum_score(self):
+		return max(self.options.values())
 
 	def initialize_coverage(self, coverage, context):
 		for mode in ("verify", "export"):
@@ -130,6 +136,9 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 		ClozeQuestionGap.__init__(self, question, index)
 		self.options = options
 
+	def get_maximum_score(self):
+		return max(self.options.values())
+
 	def initialize_coverage(self, coverage, context):
 		for value in self.options.keys():
 			for mode in ("verify", "export"):
@@ -168,6 +177,9 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		# ILIAS will limit exports to XLS to 16 significant decimals, which makes sense.
 		# e.g. 25.433019319138662 -> 25.43301931913866, 0.17493771424585164 -> 0.1749377142458516
 		self.format = '%.16g'
+
+	def get_maximum_score(self):
+		return self.score
 
 	def initialize_coverage(self, coverage, context):
 		for mode in ("verify", "export"):
@@ -288,11 +300,11 @@ class ClozeQuestion(Question):
 			gap_index = len(self.gaps)
 
 			try:
-				cloze = driver.find_element_by_name("clozetype_%d" % gap_index)
+				cloze_type_element = driver.find_element_by_name("clozetype_%d" % gap_index)
 			except NoSuchElementException:
 				break
 
-			cloze_type = ClozeType(int(cloze.get_attribute("value")))
+			cloze_type = ClozeType(int(cloze_type_element.get_attribute("value")))
 
 			if cloze_type == ClozeType.text or cloze_type == ClozeType.select:
 				options = parse_gap_options(driver, gap_index)
@@ -317,6 +329,9 @@ class ClozeQuestion(Question):
 				raise NotImplementedException("unsupported cloze type " + str(cloze_type))
 
 			self.gaps[gap_index] = gap
+
+	def get_maximum_score(self):
+		return sum([gap.get_maximum_score() for gap in self.gaps.values()])
 
 	def create_answer(self, driver, *args):
 		from ..answers.cloze import ClozeAnswer

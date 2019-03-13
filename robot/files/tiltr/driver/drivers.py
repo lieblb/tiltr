@@ -13,6 +13,7 @@ import requests
 import traceback
 from urllib.parse import urlparse, parse_qs
 from decimal import *
+from collections import namedtuple
 
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
@@ -32,6 +33,25 @@ from tiltr.question import *
 from tiltr.data.result import *
 from tiltr.question.protocol import AnswerProtocol
 from tiltr.data.pdf import PDF
+
+
+UserStat = namedtuple('UserStat', ['score', 'short_mark'])
+
+Mark = namedtuple('Mark', ['level', 'short', 'official'])
+
+class Marks:
+	def __init__(self, marks):
+		self._marks = marks
+
+	def lookup(self, percentage):
+		best = None
+
+		for mark in self._marks:
+			if percentage >= mark.level:
+				if best is None or mark.level > best.level:
+					best = mark
+
+		return best
 
 
 class Login:
@@ -808,18 +828,28 @@ class ExamDriver:
 	def get_expected_result(self, language):
 		result = Result(origin=Origin.recorded)
 
-		expected_total_score = Decimal(0)
+		maximum_score = Decimal(0)
+		for question in self.questions.values():
+			maximum_score += question.get_maximum_score()
+
+		expected_reached_score = Decimal(0)
 		for answer in self.answers.values():
 			score = answer.add_to_result(
-				result, self.context, language, self.exam_configuration.clip_answer_score)
-
-			expected_total_score += score
+				result, self.context,
+				language, self.exam_configuration.clip_answer_score)
+			expected_reached_score += score
 
 		# always clip final score on 0.
-		expected_total_score = max(expected_total_score, Decimal(0))
+		expected_reached_score = max(expected_reached_score, Decimal(0))
 
-		result.add_as_formatted_score(("exam", "score", "total"), expected_total_score)
-		result.add_as_formatted_score(("exam", "score", "gui"), expected_total_score)
+		mark = Marks(self.exam_configuration.marks).lookup(
+			(100 * expected_reached_score) / maximum_score)
+
+		result.add_as_formatted_score(("xls", "score_maximum"), maximum_score)
+
+		for channel in ("xls", "gui"):
+			result.add_as_formatted_score((channel, "score_reached"), expected_reached_score)
+			result.add((channel, "short_mark"), str(mark.short).strip())
 
 		self.add_protocol_to_result(result)
 		result.attach_performance_measurements(self.dts)
@@ -909,21 +939,22 @@ class TestDriver:
 	def import_test_from_template(self):
 		self.user_driver.import_test(self.test.get_path())
 
-	def configure(self, workarounds):
+	def configure_test(self, workarounds, exam_configuration):
 		self.make_online()
 		self.configure_autosave(workarounds)
+		self.configure_random_mark_schema(exam_configuration)
 
 	def make_online(self):
-		# now activate the Test by setting it online.
+		# activate the Test by setting it online.
 		self.goto_settings()
 
 		if not self.driver.find_element_by_id("online").is_selected():
 			self.driver.execute_script('document.getElementById("online").click()')
 
+		self.report("setting test online.")
+
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_name("cmd[saveForm]").click()
-
-		self.report("setting test online.")
 
 	def configure_autosave(self, workarounds):
 		self.goto_settings()
@@ -943,6 +974,61 @@ class TestDriver:
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_name("cmd[saveForm]").click()
 
+	def configure_random_mark_schema(self, exam_configuration):
+		import random as rnd
+		random = rnd.SystemRandom()
+
+		n_grades = random.randint(2, 20)
+
+		self.report("configuring %s random marks." % n_grades)
+
+		def generate_numbers(n, fmt, ab):
+			while True:
+				numbers = set()
+				for _ in range(n):
+					numbers.add(fmt % random.uniform(*ab))
+				if len(numbers) == n:
+					break
+			return sorted(list(numbers), key=lambda s: float(s))
+
+
+		grades = generate_numbers(n_grades - 1, "%.1f", (1, 5.9))
+		levels = generate_numbers(n_grades - 1, "%.2f", (0.01, 100))
+
+		grades.append("6.0")
+		levels = ["0.00"] + levels
+
+		self.goto_mark_schema()
+
+		for mark_checkbox in self.driver.find_elements_by_css_selector('input[name="marks[]"]'):
+			mark_checkbox.click()
+
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_css_selector(
+				'input[name="cmd[deleteMarkSteps]"]').click()
+
+		for _ in range(n_grades):
+			with wait_for_page_load(self.driver):
+				self.driver.find_element_by_css_selector(
+					'button[name="cmd[addMarkStep]"]').click()
+
+		marks = list()
+		for i, (grade, percentage) in enumerate(zip(reversed(grades), levels)):
+			official = "Note %s" % grade
+			marks.append(Mark(short=grade, official=official, level=Decimal(percentage)))
+			set_element_value(self.driver, self.driver.find_element_by_id("mark_short_%d" % i), grade)
+			set_element_value(self.driver, self.driver.find_element_by_id("mark_official_%d" % i), official)
+			set_element_value(self.driver, self.driver.find_element_by_id("mark_percentage_%d" % i), percentage)
+
+		passed = self.driver.find_element_by_css_selector('input[name="passed_%d"]' % (n_grades - 1))
+		if not passed.is_selected():
+			passed.click()
+
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_css_selector('input[name="cmd[saveMarks]"]').click()
+
+		exam_configuration.marks = marks
+
 	def goto_participants(self):
 		assert self.goto()
 		self.driver.find_element_by_css_selector("#tab_participants a").click()
@@ -950,6 +1036,10 @@ class TestDriver:
 	def goto_settings(self):
 		assert self.goto()
 		self.driver.find_element_by_css_selector("#tab_settings a").click()
+
+	def goto_mark_schema(self):
+		self.goto_settings()
+		self.driver.find_element_by_css_selector("#subtab_mark_schema").click()
 
 	def goto_scoring(self):
 		self.goto_settings()
@@ -1073,27 +1163,22 @@ class TestDriver:
 
 		return pdfs
 
-	def get_gui_scores(self, user_ids):
+	def get_statistics_from_web_gui(self, user_ids):
 		def fetch_scores():
 			with wait_for_page_load(self.driver):
 				self.goto_statistics()
 
-			reached = None
-			login = None
-
-			for index, a in enumerate(self.driver.find_elements_by_css_selector("#tst_eval_all thead th a")):
+			index = dict()
+			for i, a in enumerate(self.driver.find_elements_by_css_selector("#tst_eval_all thead th a")):
 				nav = http_get_parameters(a.get_attribute("href"))["tst_eval_all_table_nav"].split(":")
-				if nav[0] == "reached":
-					reached = index
-				elif nav[0] == "login":
-					login = index
+				index[nav[0]] = i
 
-			if reached is not None and login is not None:
-				return reached, login
+			if all(k in index for k in ("reached", "mark", "login")):
+				return index
 			else:
 				raise InteractionException("unable to get gui scores")
 
-		reached, login = interact(self.driver, fetch_scores, refresh=True)
+		columns_index = interact(self.driver, fetch_scores, refresh=True)
 
 		# configure table to show up to 800 entries.
 		form = self.driver.find_element_by_css_selector("#evaluation_all")
@@ -1107,22 +1192,29 @@ class TestDriver:
 		href_800.click()
 
 		# now read out the scores for all participants.
-		scores = dict()
+		stats = dict()
 		unassigned = dict(("[%s]" % name, name) for name in user_ids)
 
 		for tr in self.driver.find_elements_by_css_selector("#tst_eval_all tbody tr"):
-			columns = list(tr.find_elements_by_css_selector("td"))
-			key = columns[login].text.strip()
+			columns_list = list(tr.find_elements_by_css_selector("td"))
+			columns = dict((k, columns_list[i]) for k, i in columns_index.items())
+
+			key = columns["login"].text.strip()
 			user_id = unassigned.get(key)
 			if user_id:
 				del unassigned[key]
-				score = re.split(r"\s+", columns[reached].text)
-				scores[user_id] = Decimal(score[0])
+
+				score_data = re.split(r"\s+", columns["reached"].text)
+
+				stats[user_id] = UserStat(
+					score=Decimal(score_data[0]),
+					short_mark=columns["mark"].text.strip())
 
 		if len(unassigned) > 0:
-			raise InteractionException("failed to read out gui scores for %s" % ",".join(unassigned.keys()))
+			raise InteractionException(
+				"failed to read out gui scores for %s" % ",".join(unassigned.keys()))
 
-		return scores
+		return stats
 
 	def parse_exam_configuration(self):
 		self.report("parsing exam configuration.")

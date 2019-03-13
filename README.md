@@ -13,13 +13,13 @@ Using its built-in test oracle TiltR can help institutions that rely on ILIAS fo
 assert that some of the most essential functionality they fundamentally rely on as correct is indeed that.
 Note however that it can _not_ achieve anything like full coverage and some areas are not tested at all.
 
-|                      | Responses         | Scores          | Total Score          | Grade       |
+|                      | Responses         | Response Scores | Total Scores         | Marks        |
 | ---------------------|:-----------------:| ---------------:| --------------------:| -----------:|
 | **During the Test**  |                   |                 |                      |
 |                      | &#x2713;          | -               | -                    | -
 | **After the Test**   |                   |                 |                      |
-| via Web UI           | -                 | -               | &#x2713;             | -
-| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | -
+| via Web UI           | -                 | -               | &#x2713;             | &#x2713;
+| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | &#x2713;
 | via PDF Export       | -                 | &#x2713;        | -                    | -
 | **Readjustments**    |                   |                 |                      |
 |                      | -                 | SC, MC          | SC, MC               | -

@@ -28,6 +28,7 @@ class ExamConfiguration:
 		self.mc_scoring = None
 		self.score_cutting = None
 		self.pass_scoring = None
+		self.marks = None
 
 	def set_count_system(self, value):
 		self.count_system = CountSystem(value)

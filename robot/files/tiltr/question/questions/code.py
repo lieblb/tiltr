@@ -16,6 +16,9 @@ class CodeQuestion(Question):
 		super().__init__(title)
 		self.length = int(settings.max_long_text_length)
 
+	def get_maximum_score(self):
+		return Decimal(0)
+
 	def create_answer(self, driver, *args):
 		from ..answers.code import CodeAnswer
 		return CodeAnswer(driver, self, *args)

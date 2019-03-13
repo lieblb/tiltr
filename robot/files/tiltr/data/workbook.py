@@ -24,8 +24,14 @@ class XlsResultRow:
 	def get_username(self):
 		return self.get(2)
 
-	def get_total_score(self):
+	def get_reached_score(self):
 		return Decimal(self.get(3))
+
+	def get_maximum_score(self):
+		return Decimal(self.get(4))
+
+	def get_short_mark(self):
+		return str(self.get(5)).strip()
 
 	def get_question_scores(self, workarounds):
 		scores = dict()
@@ -167,6 +173,8 @@ def workbook_to_result(wb, username, questions, workarounds, report):
 	for title, score in result_row.get_question_scores(workarounds).items():
 		result.add(("xls", "question", Result.normalize_question_title(title), "score"), score)
 
-	result.add(("exam", "score", "total"), result_row.get_total_score())
+	result.add(("xls", "score_reached"), result_row.get_reached_score())
+	result.add(("xls", "score_maximum"), result_row.get_maximum_score())
+	result.add(("xls", "short_mark"), result_row.get_short_mark())
 
 	return result

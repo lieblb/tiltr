@@ -43,7 +43,7 @@ from tiltr.driver.exam_configuration import * # needed for pickling
 import pandora
 
 from .commands import TakeExamCommand
-from .drivers import UsersBackend, UsersFactory, UserDriver, verify_admin_settings, ImportedTest
+from .drivers import UsersBackend, UsersFactory, UserDriver, verify_admin_settings, ImportedTest, Marks
 from .utils import wait_for_page_load, run_interaction
 
 
@@ -254,7 +254,8 @@ class Run:
 			"log",
 
 			"preferences/workarounds",
-			"preferences/settings"]
+			"preferences/settings",
+			"mark_schema"]
 
 		parts = list()
 
@@ -275,7 +276,7 @@ class Run:
 	def _check_results(self, index, master, test_driver, workbook, all_recorded_results, is_reimport):
 		all_assertions_ok = True
 
-		gui_scores = test_driver.get_gui_scores(
+		gui_stats = test_driver.get_statistics_from_web_gui(
 			[user.get_username() for user in self.users])
 
 		pdfs = test_driver.export_pdf()
@@ -290,8 +291,9 @@ class Run:
 			ilias_result = workbook_to_result(
 				workbook, user.get_username(), self.questions, self.workarounds, master.report)
 
-			# check score via gui participants tab as well.
-			ilias_result.add(("exam", "score", "gui"), gui_scores[user.get_username()])
+			# check score via statistics gui as well.
+			ilias_result.add(("gui", "score_reached"), gui_stats[user.get_username()].score)
+			ilias_result.add(("gui", "short_mark"), gui_stats[user.get_username()].short_mark)
 
 			# add scores from pdf.
 			for question_title, score in pdfs[user.get_username()].scores.items():
@@ -310,6 +312,9 @@ class Run:
 				" (FOR REIMPORTED VERSION)" if is_reimport else ""), ""])
 
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
+				message = "verification failed for user %s." % user.get_username()
+				master.report(message)
+				self.protocols["log"].append("[fail] " + message)
 				all_assertions_ok = False
 
 			if not is_reimport:
@@ -410,14 +415,25 @@ class Run:
 				report("recomputed expected score for %s / %s as %s based on answer %s" % (
 					user.get_username(), question_title, score, json.dumps(answers)))
 
-		# recompute total scores.
+		maximum_score = Decimal(0)
+		for question in self.questions.values():
+			maximum_score += question.get_maximum_score()
+
+		# recompute reached scores and marks.
 		for result in all_recorded_results:
-			score = Decimal(0)
+			result.update(("xls", "score_maximum"), maximum_score)
+
+			reached_score = Decimal(0)
 			for value in result.scores():
-				score += Decimal(value)
-			score = remove_trailing_zeros(str(score))
-			result.update(("exam", "score", "total"), score)
-			result.update(("exam", "score", "gui"), score)
+				reached_score += Decimal(value)
+
+			for channel in ("xls", "gui"):
+				result.update((channel, "score_reached"), remove_trailing_zeros(str(reached_score)))
+
+			mark = Marks(self.exam_configuration.marks).lookup(
+				(100 * reached_score) / maximum_score)
+			for channel in ("xls", "gui"):
+				result.update((channel, "short_mark"), str(mark.short).strip())
 
 	def _users_backend(self, master):
 		return lambda: UsersBackend(master.driver, self.batch.ilias_url, master.report)
@@ -453,7 +469,6 @@ class Run:
 			test_driver.import_test_from_template()
 		else:
 			test_driver.delete_all_participants()
-		test_driver.configure(self.workarounds)
 
 		# grab exam configuration from UI.
 		if self.exam_configuration is None:
@@ -464,6 +479,12 @@ class Run:
 		if self.questions is None:
 			self.questions = test_driver.parse_question_definitions(self.settings)
 			self.test.cache.questions = self.questions
+
+		# now configure test.
+		test_driver.configure_test(self.workarounds, self.exam_configuration)
+
+		for mark in self.exam_configuration.marks:
+			self.protocols["mark_schema"].append(" / ".join(str(x) for x in mark))
 
 		# find URL of test, since this saves us a lot of time in the clients.
 		self.test_url = test_driver.get_test_url()
@@ -641,30 +662,37 @@ class Run:
 
 		try:
 			with self.batch.in_master(self.protocol_master) as master:
+				try:
+					if copy_test:
+						with tempfile.TemporaryDirectory() as tmpdir:
+							temp_test_name = create_temp_test_name()
+							test_path = _patch_exam_name(
+								self.test.get_path(), temp_test_name, tmpdir)
+							master.user_driver.import_test(test_path)
 
-				if copy_test:
-					with tempfile.TemporaryDirectory() as tmpdir:
-						temp_test_name = create_temp_test_name()
-						test_path = _patch_exam_name(
-							self.test.get_path(), temp_test_name, tmpdir)
-						master.user_driver.import_test(test_path)
+						temp_test = ImportedTest(temp_test_name)
+						used_test = temp_test
 
-					temp_test = ImportedTest(temp_test_name)
-					used_test = temp_test
+						temp_test.cache.transfer_invariants(self.test.cache)
+					else:
+						used_test = self.test
 
-					temp_test.cache.transfer_invariants(self.test.cache)
-				else:
-					used_test = self.test
+					test_driver = master.user_driver.create_test_driver(used_test)
+					self.prepare(master, test_driver)
 
-				test_driver = master.user_driver.create_test_driver(used_test)
-				self.prepare(master, test_driver)
-
-				if temp_test:
-					self.test.cache.transfer_invariants(temp_test.cache)
+					if temp_test:
+						self.test.cache.transfer_invariants(temp_test.cache)
+				except Exception as e:
+					try:
+						self.files['error/master.png'] = base64.b64decode(
+							master.driver.get_screenshot_as_base64())
+					except:
+						pass  # ignore
+					raise e
 
 			try:
 				all_recorded_results = self.run_exams()
-			except TiltrException as e:
+			except Exception as e:
 				# in case of an error, always try to export XLS for later analysis.
 				try:
 					with self.batch.in_master(self.protocol_master) as master:
@@ -675,14 +703,20 @@ class Run:
 				raise e  # original exception
 
 			with self.batch.in_master(self.protocol_master) as master:
-				test_driver = master.user_driver.create_test_driver(used_test)
-				self.analyze(master, test_driver, all_recorded_results)
+				try:
+					test_driver = master.user_driver.create_test_driver(used_test)
+					self.analyze(master, test_driver, all_recorded_results)
 
-				if temp_test:
-					master.user_driver.delete_test(temp_test.get_title())
-					temp_test = None
-
-				# FIXME. take over cached stuff.
+					if temp_test:
+						master.user_driver.delete_test(temp_test.get_title())
+						temp_test = None
+				except Exception as e:
+					try:
+						self.files['error/master.png'] = base64.b64decode(
+							master.driver.get_screenshot_as_base64())
+					except:
+						pass  # ignore
+					raise e
 
 		except selenium.common.exceptions.WebDriverException as e:
 			self.success = ("FAIL", "interaction")

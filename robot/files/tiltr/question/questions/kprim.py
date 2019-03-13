@@ -34,6 +34,9 @@ class KPrimQuestion(Question):
 			self.names.append(driver.find_element_by_name(
 				"kprim_answers[answer][%d]" % i).get_attribute("value"))
 
+	def get_maximum_score(self):
+		return self.score
+
 	def create_answer(self, driver, *args):
 		from ..answers.kprim import KPrimAnswer
 		return KPrimAnswer(driver, self, *args)

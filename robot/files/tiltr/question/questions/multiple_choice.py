@@ -70,6 +70,12 @@ class MultipleChoiceQuestion(Question):
 		super().__init__(title)
 		self.choices = self._get_ui(driver)
 
+	def get_maximum_score(self):
+		def max_values():
+			for item in self.choices.values():
+				yield max(item.checked_score, item.unchecked_score)
+		return sum(max_values())
+
 	def create_answer(self, driver, *args):
 		from ..answers.multiple_choice import MultipleChoiceAnswer
 		return MultipleChoiceAnswer(driver, self, *args)

@@ -51,6 +51,9 @@ class SingleChoiceQuestion(Question):
 		super().__init__(title)
 		self.choices = self._get_ui(driver)
 
+	def get_maximum_score(self):
+		return max(self.choices.values())
+
 	def create_answer(self, driver, *args):
 		from ..answers.single_choice import SingleChoiceAnswer
 		return SingleChoiceAnswer(driver, self, *args)

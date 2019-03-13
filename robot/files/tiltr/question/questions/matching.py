@@ -80,6 +80,9 @@ class MatchingQuestion(Question):
 		self.terms = self._get_ui_items(driver, 'terms')
 		self.pairs = self._get_ui_pairs(driver)
 
+	def get_maximum_score(self):
+		return sum(self.pairs.values())
+
 	def create_answer(self, driver, *args):
 		from ..answers.matching import MatchingAnswer
 		return MatchingAnswer(driver, self, *args)

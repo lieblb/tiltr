@@ -18,7 +18,14 @@ class LongTextQuestion(Question):
 		self.length = int(settings.max_long_text_length)
 
 		if not driver.find_element_by_id("scoring_mode_non").is_selected():
-			raise NotImplementedException("only manual scoring is supported for tests with LongTextQuestion")
+			raise NotImplementedException(
+				"only manual scoring is currently supported for tests with LongTextQuestions")
+
+		self._maximum_score = Decimal(
+			driver.find_element_by_id("non_keyword_points").get_attribute('value'))
+
+	def get_maximum_score(self):
+		return self._maximum_score
 
 	def create_answer(self, driver, *args):
 		from ..answers.longtext import LongTextAnswerTinyMCE
