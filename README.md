@@ -14,7 +14,7 @@ assert that some of the most essential functionality they fundamentally rely on 
 Note however that it can _not_ achieve anything like full coverage and some areas are not tested at all.
 
 |                      | Responses         | Response Scores | Total Scores         | Marks        |
-| ---------------------|:-----------------:| ---------------:| --------------------:| -----------:|
+| ---------------------|:-----------------:| ---------------:| --------------------:| ------------:|
 | **During the Test**  |                   |                 |                      |
 |                      | &#x2713;          | -               | -                    | -
 | **After the Test**   |                   |                 |                      |
@@ -22,9 +22,9 @@ Note however that it can _not_ achieve anything like full coverage and some area
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | &#x2713;
 | via PDF Export       | -                 | &#x2713;        | -                    | -
 | **Readjustments**    |                   |                 |                      |
-|                      | -                 | SC, MC          | SC, MC               | -
+|                      | -                 | SC, MC          | SC, MC               | &#x2713;
 | **Re-Imported**      |                   |                 |                      |
-| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | -
+| via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | &#x2713;
 
 ## Supported Question Types
 
