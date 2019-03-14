@@ -333,9 +333,10 @@ class Run:
 
 		def report(s):
 			protocol.append(s)
+			if s:
+				master.report(s)
 
-		if protocol:
-			report("")
+		report("")
 		report("## READJUSTMENT ROUND %d" % (index + 1))
 		report("")
 
@@ -360,22 +361,48 @@ class Run:
 			with wait_for_page_load(master.driver):
 				link.click()
 
-			# close stats window.
-			master.driver.execute_script("""
-			document.getElementsByClassName("ilOverlay")[0].style.display = "none";
-			""")
+			def close_stats_window():
+				master.driver.execute_script("""
+				(function() {
+					var overlay = document.getElementsByClassName("ilOverlay")[0];
+					if (overlay) {
+						overlay.style.display = "none";
+					}
+				}())
+				""")
+
+			close_stats_window()
 
 			random = rnd.SystemRandom()
 
 			try:
-				if question.readjust_scores(master.driver, random, report):
-					master.report('readjusting scores for question "%s"' % question.title)
+				while True:
+					report('')
+					report('### QUESTION "%s"' % question.title.upper())
+					report('')
 
-					modified_questions.add(question.title)
+					if question.readjust_scores(master.driver, random, report):
+						modified_questions.add(question.title)
 
-					master.report("saving.")
-					with wait_for_page_load(master.driver):
-						master.driver.find_element_by_name("cmd[savescoringfortest]").click()
+						master.report("saving.")
+
+						with wait_for_page_load(master.driver):
+							master.driver.find_element_by_name("cmd[savescoringfortest]").click()
+
+						close_stats_window()
+
+						if master.driver.find_elements_by_css_selector(".alert-danger"):
+							maximum_score = question.get_maximum_score()
+
+							if maximum_score > 0:
+								report("ILIAS rejected new scores even though they are valid (%f)." % maximum_score)
+							else:
+								report("ILIAS rejected invalid new scores.")
+						else:
+							break
+					else:
+						break
+
 			except TimeoutException:
 				retries += 1
 				if retries >= 1:
@@ -586,6 +613,9 @@ class Run:
 				self._apply_readjustment(
 					readjustment_round, master, test_driver, all_recorded_results)
 
+				xmlres_zip = test_driver.export_xmlres()
+				self.files["readjustments/round%d.zip" % (1 + readjustment_round)] = xmlres_zip
+
 		return "OK" if all_assertions_ok else "FAIL"
 
 	def analyze(self, master, test_driver, all_recorded_results):
@@ -629,7 +659,7 @@ class Run:
 		files['protocol.txt'] = self._make_protocol().encode('utf8')
 
 		if self.protocols["readjustments"]:
-			files['readjustments.txt'] = ("\n".join(self.protocols["readjustments"])).encode('utf8')
+			files['readjustments/protocol.txt'] = ("\n".join(self.protocols["readjustments"])).encode('utf8')
 
 		for part in itertools.chain(["master"], (user.get_username() for user in self.users)):
 			files['machines/%s.txt' % part] = ("\n".join(self.protocols[part])).encode('utf8')
@@ -640,7 +670,7 @@ class Run:
 			db.put(
 				batch_id=self.batch_id,
 				success=encode_success(self.success),
-				protocol=json.dumps(files_data),
+				files=json.dumps(files_data),
 				num_users=len(self.users),
 				elapsed_time=elapsed_time)
 			db.put_performance_data(self.performance_data)

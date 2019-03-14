@@ -74,9 +74,6 @@ class SingleChoiceQuestion(Question):
 		return choice, self.choices[choice]
 
 	def readjust_scores(self, driver, random, report):
-		report('### READJUSTING QUESTION "%s"' % self.title.upper())
-		report('')
-
 		choices = self._get_ui(driver)
 
 		if len(choices) != len(self.choices):
@@ -88,12 +85,16 @@ class SingleChoiceQuestion(Question):
 		for key, score in list(choices.items()):
 			new_score = _readjust_score(random, score)
 			choices[key] = new_score
-			report('readjusted score for "%s / %s" from %s to %s.' % (self.title, key, score, new_score))
+			report('readjusted score for "%s" from %s to %s.' % (key, score, new_score))
 
 		self._set_ui(driver, choices)
 		self.choices = choices
 
 		return True
+
+	#def verify_readjusted_scores(self, driver):
+	#	for key, score in self.choices.items():
+	#		self._get_ui(driver)
 
 	def compute_score(self, answers, context):
 		score = Decimal(0)

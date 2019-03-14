@@ -69,7 +69,7 @@ Starting up TiltR happens via the `compose.py` script, which takes the number of
 
 ```
 cd /path/to/tiltr
-./compose.py up --n 5
+./compose.py up 5
 ```
 
 After TiltR started up, you should be able to access the TiltR main GUI under:
@@ -79,6 +79,8 @@ After TiltR started up, you should be able to access the TiltR main GUI under:
 Please note that the default network setup globally exposes your port; if your firewall does not block it, other people will be able to reach your TiltR installation from outside (you can change this by changing TiltR' `docker-compose.yml`).
 
 Be patient during the first setup, it may take some time. If your installation is local, `mymachine` will be `localhost`.
+
+To stop TiltR kill its process. You can also call `./compose.py stop` to shut down any running docker instances.
 
 # The TiltR UI
 
@@ -127,7 +129,7 @@ your ILIAS instance is to deal with a given number of parallel users.
 
 <img src="https://github.com/lieblb/tiltr/blob/master/docs/response-times-ui.jpg?raw=true">
 
-# Error Classes
+## Error Classes
 
 If TiltR detects an error, it will annotate it with one of the following classes. Here's a 
 description of what each class means. The only class you really should be concerned about is
@@ -165,13 +167,46 @@ to the next question.
 * `integrity`
 This indicates a bug in ILIAS. Some data was not retrieved in the same state as it was saved.
 
-# TiltR in Action
+## TiltR in Action
 
 Here's a short demo:
 
 <img src="https://github.com/lieblb/tiltr/blob/master/docs/sample-video.gif?raw=true">
 
-# Technical stuff
+# Advanced Topics
+
+## Using your own Tests
+
+Running against your own tests is easy. Just export your test as a zip file, then put it into TiltR's
+`tests` directory. Reload TiltR's UI and you will see your test listed in the tests dropdown.
+Select it and start your test run.
+
+Note that your Tests must have different titles in order to differentiate them in TiltR.
+
+## Using your own ILIAS instance
+
+By default, TiltR runs against its own embedded ILIAS instance (inside Docker). However, you can test
+against an existing external ILIAS instance.
+
+**WARNING** Do **not** run TiltR against production instances of ILIAS. TiltR will bulk delete users and tests and
+things might go wrong, you know. Instead, to test your infrastructure, create a separate empty instance on your production server that's
+only for TiltR testing.
+
+To run TiltR against an external instance, use:
+
+```
+./compose.py up [number of machines] --ilias my_ilias.yaml
+```
+
+`my_ilias.yaml` contains the relevant information about your ILIAS instance. It should look like this:
+
+```
+url: https://some.ilias.uni-regensburg.de
+admin:
+  user: my_root_user
+  password: my_sikrit_root_user_password
+
+```
 
 ## Debugging startup problems
 

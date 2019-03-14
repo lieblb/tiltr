@@ -3,6 +3,6 @@
 *.pyc
 /robot/files/tiltr/venv
 /robot/files/tiltr/.idea
-/robot/files/tmp
+/tmp
 /web/ILIAS
 /docker-compose.log

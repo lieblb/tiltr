@@ -423,7 +423,7 @@ class ReportHandler(tornado.web.RequestHandler):
 
 	def get(self):
 		with open_results() as db:
-			protocols = db.get_protocols()
+			protocols = db.get_files()
 
 			nprotocols = dict()
 			sep = "-" * 40

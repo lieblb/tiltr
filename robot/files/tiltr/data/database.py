@@ -20,11 +20,12 @@ class DB:
 		pass
 
 	def __enter__(self):
-		db_path = os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "results.db")
+		db_path = os.path.join("/tiltr/tmp", "results.db")
 		self.db = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
 
 		c = self.db.cursor()
-		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, xls BLOB, protocol TEXT, nusers INTEGER, elapsed INTEGER)")
+		c.execute("CREATE TABLE IF NOT EXISTS results (created TIMESTAMP, batch TEXT PRIMARY KEY, success TEXT, files BLOB, nusers INTEGER, elapsed INTEGER)")
+
 		c.execute("CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, dt INTEGER)")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_cases (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
 		c.execute("CREATE TABLE IF NOT EXISTS coverage_occurrences (id INTEGER PRIMARY KEY AUTOINCREMENT, question VARCHAR(255), name TEXT, UNIQUE(name))")
@@ -43,16 +44,21 @@ class DB:
 
 	@staticmethod
 	def get_size():
-		return os.path.getsize(os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "results.db"))
+		path = os.path.join("/tiltr/tmp", "results.db")
+		if os.path.exists(path):
+			return os.path.getsize(path)
+		else:
+			return 0
 
-	def put(self, batch_id, success, protocol, num_users, elapsed_time):
+	def put(self, batch_id, success, files, num_users, elapsed_time):
 		c = self.db.cursor()
 		now = datetime.datetime.now()
-		c.execute("INSERT INTO results (created, batch, success, xls, protocol, nusers, elapsed) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			(now, batch_id.encode(), success.encode(), sqlite3.Binary(b""), protocol.encode(), num_users, elapsed_time))
+		c.execute("INSERT INTO results (created, batch, success, files, nusers, elapsed) VALUES (?, ?, ?, ?, ?, ?)",
+			(now, batch_id.encode(), success.encode(), files.encode("utf-8"), num_users, elapsed_time))
 
 		success_code = dict(OK=1, FAIL=0).get(success.split("/")[0], 0)
-		c.execute("INSERT INTO longterm (created, success, detail, nusers) VALUES (?, ?, ?, ?)", (now, success_code, success, num_users));
+		c.execute("INSERT INTO longterm (created, success, detail, nusers) VALUES (?, ?, ?, ?)",
+			(now, success_code, success, num_users));
 
 		self.db.commit()
 		c.close()
@@ -165,17 +171,17 @@ class DB:
 
 		return values
 
-	def get_protocols(self):
+	def get_files(self):
 		c = self.db.cursor()
-		c.execute("SELECT batch, protocol FROM results")
-		protocols = dict()
+		c.execute("SELECT batch, files FROM results")
+		files = dict()
 		while True:
 			row = c.fetchone()
 			if row is None:
 				break
-			protocols[row[0].decode("utf-8")] = row[1].decode("utf-8")
+			files[row[0].decode("utf-8")] = row[1].decode("utf-8")
 		c.close()
-		return protocols
+		return files
 
 	def clear(self):
 		c = self.db.cursor()
@@ -188,10 +194,10 @@ class DB:
 
 	def get_zipfile(self, batch_id, file):
 		c = self.db.cursor()
-		c.execute("SELECT protocol FROM results WHERE batch=?", (batch_id.encode("utf-8"),))
-		protocol = c.fetchone()[0]
+		c.execute("SELECT files FROM results WHERE batch=?", (batch_id.encode("utf-8"),))
+		files_json = c.fetchone()[0]
 
 		with zipfile.ZipFile(file, "w") as z:
-			protocols = json.loads(protocol.decode("utf-8"))
-			for k, v in protocols.items():
+			files = json.loads(files_json.decode("utf-8"))
+			for k, v in files.items():
 				z.writestr('/' + k, base64.b64decode(v))

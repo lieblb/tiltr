@@ -27,8 +27,7 @@ def verify_hello(machine):
 
 
 def detect_machines(max_wait_time=30):
-	base = os.path.dirname(__file__)
-	machines_path = os.path.realpath(os.path.join(base, "..", "..", "tmp", "machines.json"))
+	machines_path = os.path.realpath(os.path.join("/tiltr/tmp", "machines.json"))
 	t0 = time.time()
 	while not os.path.isfile(machines_path):
 		if time.time() - t0 > max_wait_time:

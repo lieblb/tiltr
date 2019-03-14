@@ -29,8 +29,10 @@ services:
     expose:
       - "8080"
     volumes:
-      - ./robot/files:/files
-    working_dir: /files
+      - ./robot/files:/tiltr/app
+      - ./tests:/tiltr/tests
+      - ./tmp:/tiltr/tmp
+    working_dir: /tiltr/app
     entrypoint: python3 -m tiltr --master $ILIASTEST_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
@@ -41,8 +43,9 @@ services:
   machine:
     build: robot
     volumes:
-      - ./robot/files:/files
-    working_dir: /files
+      - ./robot/files:/tiltr/app
+      - ./tests:/tiltr/tests
+    working_dir: /tiltr/app
     entrypoint: python3 -m tiltr --machine $ILIASTEST_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1

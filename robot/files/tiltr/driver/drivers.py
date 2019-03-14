@@ -390,7 +390,7 @@ class UsersBackend:
 		parsed = urlparse(self.driver.current_url)
 		base_url = parsed.scheme + "://" + parsed.netloc + '/'.join(parsed.path.split('/')[:-1])
 
-		xml_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "users.xml"))
+		xml_path = os.path.abspath(os.path.join("/tiltr/tmp", "users.xml"))
 
 		users = []
 		for i in range(n):
@@ -884,9 +884,20 @@ class PackagedTest(AbstractTest):
 
 		self.test_id = test_id
 		self.path = os.path.abspath(os.path.join(
-			os.path.dirname(__file__), "..", "..", "tests", test_id + ".zip"))
+			"/tiltr/tests", test_id + ".zip"))
+
 		with ZipFile(self.path, 'r') as zf:
-			root = ET.fromstring(zf.read("%s/%s.xml" % (test_id, test_id)))
+			main = None
+			for name in zf.namelist():
+				if re.match(r"^[^/]*/[^/]+_tst_[^/]+\.xml$", name):
+					main = name
+					break
+
+			if main is None:
+				raise RuntimeError("did not find test xml in zip")
+
+			root = ET.fromstring(zf.read(main))
+
 		self.title = root.findall(".//Title")[0].text
 
 	def get_id(self):
@@ -901,11 +912,16 @@ class PackagedTest(AbstractTest):
 	@staticmethod
 	def list():
 		tests = dict()
-		path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests"))
-		for filename in os.listdir(path):
+
+		for filename in os.listdir("/tiltr/tests"):
 			if filename.endswith(".zip"):
-				test = PackagedTest(os.path.splitext(filename)[0])
-				tests[test.get_title()] = test.get_id()
+				try:
+					test = PackagedTest(os.path.splitext(filename)[0])
+					tests[test.get_title()] = test.get_id()
+				except:
+					print("could not inspect Test %s." % filename)
+					traceback.print_exc()
+
 		return tests
 
 

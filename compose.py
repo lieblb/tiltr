@@ -55,8 +55,8 @@ for p in (up_parser, stop_parser, ps_parser):
 	p.add_argument('--port', help='port to run TiltR on', nargs='?', const=1, type=int, default=11150)
 	p.add_argument('--embedded-ilias-port', help='port to run embedded ILIAS on', nargs='?', const=1, type=int, default=11145)
 
+up_parser.add_argument('n', nargs='?', type=int, default=1)
 up_parser.add_argument('--fork', help='fork up.py', action='store_true')
-up_parser.add_argument('--n', nargs='?', const=1, type=int, default=1)
 up_parser.add_argument('--rebuild', help='rebuild docker containers', action='store_true')
 up_parser.add_argument('--rebuild-no-cache', help='rebuild docker containers without cache', action='store_true')
 
@@ -218,7 +218,7 @@ base = os.path.dirname(os.path.realpath(__file__))
 os.chdir(base)  # important for docker-compose later
 _, docker_compose_name = os.path.split(base)
 
-tmp_path = os.path.join(base, "robot", "files", "tmp")
+tmp_path = os.path.join(base, "tmp")
 if not os.path.exists(tmp_path):
 	os.makedirs(tmp_path)
 

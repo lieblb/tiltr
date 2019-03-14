@@ -136,8 +136,6 @@ class MultipleChoiceQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, random, report):
-		report('### READJUSTING QUESTION "%s"' % self.title.upper())
-		report('')
 
 		choices = self._get_ui(driver)
 
@@ -150,7 +148,7 @@ class MultipleChoiceQuestion(Question):
 		for key, score in list(choices.items()):
 			new_score = _readjust_choice_item(random, score)
 			choices[key] = new_score
-			report('readjusted score for "%s / %s" from %s to %s.' % (self.title, key, score, new_score))
+			report('readjusted score for "%s" from (%f, %f) to (%f, %f).' % (key, *score, *new_score))
 
 		self._set_ui(driver, choices)
 		self.choices = choices
