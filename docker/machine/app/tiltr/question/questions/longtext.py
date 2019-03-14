@@ -9,20 +9,29 @@ from decimal import *
 
 from .question import Question
 from ...data.exceptions import *
+from tiltr.driver.utils import set_element_value
 
 
 class LongTextQuestion(Question):
-	def __init__(self, driver, title, settings):
-		super().__init__(title)
-
-		self.length = int(settings.max_long_text_length)
-
+	@staticmethod
+	def _get_ui(driver):
 		if not driver.find_element_by_id("scoring_mode_non").is_selected():
 			raise NotImplementedException(
 				"only manual scoring is currently supported for tests with LongTextQuestions")
 
-		self._maximum_score = Decimal(
+		return Decimal(
 			driver.find_element_by_id("non_keyword_points").get_attribute('value'))
+
+	@staticmethod
+	def _set_ui(driver, score):
+		points = driver.find_element_by_id("non_keyword_points")
+		set_element_value(driver, points, str(score))
+
+	def __init__(self, driver, title, settings):
+		super().__init__(title)
+
+		self.length = int(settings.max_long_text_length)
+		self._maximum_score = LongTextQuestion._get_ui(driver)
 
 	def get_maximum_score(self):
 		return self._maximum_score
@@ -51,7 +60,10 @@ class LongTextQuestion(Question):
 		return text, self.compute_score(text, context)
 
 	def readjust_scores(self, driver, random, report):
-		return False
+		maximum_score = Decimal(random.randint(1, 100)) / Decimal(10)
+		self._set_ui(driver, maximum_score)
+		self._maximum_score = maximum_score
+		return True
 
 	def compute_score(self, text, context):
 		return Decimal(0)

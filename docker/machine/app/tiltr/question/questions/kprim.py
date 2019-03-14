@@ -6,48 +6,75 @@
 #
 
 from decimal import *
+from collections import namedtuple
 import itertools
 import json
 
 from .question import Question
+from tiltr.driver.utils import set_element_value
 
+
+KPrimScoring = namedtuple('KPrimScoring', ['halfpoints', 'score', 'choices'])
+KPrimChoice = namedtuple('KPrimChoice', ['name', 'is_correct'])
 
 class KPrimQuestion(Question):
-	def __init__(self, driver, title, settings):
-		super().__init__(title)
-
-		self.halfpoints = driver.find_element_by_name("score_partsol_enabled").is_selected()
-		self.score = Decimal(driver.find_element_by_name("points").get_attribute("value"))
-		self.solution = []
-		self.names = []
+	@staticmethod
+	def _get_ui(driver):
+		halfpoints = driver.find_element_by_name("score_partsol_enabled").is_selected()
+		score = Decimal(driver.find_element_by_name("points").get_attribute("value"))
+		choices = list()
 
 		for i in range(4):
-			is_right = None
+			is_correct = None
 
 			for radio in driver.find_elements_by_name("kprim_answers[correctness][%d]" % i):
 				if int(radio.get_attribute("value")) == 1:
-					is_right = radio.is_selected()
+					is_correct = radio.is_selected()
 
-			assert is_right is not None
-			self.solution.append(is_right)
+			assert is_correct is not None
 
-			self.names.append(driver.find_element_by_name(
-				"kprim_answers[answer][%d]" % i).get_attribute("value"))
+			name = driver.find_element_by_name(
+				"kprim_answers[answer][%d]" % i).get_attribute("value")
+
+			choices.append(KPrimChoice(name, is_correct))
+
+		return KPrimScoring(
+			halfpoints=halfpoints, score=score, choices=choices)
+
+	@staticmethod
+	def _set_ui(driver, scoring):
+		halfpoints_checkbox = driver.find_element_by_name("score_partsol_enabled")
+		if halfpoints_checkbox.is_selected() != scoring.halfpoints:
+			halfpoints_checkbox.click()
+
+		set_element_value(driver, driver.find_element_by_name("points"), str(scoring.score))
+
+		for i, choice in enumerate(scoring.choices):
+			radio_value = 1 if choice.is_correct else 0
+
+			for radio in driver.find_elements_by_name("kprim_answers[correctness][%d]" % i):
+				if int(radio.get_attribute("value")) == radio_value:
+					radio.click()
+					break
+
+	def __init__(self, driver, title, settings):
+		super().__init__(title)
+		self.scoring = KPrimQuestion._get_ui(driver)
 
 	def get_maximum_score(self):
-		return self.score
+		return self.scoring.score
 
 	def create_answer(self, driver, *args):
 		from ..answers.kprim import KPrimAnswer
 		return KPrimAnswer(driver, self, *args)
 
 	def initialize_coverage(self, coverage, context):
-		elements = [(False, True)] * len(self.names)
+		elements = [(False, True)] * len(self.scoring.choices)
 		for combination in itertools.product(*elements):
 			if context.workarounds.disallow_empty_answers or any(combination):
 				solution = dict()
-				for checked, label in zip(combination, self.names):
-					solution[label] = 1 if checked else 0
+				for checked, choice in zip(combination, self.scoring.choices):
+					solution[choice.name] = 1 if checked else 0
 				coverage.add_case(self, "verify", json.dumps(solution))
 				coverage.add_case(self, "export", json.dumps(solution))
 
@@ -55,28 +82,33 @@ class KPrimQuestion(Question):
 		coverage.case_occurred(self, "export", json.dumps(answers))
 
 	def compute_score(self, answers, context):
+		name_to_index = dict()
+		for i, choice in enumerate(self.scoring.choices):
+			name_to_index[choice.name] = i
+
 		indexed_answers = dict()
 		for name, value in answers.items():
-			indexed_answers[self.names.index(name)] = value
+			indexed_answers[name_to_index[name]] = value
+
 		return self.compute_score_by_indices(indexed_answers)
 
 	def compute_score_by_indices(self, answers):
-		if not self.halfpoints:
-			s = self.score / Decimal(4)
+		if not self.scoring.halfpoints:
+			s = self.scoring.score / Decimal(4)
 			score = Decimal(0)
 			for i in range(4):
-				if answers[i] == self.solution[i]:
+				if answers[i] == self.scoring.choices[i].is_correct:
 					score += s
 			return score
 		else:
 			n_correct = 0
 			for i in range(4):
-				if answers[i] == self.solution[i]:
+				if answers[i] == self.scoring.choices[i].is_correct:
 					n_correct += 1
 			if n_correct == 4:
-				return self.score
+				return self.scoring.score
 			elif n_correct == 3:
-				return self.score / Decimal(2)
+				return self.scoring.score / Decimal(2)
 			else:
 				return Decimal(0)
 
@@ -85,4 +117,23 @@ class KPrimQuestion(Question):
 		return answers, self.compute_score_by_indices(answers)
 
 	def readjust_scores(self, driver, random, report):
-		return False
+		def random_flip(f):
+			if random.randint(0, 3) == 0:  # flip?
+				return not f
+			else:
+				return f
+
+		def new_choice(choice):
+			return KPrimChoice(
+				choice.name, random_flip(choice.is_correct))
+
+		new_choices = list(map(new_choice, self.scoring.choices))
+
+		self.scoring = KPrimScoring(
+			halfpoints=random_flip(self.scoring.halfpoints),
+			score=Decimal(random.randint(1, 8)) / Decimal(4),
+			choices=new_choices)
+
+		KPrimQuestion._set_ui(driver, self.scoring)
+
+		return True

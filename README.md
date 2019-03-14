@@ -7,36 +7,50 @@ TiltR imports and analyzes a given test and then performs random test runs with 
 
 TiltR tests run against well-defined browser environments based on Selenium docker images (you can choose from Chrome and Firefox).
 
-## Scope of Verification
+## Scope of Verifications
 
 Using its built-in test oracle TiltR can help institutions that rely on ILIAS for performing e-assessments
-assert that some of the most essential functionality they fundamentally rely on as correct is indeed that.
-Note however that it can _not_ achieve anything like full coverage and some areas are not tested at all.
+assert that some of the most essential functionality they fundamentally rely on for their workflows is correct.
+
+TiltR verifications operate on the following areas:
 
 |                      | Responses         | Response Scores | Total Scores         | Marks        |
 | ---------------------|:-----------------:| ---------------:| --------------------:| ------------:|
-| **During the Test**  |                   |                 |                      |
+| **During Test**      |                   |                 |                      |
 |                      | &#x2713;          | -               | -                    | -
-| **After the Test**   |                   |                 |                      |
+| **After Test**       |                   |                 |                      |
 | via Web UI           | -                 | -               | &#x2713;             | &#x2713;
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | &#x2713;
 | via PDF Export       | -                 | &#x2713;        | -                    | -
-| **Readjustments**    |                   |                 |                      |
-|                      | -                 | SC, MC          | SC, MC               | &#x2713;
-| **Re-Imported**      |                   |                 |                      |
+| **Readjusted Test**  |                   |                 |                      |
+| via XLS Export       | -                 | &#x2713;        | &#x2713;             | &#x2713;
+| **Re-Import**        |                   |                 |                      |
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | &#x2713;
 
-## Supported Question Types
+Note that TiltR can not achieve anything like full coverage (even in areas that are marked above).
 
-TiltR can operate on any test you provide it with. Currently the following question types are supported (with various degrees of coverage):
+## Question Types
 
-* Single Choice
-* Multiple Choice
-* KPrim
-* Cloze Question (select, text, and numeric gaps)
-* Long Text ("Essay") Question
-* Matching Questions
-* [Paint Questions](https://github.com/kyro46/assPaintQuestion)
+The following question types are supported:
+
+|                      | Response Verification  | Score Verification  | With Readjustments   |
+| ---------------------|:----------------------:| -------------------:| --------------------:|
+| Single Choice        |  &#x2713;              |  &#x2713;           | &#x2713;             |
+| Multiple Choice      |  &#x2713;              |  &#x2713;           | &#x2713;             |
+| KPrim                |  &#x2713;              |  &#x2713;           | &#x2713;             |
+| Cloze Select Gaps    |  &#x2713;              |  &#x2713;           | -                    |
+| Cloze Text Gaps      |  &#x2713;              |  &#x2713;           | -                    |
+| Cloze Numeric Gaps   |  &#x2713;              |  &#x2713;           | -                    |
+| Long Text            |  &#x2713;              |  &#x2713;           | (&#x2713;)           |
+| Matching             |  &#x2713;              |  &#x2713;           | -                    |
+| [Paint Question](https://github.com/kyro46/assPaintQuestion)          |  &#x2713;              |  &#x2713;           | -                    |
+| [Code Question](https://github.com/frankbauer/ilias-asscodequestion)  | &#x2713;              |  &#x2713;           | -                    |
+
+Explanation of Terms:
+
+* Response Verification: are automatically generated answers saved/exported/reimported correctly?
+* Score Verification: are scores computed for a specific answer correct?
+* With Readjustments: are scores recomputed after readjustments correct?
 
 # Getting Started
 
@@ -254,12 +268,13 @@ TiltR intializes its ILIAS installation using a minimal default DB. As new ILIAS
 * Then re-export the dump:
 
 ```
-docker exec -it iliasdocker_db_1 /bin/bash
+docker exec -it tiltr_db_1 /bin/bash
 
-> mysqldump ilias -p > dump.sql
-> dev
+root# mysqldump ilias -p > dump.sql
+Enter password: dev
+root# exit
 
-> docker cp iliasdocker_db_1:/dump.sql /your/local/machine/tiltr/db/ilias.sql
+docker cp tiltr_db_1:/dump.sql /your/local/machine/tiltr/docker/db/ilias.sql
 ```
 
 Now zip `ilias.sql` and update in your version control.

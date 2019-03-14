@@ -47,7 +47,8 @@ class KPrimAnswer(Answer):
 		return ui
 
 	def _get_binary_answers(self):
-		return dict(zip(self.question.names, [int(x) for x in self.current_answers]))
+		names = [c.name for c in self.question.scoring.choices]
+		return dict(zip(names, [int(x) for x in self.current_answers]))
 
 	def verify(self, context, after_crash=False):
 		ui = self._parse_ui()
