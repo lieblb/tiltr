@@ -64,6 +64,7 @@ class FetchILIASVersion(threading.Thread):
 		self.state = state
 
 	def run(self):
+		n_tries = 0
 		while True:
 			try:
 				with pandora.Browser('chrome') as browser:
@@ -81,7 +82,8 @@ class FetchILIASVersion(threading.Thread):
 							return
 			except:
 				traceback.print_exc()
-				time.sleep(2)
+				time.sleep(2 ** min(n_tries, 5))
+				n_tries += 1
 
 
 class Looper(threading.Thread):
