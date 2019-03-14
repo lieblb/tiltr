@@ -281,7 +281,7 @@ mysql> use ilias;
 
 Very experimental.
 
-Copy `tiltr.service` to `/etc/systemd/system/tiltr.service`.
+Adapt [tiltr.service](./docs/tiltr.service) to your environment and copy it to `/etc/systemd/system/tiltr.service`.
 
 Make sure you change `YOUR_USER_WITH_DOCKER_PRIVILEGES` and `/path/to/tiltr`.
 

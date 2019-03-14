@@ -2,18 +2,18 @@ version: '3'
 
 services:
   web:
-    build: web
+    build: docker/web
     ports:
       - "${EMBEDDED_ILIAS_PORT}:80"
     expose:
       - "80"
     volumes:
-      - ./web/ILIAS:/var/www/html/ILIAS
+      - ./data/ILIAS:/var/www/html/ILIAS
     networks:
       - net
 
   db:
-    build: db
+    build: docker/db
     environment:
       MYSQL_ROOT_PASSWORD: dev
       MYSQL_USER: dev
@@ -23,15 +23,15 @@ services:
       - net
 
   master:
-    build: robot
+    build: docker/machine
     ports:
       - "${TILTR_PORT}:8080"
     expose:
       - "8080"
     volumes:
-      - ./robot/files:/tiltr/app
-      - ./tests:/tiltr/tests
-      - ./tmp:/tiltr/tmp
+      - ./docker/machine/app:/tiltr/app
+      - ./data/tests:/tiltr/tests
+      - ./data/tmp:/tiltr/tmp
     working_dir: /tiltr/app
     entrypoint: python3 -m tiltr --master $ILIASTEST_ARGUMENTS
     environment:
@@ -41,10 +41,10 @@ services:
       - net
   
   machine:
-    build: robot
+    build: docker/machine
     volumes:
-      - ./robot/files:/tiltr/app
-      - ./tests:/tiltr/tests
+      - ./docker/machine/app:/tiltr/app
+      - ./data/tests:/tiltr/tests
     working_dir: /tiltr/app
     entrypoint: python3 -m tiltr --machine $ILIASTEST_ARGUMENTS
     environment:

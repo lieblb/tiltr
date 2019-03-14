@@ -1,8 +1,6 @@
 .DS_Store
 .idea
 *.pyc
-/robot/files/tiltr/venv
-/robot/files/tiltr/.idea
-/tmp
-/web/ILIAS
+/data/tmp
+/data/ILIAS
 /docker-compose.log

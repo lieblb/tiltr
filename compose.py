@@ -135,7 +135,7 @@ def monitor_docker_stats(tmp_path, docker_compose_name):
 def instrument_ilias():
 	base = os.path.dirname(os.path.realpath(__file__))
 
-	ilias_path = os.path.realpath(os.path.join(base, "web", "ILIAS"))
+	ilias_path = os.path.realpath(os.path.join(base, "data", "ILIAS"))
 	if not os.path.isdir(ilias_path) or not os.path.exists(os.path.join(ilias_path, "ilias.php")):
 		print("please put the ILIAS source code you want to test against under %s." % ilias_path)
 		print("note that the code you put there will get modified into a default test client.")
@@ -144,12 +144,14 @@ def instrument_ilias():
 
 	# instrument ILIAS source code for test runner.
 
-	shutil.copyfile(
-		os.path.join(base, "web", "custom", "ilias.ini.php"),
-		os.path.join(base, "web", "ILIAS", "ilias.ini.php"))
+	web_path = os.path.join(base, "docker", "web")
 
-	client_zip = zipfile.ZipFile(os.path.join(base, "web", "custom", "data.zip"), 'r')
-	client_zip.extractall(os.path.join(base, "web", "ILIAS"))
+	shutil.copyfile(
+		os.path.join(web_path, "custom", "ilias.ini.php"),
+		os.path.join(ilias_path, "ilias.ini.php"))
+
+	client_zip = zipfile.ZipFile(os.path.join(web_path, "custom", "data.zip"), 'r')
+	client_zip.extractall(ilias_path)
 	client_zip.close()
 
 	return ilias_path
@@ -199,26 +201,30 @@ def set_argument_environ(args):
 
 embedded_ilias = set_argument_environ(args)
 
+base = os.path.dirname(os.path.realpath(__file__))
+os.chdir(base)  # important for docker-compose later
+_, docker_compose_name = os.path.split(base)
+
+docker_compose_args = []
+
+print(os.path.join(base, "docker", "docker-compose.yml"))
+
 if args.command == 'stop':
-	subprocess.call(["docker-compose", "stop"])
+	subprocess.call(["docker-compose", *docker_compose_args, "stop"])
 	sys.exit(0)
 elif args.command == 'ps':
-	subprocess.call(["docker-compose", "ps"])
+	subprocess.call(["docker-compose", *docker_compose_args, "ps"])
 	sys.exit(0)
 elif args.command != 'up':
 	print("illegal command %s." % args.command)
 	sys.exit(1)
 
 if args.rebuild_no_cache:
-	subprocess.call(["docker-compose", "build", "--no-cache"])
+	subprocess.call(["docker-compose", *docker_compose_args, "build", "--no-cache"])
 elif args.rebuild:
-	subprocess.call(["docker-compose", "build"])
+	subprocess.call(["docker-compose", *docker_compose_args, "build"])
 
-base = os.path.dirname(os.path.realpath(__file__))
-os.chdir(base)  # important for docker-compose later
-_, docker_compose_name = os.path.split(base)
-
-tmp_path = os.path.join(base, "tmp")
+tmp_path = os.path.join(base, "data", "tmp")
 if not os.path.exists(tmp_path):
 	os.makedirs(tmp_path)
 
@@ -293,8 +299,11 @@ def check_errors(pipe, output):
 
 # start up docker.
 compose_stderr = []
-compose = subprocess.Popen(
-	["docker-compose", "up", "--scale", "machine=%d" % args.n],
+compose = subprocess.Popen([
+		"docker-compose",
+		*docker_compose_args,
+		"up",
+	 	"--scale", "machine=%d" % args.n],
 	stdout=subprocess.PIPE,
 	stderr=subprocess.PIPE,
 	bufsize=1)
