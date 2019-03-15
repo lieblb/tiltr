@@ -95,23 +95,23 @@ class Looper(threading.Thread):
 		self.workarounds = workarounds
 		self.wait_time = wait_time
 		self.done = False
-		self.consecutive_fails = 0
+		self.consecutive_interaction_fails = 0
 
 	def _check_success(self):
 		success = self.state.batch.get_success()
-		if success[0] == 'OK':
-			self.consecutive_fails = 0
+		if success == ('FAIL', 'interaction'):
+			self.consecutive_interaction_fails += 1
 		else:
-			self.consecutive_fails += 1
+			self.consecutive_interaction_fails = 0
 
-		if self.consecutive_fails >= 5:
-			# stop looping after too many consecutive fails.
-			print("too many consecutive fails")
+		if self.consecutive_interaction_fails >= 10:
+			# stop looping after too many consecutive interaction fails.
+			print("too many consecutive interaction fails")
 			self.state.is_looping = False
 
 			# usually, this happens when chrome/selenium drivers continue to
 			# crash which indicates that something is wrong with our Docker
-			# container. just shut down in this case.
+			# container. shut down in this case.
 			sys.exit(1)
 
 	def run(self):
