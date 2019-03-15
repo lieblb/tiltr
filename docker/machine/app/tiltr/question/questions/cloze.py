@@ -7,11 +7,38 @@
 
 from enum import Enum
 from decimal import *
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from selenium.common.exceptions import NoSuchElementException
 
 from .question import Question
 from ...data.exceptions import *
+from tiltr.driver.utils import set_element_value
+
+
+ClozeScoring = namedtuple('ClozeScoring', ['identical_scoring', 'comparator', 'gaps'])
+
+TextishGapScoring = namedtuple(
+	'TextishGapScoring', ['cloze_type', 'size', 'options'])
+NumericGapScoring = namedtuple(
+	'NumericGapScoring', ['cloze_type', 'size', 'value', 'lower', 'upper', 'score'])
+
+
+def _readjust_score(random, score):
+	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
+	score += delta
+	score = max(score, Decimal(0))
+	return score
+
+
+def _readjust(random, scoring):
+	if scoring.cloze_type == ClozeType.numeric:
+		return scoring._replace(
+			score=_readjust_score(random, scoring.score))
+	else:
+		new_options = dict()
+		for k, score in scoring.options.items():
+			new_options[k] = _readjust_score(random, score)
+		return scoring._replace(options=new_options)
 
 
 class ClozeType(Enum):
@@ -28,8 +55,7 @@ class ClozeComparator(Enum):
 class ClozeQuestionGap:
 	_export_names = dict(de="Lücke", en="Gap")
 
-	def __init__(self, question, index):
-		self.question = question
+	def __init__(self, index):
 		self.index = index
 
 	def get_maximum_score(self):
@@ -43,34 +69,29 @@ class ClozeQuestionGap:
 
 
 class ClozeQuestionTextGap(ClozeQuestionGap):
-	def __init__(self, question, index, options, comparator, size):
-		ClozeQuestionGap.__init__(self, question, index)
-		self.options = options
-		self.comparator = comparator
-		self.size = size
+	def __init__(self, scoring, index):
+		ClozeQuestionGap.__init__(self, index)
+		self.comparator = scoring.comparator
+		gap_scoring = scoring.gaps[index]
+		self.options = gap_scoring.options
+		self.size = gap_scoring.size
 
 	def get_maximum_score(self):
 		return max(self.options.values())
 
-	def initialize_coverage(self, coverage, context):
+	def initialize_coverage(self, question, coverage, context):
 		for mode in ("verify", "export"):
 			for args in coverage.text_cases(self.size, context):
-				coverage.add_case(self.question, self.index, mode, *args)
+				coverage.add_case(question, self.index, mode, *args)
 			for solution in self.options.keys():
-				coverage.add_case(self.question, self.index, mode, "solution", solution)
+				coverage.add_case(question, self.index, mode, "solution", solution)
 
-	def add_verify_coverage(self, coverage, value):
-		for args in coverage.text_cases_occurred(value):
-			coverage.case_occurred(self.question, self.index, "verify", *args)
-		if value in self.options:
-			coverage.case_occurred(self.question, self.index, "verify", "solution", value)
-
-	def add_export_coverage(self, coverage, value):
+	def add_coverage(self, question, channel, coverage, value):
 		value = str(value)
 		for args in coverage.text_cases_occurred(value):
-			coverage.case_occurred(self.question, self.index, "export", *args)
+			coverage.case_occurred(question, self.index, channel, *args)
 		if value in self.options:
-			coverage.case_occurred(self.question, self.index, "export", "solution", value)
+			coverage.case_occurred(question, self.index, channel, "solution", value)
 
 	def _modify_solution(self, text, score, context):
 		mode = context.random.choices(
@@ -125,31 +146,28 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		return Decimal(0)
 
 	def is_valid_answer(self, value):
-		return True  # FIXME: len(value) <= self.size
+		return len(value) <= self.size
 
 	def get_type(self):
 		return ClozeType.text
 
 
 class ClozeQuestionSelectGap(ClozeQuestionGap):
-	def __init__(self, question, index, options):
-		ClozeQuestionGap.__init__(self, question, index)
-		self.options = options
+	def __init__(self, scoring, index):
+		ClozeQuestionGap.__init__(self, index)
+		self.options = scoring.gaps[index].options
 
 	def get_maximum_score(self):
 		return max(self.options.values())
 
-	def initialize_coverage(self, coverage, context):
+	def initialize_coverage(self, question, coverage, context):
 		for value in self.options.keys():
 			for mode in ("verify", "export"):
-				coverage.add_case(self.question, self.index, mode, value)
+				coverage.add_case(question, self.index, mode, value)
 
-	def add_verify_coverage(self, coverage, value):
-		coverage.case_occurred(self.question, self.index, "verify", value)
-
-	def add_export_coverage(self, coverage, value):
+	def add_coverage(self, question, channel, coverage, value):
 		value = str(value)
-		coverage.case_occurred(self.question, self.index, "export", value)
+		coverage.case_occurred(question, self.index, channel, value)
 
 	def get_random_choice(self, context):
 		return context.random.choice(list(self.options.items()))
@@ -165,14 +183,16 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 
 
 class ClozeQuestionNumericGap(ClozeQuestionGap):
-	def __init__(self, question, index, size, driver):
-		ClozeQuestionGap.__init__(self, question, index)
-		self.size = size
+	def __init__(self, scoring, index):
+		ClozeQuestionGap.__init__(self, index)
 
-		self.numeric_value = Decimal(driver.find_element_by_name("gap_%d_numeric" % index).get_attribute("value"))
-		self.numeric_lower = Decimal(driver.find_element_by_name("gap_%d_numeric_lower" % index).get_attribute("value"))
-		self.numeric_upper = Decimal(driver.find_element_by_name("gap_%d_numeric_upper" % index).get_attribute("value"))
-		self.score = Decimal(driver.find_element_by_name("gap_%d_numeric_points" % index).get_attribute("value"))
+		gap_scoring = scoring.gaps[index]
+		self.size = gap_scoring.size
+
+		self.numeric_value = gap_scoring.value
+		self.numeric_lower = gap_scoring.lower
+		self.numeric_upper = gap_scoring.upper
+		self.score = gap_scoring.score
 
 		# ILIAS will limit exports to XLS to 16 significant decimals, which makes sense.
 		# e.g. 25.433019319138662 -> 25.43301931913866, 0.17493771424585164 -> 0.1749377142458516
@@ -181,21 +201,16 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 	def get_maximum_score(self):
 		return self.score
 
-	def initialize_coverage(self, coverage, context):
+	def initialize_coverage(self, question, coverage, context):
 		for mode in ("verify", "export"):
-			coverage.add_case(self.question, self.index, mode, str(self.numeric_value))
-			coverage.add_case(self.question, self.index, mode, str(self.numeric_lower))
-			coverage.add_case(self.question, self.index, mode, str(self.numeric_upper))
+			coverage.add_case(question, self.index, mode, str(self.numeric_value))
+			coverage.add_case(question, self.index, mode, str(self.numeric_lower))
+			coverage.add_case(question, self.index, mode, str(self.numeric_upper))
 
-	def add_verify_coverage(self, coverage, value):
+	def add_coverage(self, question, channel, coverage, value):
 		x = str(value)
 		if x in [str(self.numeric_value), str(self.numeric_lower), str(self.numeric_upper)]:
-			coverage.case_occurred(self.question, self.index, "verify", x)
-
-	def add_export_coverage(self, coverage, value):
-		x = str(value)
-		if x in [str(self.numeric_value), str(self.numeric_lower), str(self.numeric_upper)]:
-			coverage.case_occurred(self.question, self.index, "export", x)
+			coverage.case_occurred(question, self.index, channel, x)
 
 	def _get_random_inside(self, context):
 		return context.random.uniform(float(self.numeric_lower), float(self.numeric_upper))
@@ -266,6 +281,18 @@ def parse_gap_size(driver, gap_index, fallback_length):
 		return int(text)
 
 
+def parse_numeric_gap_scoring(driver, gap_index):
+	value = Decimal(driver.find_element_by_name("gap_%d_numeric" % gap_index).get_attribute("value"))
+	lower = Decimal(driver.find_element_by_name("gap_%d_numeric_lower" % gap_index).get_attribute("value"))
+	upper = Decimal(driver.find_element_by_name("gap_%d_numeric_upper" % gap_index).get_attribute("value"))
+	score = Decimal(driver.find_element_by_name("gap_%d_numeric_points" % gap_index).get_attribute("value"))
+	return dict(value=value, lower=lower, upper=upper, score=score)
+
+
+def update_numeric_gap_scoring(driver, gap_index, gap):
+	set_element_value(driver, driver.find_element_by_name("gap_%d_numeric_points" % gap_index), str(gap.score))
+
+
 def parse_gap_options(driver, gap_index):
 	options = dict()
 
@@ -280,24 +307,27 @@ def parse_gap_options(driver, gap_index):
 	return options
 
 
+def update_gap_options(driver, gap_index, options):
+	for option_index, (key, score) in enumerate(options.items()):
+		answer = driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, option_index))
+		if answer.text.strip() != key:
+			raise InteractionException("must not change gap title")
+		points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, option_index))
+		set_element_value(driver, points, str(score))
+
+
 class ClozeQuestion(Question):
-	def __init__(self, driver, title, settings):
-		super().__init__(title)
-
-		self.gaps = dict()
-
-		self.identical_scoring = driver.find_element_by_name("identical_scoring").is_selected()
-
+	@staticmethod
+	def _get_ui(driver, settings):
 		fallback_length = driver.find_element_by_name("fixedTextLength").get_attribute("value").strip()
 		if fallback_length == '':
 			fallback_length = settings.max_cloze_text_length
 		fallback_length = int(fallback_length)
 
-		self.comparator = ClozeComparator(driver.find_element_by_css_selector(
-			"#textgap_rating option[selected]").get_attribute("value"))
+		gaps = list()
 
 		while True:
-			gap_index = len(self.gaps)
+			gap_index = len(gaps)
 
 			try:
 				cloze_type_element = driver.find_element_by_name("clozetype_%d" % gap_index)
@@ -306,29 +336,68 @@ class ClozeQuestion(Question):
 
 			cloze_type = ClozeType(int(cloze_type_element.get_attribute("value")))
 
-			if cloze_type == ClozeType.text or cloze_type == ClozeType.select:
+			if cloze_type != ClozeType.select:
+				gap_size = parse_gap_size(driver, gap_index, fallback_length)
+			else:
+				gap_size = None
+
+			if cloze_type in (ClozeType.text, ClozeType.select):
 				options = parse_gap_options(driver, gap_index)
 
 				if not options:
-					break
+					raise InteractionException("did not find gap options (%d)" % gap_index)
 
-				if cloze_type == ClozeType.text:
-					gap = ClozeQuestionTextGap(
-						self, gap_index, options, self.comparator,
-						parse_gap_size(driver, gap_index, fallback_length))
-				elif cloze_type == ClozeType.select:
-					gap = ClozeQuestionSelectGap(self, gap_index, options)
+				scoring = TextishGapScoring(cloze_type=cloze_type, size=gap_size, options=options)
 
 			elif cloze_type == ClozeType.numeric:
-				gap = ClozeQuestionNumericGap(
-					self, gap_index,
-					parse_gap_size(driver, gap_index, fallback_length),
-					driver)
+				scoring = NumericGapScoring(
+					cloze_type=ClozeType.numeric, size=gap_size,
+					**parse_numeric_gap_scoring(driver, gap_index))
 
 			else:
 				raise NotImplementedException("unsupported cloze type " + str(cloze_type))
 
+			gaps.append(scoring)
+
+		identical_scoring = driver.find_element_by_name("identical_scoring").is_selected()
+
+		comparator = ClozeComparator(driver.find_element_by_css_selector(
+			"#textgap_rating option[selected]").get_attribute("value"))
+
+		return ClozeScoring(
+			identical_scoring=identical_scoring,
+			comparator=comparator,
+			gaps=gaps)
+
+	@staticmethod
+	def _set_ui(driver, scoring):
+		identical_scoring_checkbox = driver.find_element_by_name("identical_scoring")
+		if identical_scoring_checkbox.is_selected() != scoring.identical_scoring:
+			identical_scoring_checkbox.click()
+
+		for gap_index, gap in enumerate(scoring.gaps):
+			if gap.cloze_type in (ClozeType.text, ClozeType.select):
+				update_gap_options(driver, gap_index, gap.options)
+			else:
+				update_numeric_gap_scoring(driver, gap_index, gap)
+
+	def _create_gaps(self):
+		constructors = dict((
+			(ClozeType.text, ClozeQuestionTextGap),
+			(ClozeType.select, ClozeQuestionSelectGap),
+			(ClozeType.numeric, ClozeQuestionNumericGap)))
+
+		self.gaps = dict()
+		for gap_index, gap_scoring in enumerate(self.scoring.gaps):
+			construct_gap = constructors[gap_scoring.cloze_type]
+			gap = construct_gap(self.scoring, gap_index)
 			self.gaps[gap_index] = gap
+
+	def __init__(self, driver, title, settings):
+		super().__init__(title)
+
+		self.scoring = self._get_ui(driver, settings)
+		self._create_gaps()
 
 	def get_maximum_score(self):
 		return sum([gap.get_maximum_score() for gap in self.gaps.values()])
@@ -339,23 +408,23 @@ class ClozeQuestion(Question):
 
 	def initialize_coverage(self, coverage, context):
 		for gap in self.gaps.values():
-			gap.initialize_coverage(coverage, context)
+			gap.initialize_coverage(self, coverage, context)
 
 	def add_export_coverage(self, coverage, answers, language):
 		gaps = dict()
 		for gap in self.gaps.values():
 			gaps[gap.get_export_name(language)] = self.gaps[gap.index]
 		for gap_name, value in answers.items():
-			gaps[gap_name].add_export_coverage(coverage, str(value))
+			gaps[gap_name].add_coverage(self, "export", coverage, str(value))
 
 	def get_gap_definition(self, index):
 		return self.gap[index]
 
 	def _get_normalized(self, s):
-		if self.comparator == ClozeComparator.case_sensitive:
+		if self.scoring.comparator == ClozeComparator.case_sensitive:
 			return s
 		else:
-			assert self.comparator == ClozeComparator.ignore_case
+			assert self.scoring.comparator == ClozeComparator.ignore_case
 			return s.casefold()
 
 	def _is_empty_answer(self, answer, context):
@@ -402,6 +471,21 @@ class ClozeQuestion(Question):
 				return answers, valid, self.compute_score_by_indices(answers, context)
 
 	def readjust_scores(self, driver, random, report):
+		'''
+		def random_flip(f):
+			if random.randint(0, 3) == 0:  # flip?
+				return not f
+			else:
+				return f
+
+		self.scoring = ClozeScoring(
+			identical_scoring=random_flip(self.scoring.identical_scoring),
+			comparator=self.scoring.comparator,
+			gaps=[_readjust(random, s) for s in self.scoring.gaps])
+
+		self._set_ui(driver, self.scoring)
+		'''
+
 		return False
 
 	def compute_score(self, answers, context):
@@ -418,7 +502,7 @@ class ClozeQuestion(Question):
 	def compute_score_by_indices(self, answers, context):
 		score = Decimal(0)
 
-		if self.identical_scoring:
+		if self.scoring.identical_scoring:
 			for index, text in answers.items():
 				score += self.gaps[index].get_score(text)
 		else:
@@ -431,7 +515,7 @@ class ClozeQuestion(Question):
 				comparable_text = text
 
 				if not context.workarounds.identical_scoring_ignores_comparator:
-					if self.comparator == ClozeComparator.ignore_case:
+					if self.scoring.comparator == ClozeComparator.ignore_case:
 						comparable_text = text.casefold()
 				if comparable_text in given_answers:
 					continue

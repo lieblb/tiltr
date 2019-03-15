@@ -119,7 +119,7 @@ class ClozeAnswer(Answer):
 				context.implicit_text_to_number(recorded_value),
 				context.implicit_text_to_number(context.strip_whitespace(ui[gap.index].value)),
 				after_crash=after_crash)
-			gap.add_verify_coverage(context.coverage, recorded_value)
+			gap.add_coverage(self.question, "verify", context.coverage, recorded_value)
 
 	def _get_answer_dimensions(self, context, language):
 		answers = dict()

@@ -136,14 +136,14 @@ class MultipleChoiceQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, random, report):
-
 		choices = self._get_ui(driver)
 
-		if len(choices) != len(self.choices):
-			raise IntegrityException("wrong number of choices in readjustment.")
-		for key, score in self.choices.items():
-			if choices[key] != score:
-				raise IntegrityException("wrong choice score in readjustment.")
+		if False:
+			if len(choices) != len(self.choices):
+				raise IntegrityException("wrong number of choices in readjustment.")
+			for key, score in self.choices.items():
+				if choices[key] != score:
+					raise IntegrityException("wrong choice score in readjustment.")
 
 		for key, score in list(choices.items()):
 			new_score = _readjust_choice_item(random, score)

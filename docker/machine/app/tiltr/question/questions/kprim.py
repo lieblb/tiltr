@@ -17,6 +17,24 @@ from tiltr.driver.utils import set_element_value
 KPrimScoring = namedtuple('KPrimScoring', ['halfpoints', 'score', 'choices'])
 KPrimChoice = namedtuple('KPrimChoice', ['name', 'is_correct'])
 
+
+def _print_readjustments(old_scoring, new_scoring, report):
+	bool_to_str = dict(((True, "true"), (False, "false")))
+
+	report('readjusted halfpoints from %s to %s.' % (
+		bool_to_str[old_scoring.halfpoints], bool_to_str[new_scoring.halfpoints]))
+
+	report('readjusted score from %s to %s.' % (
+		old_scoring.score, new_scoring.score))
+
+	for old_choice, new_choice in zip(old_scoring.choices, new_scoring.choices):
+		assert old_choice.name == new_choice.name
+		report('readjusted "%s" from %s to %s.' % (
+			old_choice.name,
+			bool_to_str[old_choice.is_correct],
+			bool_to_str[new_choice.is_correct]))
+
+
 class KPrimQuestion(Question):
 	@staticmethod
 	def _get_ui(driver):
@@ -129,11 +147,15 @@ class KPrimQuestion(Question):
 
 		new_choices = list(map(new_choice, self.scoring.choices))
 
+		old_scoring = self.scoring
+
 		self.scoring = KPrimScoring(
 			halfpoints=random_flip(self.scoring.halfpoints),
 			score=Decimal(random.randint(1, 8)) / Decimal(4),
 			choices=new_choices)
 
 		KPrimQuestion._set_ui(driver, self.scoring)
+
+		_print_readjustments(old_scoring, self.scoring, report)
 
 		return True
