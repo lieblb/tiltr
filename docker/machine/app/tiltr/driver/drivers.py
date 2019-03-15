@@ -1168,6 +1168,8 @@ class TestDriver:
 				if 'PDF' not in navbar.text:
 					continue
 
+				self.report("downloading PDF for %s." % user_id)
+
 				url = navbar.find_element_by_css_selector("a").get_attribute("href")
 				cookies = dict((cookie['name'], cookie['value']) for cookie in driver.get_cookies())
 				result = requests.get(url, cookies=cookies)
@@ -1263,7 +1265,7 @@ class TestDriver:
 
 		self.report("parsing questions.")
 
-		question_classes = dict(
+		constructors = dict(
 			assclozetestgui=ClozeQuestion,
 			asssinglechoicegui=SingleChoiceQuestion,
 			assmultiplechoicegui=MultipleChoiceQuestion,
@@ -1287,12 +1289,12 @@ class TestDriver:
 					raise InteractionException('duplicate question titled "%s" is not allowed.' % title)
 
 				cmd_class = http_get_parameters(self.driver.current_url)["cmdClass"]
-				question_class = question_classes.get(cmd_class)
-				if question_class is None:
+				constructor = constructors.get(cmd_class)
+				if constructor is None:
 					raise NotImplementedException("unsupported question gui cmd_class " + cmd_class)
 
-				self.report('parsing "%s" as %s.' % (title, question_class.__name__))
-				questions[title] = question_class(driver, title, settings)
+				self.report('parsing "%s" as %s.' % (title, constructor.__name__))
+				questions[title] = constructor(driver, title, settings)
 
 		return questions
 
@@ -1370,11 +1372,17 @@ class TestDriver:
 			except NoSuchElementException:
 				return False
 
+	def skip_list_of_questions(self):
+		if self.driver.find_elements_by_css_selector('#listofquestions'):
+			pass  # 'table tbody tr td a'
+
+
 	def start(self, username, context, questions, exam_configuration, allow_resume=False):
 		self.report("starting test.")
 		self.allow_resume = allow_resume
 		if not self._try_start_or_resume():
 			raise InteractionException("user does not have rights to start this test. aborting.")
+		self.skip_list_of_questions()
 		return ExamDriver(self.driver, self.ilias_url, username, self.report, context, questions, exam_configuration)
 
 

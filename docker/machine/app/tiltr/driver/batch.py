@@ -325,7 +325,7 @@ class Run:
 
 		return all_assertions_ok
 
-	def _apply_readjustment(self, index, master, test_driver, all_recorded_results):
+	def _apply_readjustment(self, index, master, test_driver, all_recorded_results, is_reimport):
 		# note that this will destroy the original test's scores. keep this in mind for future
 		# test runs on this test.
 
@@ -337,7 +337,7 @@ class Run:
 				master.report(s)
 
 		report("")
-		report("## READJUSTMENT ROUND %d" % (index + 1))
+		report("## READJUSTMENT ROUND %d%s" % (index + 1, " (AFTER REIMPORT)" if is_reimport else ""))
 		report("")
 
 		index = 0
@@ -421,12 +421,14 @@ class Run:
 		report("## REASSESSING EXPECTED USER SCORES")
 		report("")
 
-		for question_title, question in self.questions.items():
+		for user, result in zip(self.users, all_recorded_results):
+			report("### USER %s" % user.get_username())
 
-			if question_title not in modified_questions:
-				continue
+			for question_title, question in self.questions.items():
 
-			for user, result in zip(self.users, all_recorded_results):
+				if question_title not in modified_questions:
+					continue
+
 				answers = dict()
 				for key, value in result.properties.items():
 					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
@@ -439,8 +441,8 @@ class Run:
 				for key in Result.score_keys(question_title):
 					result.update(key, score)
 
-				report("recomputed expected score for %s / %s as %s based on answer %s" % (
-					user.get_username(), question_title, score, json.dumps(answers)))
+				report("recomputed expected score for %s as %s based on answer %s" % (
+					question_title, score, json.dumps(answers)))
 
 		maximum_score = Decimal(0)
 		for question in self.questions.values():
@@ -581,7 +583,13 @@ class Run:
 		if not is_reimport:
 			num_readjustments = max(0, int(self.settings.num_readjustments))
 		else:
-			num_readjustments = 0
+			# always do one readjustment on the reimported test. this might look superfluous, but
+			# in fact it's an essential regression test: scores and marks are imported from the xml,
+			# but not recomputed by default, i.e. if there's an error in the underlying data import
+			# of the responses given, score errors will only be visible after one readjustment. this
+			# error has happened before, see Mantis bug 18553.
+			num_readjustments = 1
+
 		prefix = 'reimport/' if is_reimport else 'original/'
 
 		all_assertions_ok = False
@@ -611,7 +619,7 @@ class Run:
 
 			if readjustment_round < num_readjustments:
 				self._apply_readjustment(
-					readjustment_round, master, test_driver, all_recorded_results)
+					readjustment_round, master, test_driver, all_recorded_results, is_reimport)
 
 				xmlres_zip = test_driver.export_xmlres()
 				self.files["readjustments/round%d.zip" % (1 + readjustment_round)] = xmlres_zip
