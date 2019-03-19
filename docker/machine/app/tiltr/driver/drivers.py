@@ -1465,7 +1465,7 @@ class UserDriver:
 
 		rows = list(self.driver.find_elements_by_css_selector(".ilObjListRow"))
 		if len(rows) != 1:
-			raise InteractionException("excepted exactly 1 test to delete, got %d", len(rows))
+			raise InteractionException("excepted exactly 1 test to delete, got %d named '%s'" % (len(rows), test_name))
 
 		row = rows[0]
 		link_text = row.find_element_by_css_selector("a.il_ContainerItemTitle").text.strip()
