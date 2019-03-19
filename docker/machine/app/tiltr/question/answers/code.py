@@ -22,7 +22,7 @@ class CodeAnswer(Answer):
 
 	def randomize(self, context):
 		self._set_answer(*self.question.get_random_answer(context), context)
-		return Validness.VALID
+		return Validness()
 
 	def _set_answer(self, answer, score, context):
 		answer = context.strip_whitespace(answer)

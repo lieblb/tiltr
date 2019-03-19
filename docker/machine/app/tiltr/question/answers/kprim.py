@@ -20,7 +20,7 @@ class KPrimAnswer(Answer):
 
 	def randomize(self, context):
 		self._set_answers(*self.question.get_random_answer(context))
-		return Validness.VALID
+		return Validness()
 
 	def _set_answers(self, answers, score):
 		ui = self._parse_ui()

@@ -80,7 +80,10 @@ class ClozeAnswer(Answer):
 	def randomize(self, context):
 		answers, valid, score = self.question.get_random_answer(context)
 		self._set_answers(answers, score)
-		return Validness.VALID if all(valid.values()) else Validness.INVALID
+		if all(valid.values()):
+			return Validness()
+		else:
+			return Validness(((i, answers[i]) for i, v in valid.items() if not v))
 
 	def _set_answers(self, answers, score):
 		ui = self._parse_ui()

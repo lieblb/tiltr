@@ -41,7 +41,7 @@ class MatchingAnswer(Answer):
 
 	def randomize(self, context):
 		self._set_answer(*self.question.get_random_answer(context))
-		return Validness.VALID
+		return Validness()
 
 	def _try_drag_terms(self, source_area, target_element, definition_id, term_ids):
 		term_ids = set(list(term_ids))  # copy

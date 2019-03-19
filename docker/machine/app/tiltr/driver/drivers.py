@@ -9,6 +9,7 @@ import os
 import datetime
 import io
 import re
+import json
 import requests
 import traceback
 from urllib.parse import urlparse, parse_qs
@@ -631,8 +632,12 @@ class ExamDriver:
 
 		return False
 
-	def assert_error_on_save(self, context):
-		self.protocol.append((time.time(), "test", "checking error on invalid save."))
+	def assert_error_on_save(self, invalid_answers, context):
+		self.protocol.append((
+			time.time(), "test",
+			"checking error when saving %d invalid answers:" % len(invalid_answers)))
+		for x in invalid_answers:
+			self.protocol.append((time.time(), "test", "invalid answer: %s" % json.dumps(x)))
 
 		sequence_id = self.get_sequence_id()
 
@@ -1028,8 +1033,11 @@ class TestDriver:
 				self.driver.find_element_by_css_selector(
 					'button[name="cmd[addMarkStep]"]').click()
 
+		entries = list(zip(reversed(grades), levels))
+		rnd.shuffle(entries)  # enter in random order
+
 		marks = list()
-		for i, (grade, percentage) in enumerate(zip(reversed(grades), levels)):
+		for i, (grade, percentage) in enumerate(entries):
 			official = "Note %s" % grade
 			marks.append(Mark(short=grade, official=official, level=Decimal(percentage)))
 			set_element_value(self.driver, self.driver.find_element_by_id("mark_short_%d" % i), grade)

@@ -17,10 +17,10 @@ from tiltr.driver.utils import set_element_value
 
 ClozeScoring = namedtuple('ClozeScoring', ['identical_scoring', 'comparator', 'gaps'])
 
-TextishGapScoring = namedtuple(
-	'TextishGapScoring', ['cloze_type', 'size', 'options'])
+TextualGapScoring = namedtuple(
+	'TextualGapScoring', ['cloze_type', 'size', 'options'])
 NumericGapScoring = namedtuple(
-	'NumericGapScoring', ['cloze_type', 'size', 'value', 'lower', 'upper', 'score'])
+	'NumericGapScoring', ['cloze_type', 'value', 'lower', 'upper', 'score'])
 
 
 def _readjust_score(random, score):
@@ -74,14 +74,24 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		self.comparator = scoring.comparator
 		gap_scoring = scoring.gaps[index]
 		self.options = gap_scoring.options
-		self.size = gap_scoring.size
+		self.size = gap_scoring.size  # maximum size
 
 	def get_maximum_score(self):
 		return max(self.options.values())
 
+	def _get_maximum_entry_size(self, context):
+		# get the maximum number of characters we write into this gap. note that
+		# this might be != the real maximum size, which might be unlimited, so we
+		# choose some configured maximum number for entry purposes.
+		if self.size is not None:
+			return self.size
+		else:
+			return int(context.settings.max_cloze_text_length)
+
 	def initialize_coverage(self, question, coverage, context):
+		size = self._get_maximum_entry_size(context)
 		for mode in ("verify", "export"):
-			for args in coverage.text_cases(self.size, context):
+			for args in coverage.text_cases(size, context):
 				coverage.add_case(question, self.index, mode, *args)
 			for solution in self.options.keys():
 				coverage.add_case(question, self.index, mode, "solution", solution)
@@ -130,8 +140,9 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 				text = format % (context.random.random() * 1000)
 			else:
 				# produce some random test.
+				entry_size = self._get_maximum_entry_size(context)
 				text = context.produce_text(
-					self.size, context.cloze_random_chars)
+					entry_size, context.cloze_random_chars)
 			return text, self.get_score(text)
 
 	def get_score(self, text):
@@ -146,7 +157,10 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		return Decimal(0)
 
 	def is_valid_answer(self, value):
-		return len(value) <= self.size
+		if self.size is None:  # no restriction?
+			return True
+		else:
+			return len(value) <= self.size
 
 	def get_type(self):
 		return ClozeType.text
@@ -187,7 +201,6 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		ClozeQuestionGap.__init__(self, index)
 
 		gap_scoring = scoring.gaps[index]
-		self.size = gap_scoring.size
 
 		self.numeric_value = gap_scoring.value
 		self.numeric_lower = gap_scoring.lower
@@ -271,12 +284,12 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		return ClozeType.numeric
 
 
-def parse_gap_size(driver, gap_index, fallback_length):
+def parse_gap_size(driver, gap_index):
 	element = driver.find_element_by_name("gap_%d_gapsize" % gap_index)
 	text = element.get_attribute("value").strip()
 	assert isinstance(text, str)
-	if text == '':
-		return fallback_length
+	if text.strip() == '':
+		return None
 	else:
 		return int(text)
 
@@ -318,11 +331,12 @@ def update_gap_options(driver, gap_index, options):
 
 class ClozeQuestion(Question):
 	@staticmethod
-	def _get_ui(driver, settings):
-		fallback_length = driver.find_element_by_name("fixedTextLength").get_attribute("value").strip()
-		if fallback_length == '':
-			fallback_length = settings.max_cloze_text_length
-		fallback_length = int(fallback_length)
+	def _get_ui(driver):
+		fixed_text_length = driver.find_element_by_name("fixedTextLength").get_attribute("value").strip()
+		if fixed_text_length.strip() == '':
+			fixed_text_length = None
+		else:
+			fixed_text_length = int(fixed_text_length)
 
 		gaps = list()
 
@@ -337,7 +351,9 @@ class ClozeQuestion(Question):
 			cloze_type = ClozeType(int(cloze_type_element.get_attribute("value")))
 
 			if cloze_type != ClozeType.select:
-				gap_size = parse_gap_size(driver, gap_index, fallback_length)
+				gap_size = parse_gap_size(driver, gap_index)
+				if gap_size is None:
+					gap_size = fixed_text_length
 			else:
 				gap_size = None
 
@@ -347,11 +363,12 @@ class ClozeQuestion(Question):
 				if not options:
 					raise InteractionException("did not find gap options (%d)" % gap_index)
 
-				scoring = TextishGapScoring(cloze_type=cloze_type, size=gap_size, options=options)
+				scoring = TextualGapScoring(
+					cloze_type=cloze_type, size=gap_size, options=options)
 
 			elif cloze_type == ClozeType.numeric:
 				scoring = NumericGapScoring(
-					cloze_type=ClozeType.numeric, size=gap_size,
+					cloze_type=ClozeType.numeric,
 					**parse_numeric_gap_scoring(driver, gap_index))
 
 			else:
@@ -396,7 +413,7 @@ class ClozeQuestion(Question):
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
 
-		self.scoring = self._get_ui(driver, settings)
+		self.scoring = self._get_ui(driver)
 		self._create_gaps()
 
 	def get_maximum_score(self):

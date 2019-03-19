@@ -16,7 +16,7 @@ class SingleChoiceAnswer(Answer):
 
 	def randomize(self, context):
 		self._set_answer(*self.question.get_random_answer(context))
-		return Validness.VALID
+		return Validness()
 
 	def _set_answer(self, answer, score):
 		answer_found = False

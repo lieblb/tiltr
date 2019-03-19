@@ -25,7 +25,7 @@ class AbstractLongTextAnswer(Answer):
 	def randomize(self, context):
 		answer, score = self.question.get_random_answer(context)
 		self._set_answer(answer, score, context)
-		return Validness.VALID
+		return Validness()
 
 	def _set_answer(self, answer, score, context):
 		self.protocol.choose("Ergebnis", answer)

@@ -38,9 +38,10 @@ class ExamRobot:
 	def _give_answer(self):
 		while True:
 			validness = self.exam_driver.randomize_answer()
-			if validness == Validness.VALID:
+			if validness.is_good():
 				break
-			self.exam_driver.assert_error_on_save(self.context)
+			self.exam_driver.assert_error_on_save(
+				validness.invalid_answers, self.context)
 
 		self._simulate_crash()
 

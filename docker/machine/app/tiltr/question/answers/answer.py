@@ -10,9 +10,12 @@ from collections import namedtuple
 
 from tiltr.data.result import Result, Origin
 
-class Validness(Enum):
-	VALID = 1
-	INVALID = -1
+class Validness:
+	def __init__(self, invalid_answers=None):
+		self.invalid_answers = list(invalid_answers) if invalid_answers else None
+
+	def is_good(self):
+		return not self.invalid_answers
 
 
 class Answer:
