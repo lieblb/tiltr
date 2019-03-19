@@ -130,7 +130,7 @@ class Result:
 		r.errors[domain.name] = err
 		return r
 
-	def get_most_severe_error(self):
+	def get_most_severe_error_domain(self):
 		return most_severe(ErrorDomain[d] for d in self.errors.keys())
 
 	def get(self, key):

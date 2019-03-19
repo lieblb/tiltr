@@ -213,8 +213,8 @@ def remove_trailing_zeros(s):
 		return s
 
 
-def get_most_severe_error(results):
-	return most_severe(r.get_most_severe_error() for r in results)
+def get_most_severe_error_domain(results):
+	return most_severe(r.get_most_severe_error_domain() for r in results)
 
 
 def create_temp_test_name():
@@ -646,9 +646,14 @@ class Run:
 			self.performance_data.extend(recorded_result.performance)
 
 		# abort if any errors.
-		worst = get_most_severe_error(all_recorded_results)
-		if worst.value > ErrorDomain.none.value:
-			raise TiltrException(worst)
+		worst_domain = get_most_severe_error_domain(all_recorded_results)
+		if worst_domain.value > ErrorDomain.none.value:
+			err = "failed with unknown details"
+			for r in all_recorded_results:
+				if worst_domain.name in r.errors:
+					err = str(r.errors[worst_domain.name])
+					break
+			raise TiltrException(worst_domain, err)
 
 		# detailed integrity checks.
 		if self._verify_xls(master, test_driver, all_recorded_results) == "OK":
