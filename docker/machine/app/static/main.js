@@ -221,20 +221,20 @@ $(function() {
 		}
 
         var percentage = 100.0 * coverage.observed / coverage.cases;
-        $("#coverage").val(percentage);
+        $("#coverage-total-progress").val(percentage);
         var coverageText = percentage.toFixed(1) + "%";
-        $("#coverage").text(coverageText);
+        $("#coverage-total-progress").text(coverageText);
 
-        $("#coverage-cases").text(coverage.cases);
-        $("#coverage-observed").text(coverage.observed);
-        $("#coverage-percentage").text(coverageText);
+        $("#coverage-total-cases").text(coverage.cases);
+        $("#coverage-total-observed").text(coverage.observed);
+        $("#coverage-total-percentage").text(coverageText);
 
         while (true) {
 	        var children = $("#coverage-overview").children();
-	        if (children.length < 2) {
+	        if (children.length < 1) {
 	        	break;
 			}
-			$(children[1]).remove();
+			$(children[0]).remove();
 		}
 
 		var n = coverage.questions.length;
@@ -393,7 +393,22 @@ $(function() {
 				var td;
 
 				td = $("<td></td>");
-				td.html(getIcon("status_" + status.replace("/", "_")));
+				if (status.split('/')[0] == 'OK') {
+                    var span = $("<span></span>");
+                    span.addClass("tag is-success is-medium");
+                    span.text(" OK");
+                    td.append(span);
+                } else if (status.split('/')[1].toLowerCase() == 'interaction') {
+					var span = $("<span></span>");
+					span.addClass("tag is-warning is-medium");
+					span.text(" " + status);
+					td.append(span);
+                } else {
+					var span = $("<span></span>");
+					span.addClass("tag is-danger is-medium");
+					span.text(" " + status);
+					td.append(span);
+                }
 				tr.append(td);
 
 				td = $("<td></td>");
@@ -651,6 +666,7 @@ $(function() {
 		$("#start").attr("disabled", true);
 		$("#start").addClass("is-loading");
 		$("#log").empty();
+		$("#status-error").css("display", "none");
 
 		$("#select-browser").attr("disabled", true);
 		$("#select-test").attr("disabled", true);

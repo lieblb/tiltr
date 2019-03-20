@@ -205,13 +205,24 @@
 						</a>
 					</div>
 					<div class="message-body">
+						<div class="notification">
+							The table below is an estimate of the coverage of some selected tractable border cases of answer states
+							(mostly 1-wise IPM parameters). Note that full coverage is impractical due to combinatorial explosion.
+							For details, see for example "Handling Combinatorial Explosion in Software Testing", Mats Grindal, 2007.
+						</div>
+
 						<table class="table is-fullwidth">
-							<tbody id="coverage-overview">
+							<tbody id="coverage-overview-total">
 								<tr>
 									<td>Total</td>
-									<td><progress id="coverage" class="progress is-large is-info" value="0" max="100"></progress></td>
-									<td><span id="coverage-observed"></span> / <span id="coverage-cases"></span> (<span id="coverage-percentage"></span>)</td>
+									<td><progress id="coverage-total-progress" class="progress is-large is-info" value="0" max="100"></progress></td>
+									<td><span id="coverage-total-observed"></span> / <span id="coverage-total-cases"></span> (<span id="coverage-total-percentage"></span>)</td>
 								</tr>
+							</tbody>
+						</table>
+
+						<table class="table is-fullwidth">
+							<tbody id="coverage-overview">
 							</tbody>
 						</table>
 					</div>
