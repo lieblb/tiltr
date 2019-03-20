@@ -531,11 +531,17 @@ class ClozeQuestion(Question):
 			else:
 				return f
 
+		def random_flip_comparator(c):
+			if context.random.randint(0, 3) == 0:  # flip?
+				return context.random.choice([x for x in list(ClozeComparator) if x != c])
+			else:
+				return c
+
 		old_scoring = self.scoring
 
 		self.scoring = ClozeScoring(
 			identical_scoring=random_flip(self.scoring.identical_scoring),
-			comparator=self.scoring.comparator,
+			comparator=random_flip_comparator(self.scoring.comparator),
 			gaps=[_readjust(context.random, s) for s in self.scoring.gaps])
 		self._create_gaps()
 		self._set_ui(driver, self.scoring)
