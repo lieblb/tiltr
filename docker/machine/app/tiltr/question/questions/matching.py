@@ -126,7 +126,7 @@ class MatchingQuestion(Question):
 
 		return answers, self.compute_score(answers, context)
 
-	def readjust_scores(self, driver, random, report):
+	def readjust_scores(self, driver, context, report):
 		return False
 
 	def compute_score(self, answers, context):

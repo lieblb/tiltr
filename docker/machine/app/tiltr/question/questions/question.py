@@ -22,7 +22,7 @@ class Question:
 	def get_random_answer(self, context):
 		raise NotImplementedError()
 
-	def readjust_scores(self, driver, random, report):
+	def readjust_scores(self, driver, context, report):
 		raise NotImplementedError()
 
 	def compute_score(self, answers, context):

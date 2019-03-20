@@ -23,21 +23,39 @@ NumericGapScoring = namedtuple(
 	'NumericGapScoring', ['cloze_type', 'value', 'lower', 'upper', 'score'])
 
 
-def _readjust_score(random, score):
-	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
+def _readjust_score(random, score, boost):
+	delta = Decimal(random.randint(-8, 8 + (2 ** boost))) / Decimal(4)
 	score += delta
 	score = max(score, Decimal(0))
 	return score
 
 
 def _readjust(random, scoring):
+	# FIXME: rejection of entry of zero points should be checked via UI
+
 	if scoring.cloze_type == ClozeType.numeric:
+		new_score = Decimal(0)
+		i = 0
+
+		while new_score <= Decimal(0):
+			new_score = _readjust_score(random, scoring.score, i)
+			i += 1
+
 		return scoring._replace(
-			score=_readjust_score(random, scoring.score))
+			score=new_score)
 	else:
-		new_options = dict()
-		for k, score in scoring.options.items():
-			new_options[k] = _readjust_score(random, score)
+		i = 0
+
+		while True:
+			new_options = dict()
+			for k, score in scoring.options.items():
+				new_options[k] = _readjust_score(random, score, i)
+
+			if any(score > Decimal(0) for score in new_options.values()):
+				break
+
+			i += 1
+
 		return scoring._replace(options=new_options)
 
 
@@ -288,7 +306,7 @@ def parse_gap_size(driver, gap_index):
 	element = driver.find_element_by_name("gap_%d_gapsize" % gap_index)
 	text = element.get_attribute("value").strip()
 	assert isinstance(text, str)
-	if text.strip() == '':
+	if text == '':
 		return None
 	else:
 		return int(text)
@@ -308,6 +326,7 @@ def update_numeric_gap_scoring(driver, gap_index, gap):
 
 def parse_gap_options(driver, gap_index):
 	options = dict()
+	seen = set()
 
 	while True:
 		try:
@@ -315,7 +334,14 @@ def parse_gap_options(driver, gap_index):
 		except NoSuchElementException:
 			break
 		points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, len(options)))
-		options[answer.get_attribute("value")] = Decimal(points.get_attribute("value"))
+
+		answer_key = answer.get_attribute("value")
+
+		if answer_key.strip() in seen:
+			raise InteractionException("the gap has multiple identical options named '%s'. unsupported." % answer_key)
+		seen.add(answer_key.strip())
+
+		options[answer_key] = Decimal(points.get_attribute("value"))
 
 	return options
 
@@ -323,8 +349,11 @@ def parse_gap_options(driver, gap_index):
 def update_gap_options(driver, gap_index, options):
 	for option_index, (key, score) in enumerate(options.items()):
 		answer = driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, option_index))
-		if answer.text.strip() != key:
-			raise InteractionException("must not change gap title")
+		answer_key = answer.get_attribute("value")
+		if answer_key != key:
+			raise InteractionException("must not change title for gap %d, option %d from '%s' to '%s'" % (
+				gap_index, option_index, answer_key, key))
+
 		points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, option_index))
 		set_element_value(driver, points, str(score))
 
@@ -333,7 +362,7 @@ class ClozeQuestion(Question):
 	@staticmethod
 	def _get_ui(driver):
 		fixed_text_length = driver.find_element_by_name("fixedTextLength").get_attribute("value").strip()
-		if fixed_text_length.strip() == '':
+		if fixed_text_length == '':
 			fixed_text_length = None
 		else:
 			fixed_text_length = int(fixed_text_length)
@@ -393,10 +422,18 @@ class ClozeQuestion(Question):
 			identical_scoring_checkbox.click()
 
 		for gap_index, gap in enumerate(scoring.gaps):
-			if gap.cloze_type in (ClozeType.text, ClozeType.select):
-				update_gap_options(driver, gap_index, gap.options)
-			else:
-				update_numeric_gap_scoring(driver, gap_index, gap)
+			n_tries = 0
+			while True:
+				try:
+					if gap.cloze_type in (ClozeType.text, ClozeType.select):
+						update_gap_options(driver, gap_index, gap.options)
+					else:
+						update_numeric_gap_scoring(driver, gap_index, gap)
+					break
+				except NoSuchElementException:
+					n_tries += 1
+					if n_tries > 5:
+						raise
 
 	def _create_gaps(self):
 		constructors = dict((
@@ -487,23 +524,42 @@ class ClozeQuestion(Question):
 			else:
 				return answers, valid, self.compute_score_by_indices(answers, context)
 
-	def readjust_scores(self, driver, random, report):
-		'''
+	def readjust_scores(self, driver, context, report):
 		def random_flip(f):
-			if random.randint(0, 3) == 0:  # flip?
+			if context.random.randint(0, 3) == 0:  # flip?
 				return not f
 			else:
 				return f
 
+		old_scoring = self.scoring
+
 		self.scoring = ClozeScoring(
 			identical_scoring=random_flip(self.scoring.identical_scoring),
 			comparator=self.scoring.comparator,
-			gaps=[_readjust(random, s) for s in self.scoring.gaps])
-
+			gaps=[_readjust(context.random, s) for s in self.scoring.gaps])
+		self._create_gaps()
 		self._set_ui(driver, self.scoring)
-		'''
 
-		return False
+		report("readjusted identical_scoring from %s to %s." % (
+			old_scoring.identical_scoring, self.scoring.identical_scoring))
+		report("readjusted comparator from %s to %s." % (
+			old_scoring.comparator, self.scoring.comparator))
+
+		for i, (old_gap, new_gap) in enumerate(zip(old_scoring.gaps, self.scoring.gaps)):
+			report("readjusted gap %d:" % i)
+			assert old_gap.cloze_type == new_gap.cloze_type
+			if old_gap.cloze_type == ClozeType.numeric:
+				for key in ('value', 'lower', 'upper', 'score'):
+					report("  %s: %s -> %s" % (key, getattr(old_gap, key), getattr(new_gap, key)))
+			else:
+				report("  size: %s -> %s" % (old_gap.size, new_gap.size))
+
+				report("  options:")
+				assert len(old_gap.options) == len(new_gap.options)
+				for key in old_gap.options.keys():
+					report("    %s: %s -> %s" % (key, old_gap.options[key], new_gap.options[key]))
+
+		return True
 
 	def compute_score(self, answers, context):
 		name_to_index = dict()

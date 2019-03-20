@@ -73,7 +73,7 @@ class SingleChoiceQuestion(Question):
 		choice = context.random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
 
-	def readjust_scores(self, driver, random, report):
+	def readjust_scores(self, driver, context, report):
 		choices = self._get_ui(driver)
 
 		if False:
@@ -84,7 +84,7 @@ class SingleChoiceQuestion(Question):
 					raise IntegrityException("wrong choice score in readjustment.")
 
 		for key, score in list(choices.items()):
-			new_score = _readjust_score(random, score)
+			new_score = _readjust_score(context.random, score)
 			choices[key] = new_score
 			report('readjusted score for "%s" from %s to %s.' % (key, score, new_score))
 

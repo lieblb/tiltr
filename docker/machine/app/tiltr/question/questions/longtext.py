@@ -59,8 +59,8 @@ class LongTextQuestion(Question):
 		text = context.produce_text(self.length, context.long_text_random_chars)
 		return text, self.compute_score(text, context)
 
-	def readjust_scores(self, driver, random, report):
-		maximum_score = Decimal(random.randint(1, 100)) / Decimal(10)
+	def readjust_scores(self, driver, context, report):
+		maximum_score = Decimal(context.random.randint(1, 100)) / Decimal(10)
 		self._set_ui(driver, maximum_score)
 		self._maximum_score = maximum_score
 		report('readjusted score to %s.' % maximum_score)

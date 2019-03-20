@@ -145,16 +145,13 @@ def _patch_exam_name(path, new_title, output_dir):
 		patch(root)
 		return ET.tostring(root, encoding='utf8', method='xml')
 
-	def noop(data):
-		return data
-
 	def patch_tst(root):
 		for element in root.findall(".//Title"):
 			element.text = new_title
 
 	def patch_qti(root):
-		assessment = root.find(".//assessment")
-		assessment.set("title", new_title)
+		for assessment in root.findall(".//assessment"):
+			assessment.set("title", new_title)
 
 	with zipfile.ZipFile(path, 'r') as zip_ref:
 
@@ -172,7 +169,9 @@ def _patch_exam_name(path, new_title, output_dir):
 		with zipfile.ZipFile(modified_path, 'w') as out_zip_ref:
 			for name in zip_ref.namelist():
 				data = zip_ref.read(name)
-				data = modifiers.get(name, noop)(data)
+				if name in modifiers:
+					data = modifiers[name](data)
+
 				out_zip_ref.writestr(name, data)
 
 	return modified_path
@@ -326,8 +325,10 @@ class Run:
 		return all_assertions_ok
 
 	def _apply_readjustment(self, index, master, test_driver, all_recorded_results, is_reimport):
-		# note that this will destroy the original test's scores. keep this in mind for future
-		# test runs on this test.
+		# note that this will destroy the original test's scores. usually we should have copied
+		# this test and this should only run on a temporary copy.
+
+		context = RandomContext(self.questions, self.settings, self.workarounds, self.language)
 
 		protocol = self.protocols["readjustments"]
 
@@ -373,15 +374,13 @@ class Run:
 
 			close_stats_window()
 
-			random = rnd.SystemRandom()
-
 			try:
 				while True:
 					report('')
 					report('### QUESTION "%s"' % question.title.upper())
 					report('')
 
-					if question.readjust_scores(master.driver, random, report):
+					if question.readjust_scores(master.driver, context, report):
 						modified_questions.add(question.title)
 
 						master.report("saving.")
@@ -414,8 +413,6 @@ class Run:
 			index += 1
 			retries = 0
 
-		context = RandomContext(self.questions, self.settings, self.workarounds, self.language)
-
 		# recompute user score's for all questions.
 		report("")
 		report("## REASSESSING EXPECTED USER SCORES")
@@ -441,8 +438,12 @@ class Run:
 				for key in Result.score_keys(question_title):
 					result.update(key, score)
 
-				report("recomputed expected score for %s as %s based on answer %s" % (
-					question_title, score, json.dumps(answers)))
+				report("#### %s" % question_title)
+				report("recomputed expected score: %s" % score)
+				report("    | based on answer: %s" % json.dumps(answers))
+				report("")
+
+			report("")
 
 		maximum_score = Decimal(0)
 		for question in self.questions.values():
@@ -566,16 +567,28 @@ class Run:
 			with tempfile.TemporaryDirectory() as tmpdir:
 				temp_test_name = create_temp_test_name()
 				test_path = _patch_exam_name(temp.name, temp_test_name, tmpdir)
+				self.report("master", "reimporting test as %s" % temp_test_name)
 				master.user_driver.import_test(test_path)
+				self.report("master", "reimport of test as %s done." % temp_test_name)
+
+			verify_result = None
+			try:
+				reimported_test = ImportedTest(temp_test_name)
+				reimported_test_driver = master.user_driver.create_test_driver(reimported_test)
+
+				verify_result = self._verify_xls(
+					master, reimported_test_driver, all_recorded_results, is_reimport=True)
+
+			finally:
 				try:
-					reimported_test = ImportedTest(temp_test_name)
-					reimported_test_driver = master.user_driver.create_test_driver(reimported_test)
-
-					verify_result = self._verify_xls(
-						master, reimported_test_driver, all_recorded_results, is_reimport=True)
-
-				finally:
 					master.user_driver.delete_test(temp_test_name)
+				except:
+					if verify_result is None:
+						# we got here through another exception. don't override it.
+						self.report("error", "could not delete test")
+						self.report("traceback", traceback.print_exc())
+					else:
+						raise
 
 		return verify_result
 
