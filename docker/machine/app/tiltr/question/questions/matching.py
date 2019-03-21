@@ -7,10 +7,29 @@
 
 from decimal import *
 from enum import Enum
+import itertools
+from collections import defaultdict
+
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.select import Select
 
+from tiltr.driver.utils import set_element_value
 from .question import Question
+
+
+def _readjust_score(random, score, enforce_positive):
+	if enforce_positive:
+		return Decimal(random.randint(1, 8)) / Decimal(4)
+	else:
+		delta = Decimal(random.randint(-8, 8)) / Decimal(4)
+		return score + delta
+
+
+def _get_maximum_score(scores):
+	if scores:
+		return sum(max(s, 0) for s in scores.values())
+	else:
+		return Decimal(0)
 
 
 class MatchingMultiplicity(Enum):
@@ -20,7 +39,7 @@ class MatchingMultiplicity(Enum):
 
 class MatchingQuestion(Question):
 	@staticmethod
-	def _get_ui_multiplicity(driver):
+	def _ui_get_multiplicity(driver):
 		for radio in driver.find_elements_by_name('matching_mode'):
 			if radio.is_selected():
 				value = radio.get_attribute('value')
@@ -34,54 +53,116 @@ class MatchingQuestion(Question):
 		raise RuntimeError('no matching mode set in gui')
 
 	@staticmethod
-	def _get_ui_pairs(driver):
+	def _ui_get_pairs(driver):
+		css = (
+			('.matchingpairwizard tbody td select[name^="pairs[definition]"]', 'option[selected]'),
+			('.matchingpairwizard tbody td select[name^="pairs[term]"]', 'option[selected]'),
+			('.matchingpairwizard tbody td input[name^="pairs[points]', '')
+		 )
+
+		definitions, terms, points = driver.execute_script("""
+			return arguments[0].map(function(css) {
+				return $(css[0]).map(function(i, e) {
+					if (!e.getAttribute('name').endsWith('[' + i.toString() + ']')) {
+						throw 'item is out of order';
+					}
+					return $(this, css[1])[0].value;
+				});
+			});
+		""", css)
+
+		return list(zip(zip(definitions, terms), points))
+
+	@staticmethod
+	def _ui_get_pair_keys(driver):
+		return list(map(lambda x: x[0], MatchingQuestion._ui_get_pairs(driver)))
+
+	@staticmethod
+	def _ui_get_pair_indices(driver):
 		pairs = dict()
-
-		while True:
-			i = len(pairs)
-
-			try:
-				k = []
-
-				for s in ('definition', 'term'):
-					k.append(Select(driver.find_element_by_name(
-						'pairs[%s][%d]' % (s, i))).first_selected_option.get_attribute('value'))
-
-				pairs[tuple(k)] = Decimal(driver.find_element_by_name('pairs[points][%d]' % i).get_attribute('value'))
-			except NoSuchElementException:
-				break
-
+		for i, (definition, term) in enumerate(MatchingQuestion._ui_get_pair_keys(driver)):
+			pairs[(definition, term)] = i
 		return pairs
 
 	@staticmethod
-	def _get_ui_items(driver, what):
-		items = dict()
+	def _ui_get_scores(driver):
+		scores = dict()
+		for (definition, term), score in MatchingQuestion._ui_get_pairs(driver):
+			scores[(definition, term)] = Decimal(score)
+		return scores
 
-		while True:
-			i = len(items)
-			q = dict()
+	@staticmethod
+	def _ui_add_pairs(driver, keys):
+		index = len(MatchingQuestion._ui_get_pair_indices(driver)) - 1
 
-			try:
-				for s in ('identifier', 'answer'):
-					q[s] = driver.find_element_by_name(
-						'%s[%s][%d]' % (what, s, i)).get_attribute('value')
-			except NoSuchElementException:
-				break
+		for definition, term in keys:
+			driver.find_element_by_id("add_pairs[%d]" % index).click()
+			index += 1
 
-			items[q['identifier']] = q['answer']
+			Select(driver.find_element_by_css_selector(
+				'select[name="pairs[definition][%d]"]' % index)).select_by_value(definition)
 
-		return items
+			Select(driver.find_element_by_css_selector(
+				'select[name="pairs[term][%d]"]' % index)).select_by_value(term)
+
+	@staticmethod
+	def _ui_remove_pairs(driver, keys):
+		# the number ids of pairs change with each remove, so we need to refresh
+		# on each iteration.
+		for key in keys:
+			pairs = MatchingQuestion._ui_get_pair_indices(driver)
+			index_to_remove = pairs[key]
+			driver.find_element_by_id("remove_pairs[%d]" % index_to_remove).click()
+
+	@staticmethod
+	def _ui_update_scores(driver, scores):
+		current_keys = set(MatchingQuestion._ui_get_pair_keys(driver))
+
+		added = set(scores.keys()) - current_keys
+		MatchingQuestion._ui_add_pairs(driver, added)
+
+		removed = current_keys - set(scores.keys())
+		MatchingQuestion._ui_remove_pairs(driver, removed)
+
+		current_pairs = MatchingQuestion._ui_get_pair_indices(driver)
+		assert set(current_pairs.keys()) == set(scores.keys())
+
+		for key, score in scores.items():
+			points_element = driver.find_element_by_css_selector(
+				'input[name="pairs[points][%d]"]' % current_pairs[key])
+			set_element_value(driver, points_element, str(score))
+
+	@staticmethod
+	def _ui_get_items(driver, what):
+		def gather():
+			i = 0
+
+			while True:
+				values = list()
+
+				try:
+					for s in ('identifier', 'answer'):
+						values.append(driver.find_element_by_name(
+							'%s[%s][%d]' % (what, s, i)).get_attribute('value'))
+				except NoSuchElementException:
+					break
+
+				yield tuple(values)
+
+				i += 1
+
+		return dict(gather())
 
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
 
-		self.multiplicity = self._get_ui_multiplicity(driver)
-		self.definitions = self._get_ui_items(driver, 'definitions')
-		self.terms = self._get_ui_items(driver, 'terms')
-		self.pairs = self._get_ui_pairs(driver)
+		self.multiplicity = self._ui_get_multiplicity(driver)
+		self.definitions = self._ui_get_items(driver, 'definitions')
+		self.terms = self._ui_get_items(driver, 'terms')
+		self.scores = self._ui_get_scores(driver)
 
 	def get_maximum_score(self):
-		return sum(self.pairs.values())
+		return _get_maximum_score(self.scores)
 
 	def create_answer(self, driver, *args):
 		from ..answers.matching import MatchingAnswer
@@ -127,13 +208,97 @@ class MatchingQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, context, report):
-		return False
+		if True:  # not quite working yet
+			return False
+
+		new_scores = dict()
+
+		all_pairs = set((d, t) for d, t in itertools.product(
+			self.definitions.keys(), self.terms.keys()))
+
+		unused_pairs = all_pairs - set(self.scores.keys())
+
+		old_scores = list(self.scores.items())
+		context.random.shuffle(old_scores)
+
+		for (definition, term), score in old_scores:
+			action = context.random.choice(['keep', 'adjust', 'remove'])
+
+			if action == 'keep':
+				# keep pair and score as is
+				new_scores[(definition, term)] = score
+				report('kept ("%s", "%s") at %s' % (
+					self.definitions[definition],
+					self.terms[term],
+					score))
+			elif action == 'adjust':
+				# adjust score of existing pair
+				enforce_positive = _get_maximum_score(new_scores) <= Decimal(0)
+				new_scores[(definition, term)] = _readjust_score(
+					context.random, score, enforce_positive)
+				report('adjusted ("%s", "%s") from %s to %s' % (
+					self.definitions[definition],
+					self.terms[term],
+					score,
+					new_scores[(definition, term)]))
+			elif action == 'remove':
+				# remove pair
+				report('removed ("%s", "%s")' % (
+					self.definitions[definition],
+					self.terms[term]))
+			else:
+				raise RuntimeError("illegal readjust action %s" % action)
+
+		n_to_add = context.random.randint(
+			0, min(len(unused_pairs), max(2, len(self.scores))))
+		if len(new_scores) < 1:
+			n_to_add = max(n_to_add, 1)
+		if n_to_add > len(unused_pairs):
+			unused_pairs = all_pairs - set(new_scores.keys())
+
+		for _ in range(n_to_add):
+			new_definition, new_term = context.random.choice(list(unused_pairs))
+			unused_pairs.remove((new_definition, new_term))
+			enforce_positive = _get_maximum_score(new_scores) <= Decimal(0)
+			new_scores[(new_definition, new_term)] = _readjust_score(
+				context.random, Decimal(0), enforce_positive)
+			report('added ("%s", "%s") with score %s' % (
+				self.definitions[new_definition],
+				self.terms[new_term],
+				new_scores[(new_definition, new_term)]))
+
+		MatchingQuestion._ui_update_scores(driver, new_scores)
+
+		return True
 
 	def compute_score(self, answers, context):
 		score = Decimal(0)
 		for definition_id, term_ids in answers.items():
 			for term_id in term_ids:
 				k = (definition_id, term_id)
-				if k in self.pairs:
-					score += self.pairs.get(k)
+				if k in self.scores:
+					score += self.scores.get(k)
 		return score
+
+	def compute_score_from_result(self, result, context):
+		definition_ids = dict((label, i) for i, label in self.definitions.items())
+		term_ids = dict((label, i) for i, label in self.terms.items())
+
+		answers = defaultdict(set)
+		for key, value in result.properties.items():
+			if key[0] == "question" and key[1] == self.title and key[2] == "answer":
+				definition_label = key[3]
+				term_label = key[4]
+				answers[definition_ids[definition_label]].add(term_ids[term_label])
+
+		return self.compute_score(answers, context)
+
+	def parse_xls_row(self, sheet, row):
+		key = sheet.cell(row=row, column=1).value
+		if key is None:
+			return None
+
+		# matching questions are stored as (key, "matches", value).
+		value = sheet.cell(row=row, column=3).value
+
+		return (key, value), True

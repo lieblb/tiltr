@@ -432,7 +432,7 @@ class Run:
 						dimension = key[3]
 						answers[dimension] = value
 
-				score = question.compute_score(answers, context)
+				score = question.compute_score_from_result(result, context)
 				score = remove_trailing_zeros(str(score))
 
 				for key in Result.score_keys(question_title):
@@ -440,7 +440,15 @@ class Run:
 
 				report("#### %s" % question_title)
 				report("recomputed expected score: %s" % score)
-				report("    | based on answer: %s" % json.dumps(answers))
+				report("    | based on answer:")
+				for key, value in result.properties.items():
+					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
+						dimensions = key[3:]
+						if len(dimensions) == 1:
+							dimension = dimensions[0]
+						else:
+							dimension = str(dimensions)
+						report("    | %s: %s" % (dimension, value))
 				report("")
 
 			report("")

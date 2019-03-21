@@ -28,5 +28,24 @@ class Question:
 	def compute_score(self, answers, context):
 		raise NotImplementedError()
 
+	def compute_score_from_result(self, result, context):
+		answers = dict()
+		for key, value in result.properties.items():
+			if key[0] == "question" and key[1] == self.title and key[2] == "answer":
+				dimension = key[3]
+				answers[dimension] = value
+		return self.compute_score(answers, context)
+
 	def has_xls_score(self):
 		return True
+
+	def parse_xls_row(self, sheet, row):
+		key = sheet.cell(row=row, column=1).value
+		if key is None:
+			return None
+
+		value = sheet.cell(row=row, column=2).value
+		if value is None:
+			value = ""  # an empty gap in cloze question, for example
+
+		return key, value

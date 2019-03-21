@@ -52,45 +52,37 @@ class XlsResultRow:
 		return scores
 
 
+def _is_question_header(sheet, row):
+	return sheet.cell(row=row, column=1).fill.patternType == "solid"
+
+
 def get_workbook_user_answers(sheet, questions, report=None):
-	answers = []
+	sections = list()
 
-	row = 3
-	while True:
-		question_title = sheet.cell(row=row, column=2).value
-		if question_title is None:
-			break
-		assert isinstance(question_title, str)
-		row += 1
-		question_title = question_title.strip()
+	for row in range(1, sheet.max_row + 1):
+		if _is_question_header(sheet, row):
+			title = sheet.cell(row=row, column=2).value
+			assert isinstance(title, str)
+			question = questions[title.strip()]
+			sections.append((question, row))
+
+	sections.append((None, sheet.max_row + 1))
+
+	answers = list()
+	for (question, row0), (_, row1) in zip(sections[:-1], sections[1:]):
 		if report:
-			report('detected question title "%s".' % question_title)
+			report('parsing rows %d-%d in sheet "%s" as answers to question "%s"' % (
+				row0, row1, sheet.title, question.title))
 
-		dimensions = []
-		question = questions[question_title]
+		dimensions = list()
 
 		if question.has_xls_score():
-			while sheet.cell(row=row, column=1).value is not None:
-				key = sheet.cell(row=row, column=1).value
-				assert key is not None
+			for row in range(row0 + 1, row1):
+				entry = question.parse_xls_row(sheet, row)
+				if entry:
+					dimensions.append(entry)
 
-				value = sheet.cell(row=row, column=3).value
-				if value is not None:
-					# matching questions are stored as (key, "matches", value).
-					dimensions.append(((key, value), True))
-				else:  # regular non-matching question
-					value = sheet.cell(row=row, column=2).value
-					if value is None:
-						value = ""  # an empty gap in cloze question, for example
-
-					dimensions.append((key, value))
-
-				row += 1
-
-			answers.append((question_title, dimensions))
-			row += 1
-		else:
-			answers.append((question_title, tuple()))
+		answers.append((question.title, tuple(dimensions)))
 
 	return answers
 
@@ -120,9 +112,8 @@ def check_workbook_consistency(wb, questions, workarounds, report):
 	if report:
 		report("checking workbook participant sheet consistency.")
 
-	answers = get_workbook_user_answers(wb.worksheets[1], questions, report)
-
 	if not workarounds.random_xls_participant_sheet_orders:
+		answers = get_workbook_user_answers(wb.worksheets[1], questions, report)
 		for user_index in range(2, num_users + 1):
 			user_sheet = wb.worksheets[user_index]
 			other_answers = get_workbook_user_answers(user_sheet, questions, report)
