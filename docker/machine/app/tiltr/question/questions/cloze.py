@@ -8,7 +8,9 @@
 from enum import Enum
 from decimal import *
 from collections import defaultdict, namedtuple
+
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support.select import Select
 
 from .question import Question
 from ...data.exceptions import *
@@ -420,6 +422,9 @@ class ClozeQuestion(Question):
 		identical_scoring_checkbox = driver.find_element_by_name("identical_scoring")
 		if identical_scoring_checkbox.is_selected() != scoring.identical_scoring:
 			identical_scoring_checkbox.click()
+
+		Select(driver.find_element_by_id("textgap_rating")).select_by_value(
+			scoring.comparator.value)
 
 		for gap_index, gap in enumerate(scoring.gaps):
 			n_tries = 0
