@@ -136,7 +136,7 @@ class KPrimQuestion(Question):
 
 	def readjust_scores(self, driver, context, report):
 		if context.workarounds.dont_readjust_kprim:
-			return False
+			return False, list()
 
 		random = context.random
 
@@ -163,4 +163,4 @@ class KPrimQuestion(Question):
 
 		_print_readjustments(old_scoring, self.scoring, report)
 
-		return True
+		return True, list()

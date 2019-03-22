@@ -16,12 +16,23 @@ from collections import defaultdict
 from .database import DB
 from .exceptions import ErrorDomain, most_severe
 
+from texttable import Texttable
+
 
 def _dump_properties(properties, report):
+	table = Texttable()
+	table.set_deco(Texttable.HEADER)
+	table.set_cols_dtype(['t', 't'])
+	table.set_cols_width([70, 50])
+	table.set_header_align(['l', 'l'])
+
 	# this supports tuple-keys (for matching questions); which is why we don't simply use
 	# json.dumps(properties) to print this out.
 	for k, v in properties.items():
-		report('  %s: %s' % (json.dumps(k), json.dumps(v)))
+		table.add_row([json.dumps(k), json.dumps(v)])
+
+	for line in table.draw().split('\n'):
+		report(line)
 
 
 def _flat(x):
@@ -116,6 +127,10 @@ class Result:
 			value = str(value)  # make it safe for JSON
 		self.properties[key] = value
 
+	def remove(self, key):
+		if key in self.properties:
+			del self.properties[key]
+
 	def add_as_formatted_score(self, key, score):
 		s = str(score)
 		if '.' in s:
@@ -169,6 +184,13 @@ class Result:
 		keys = sorted(list(set(
 			list(self_properties.keys()) + list(other_properties.keys()))))
 
+		table = Texttable()
+		table.set_deco(Texttable.HEADER)
+		table.set_cols_dtype(['t', 't', 't', 't'])
+		table.header(['OK?', 'KEY', self.get_origin().name.upper(), other.get_origin().name.upper()])
+		table.set_cols_width([10, 60, 20, 20])
+		table.set_header_align(['l', 'l', 'l', 'l'])
+
 		for k in keys:
 			value_self = "%s" % self_properties.get(k, None)
 			value_other = "%s" % other_properties.get(k, None)
@@ -192,18 +214,23 @@ class Result:
 				status = "FAIL"
 				all_ok = False
 
-			report("%s %s: %s [%s] %s %s [%s]" % (
-				status, " / ".join(k),
-				value_self.replace("\n", "\\n"), self.get_origin(),
-				"==" if status == "OK" else "!=",
-				value_other.replace("\n", "\\n"), other.get_origin()))
+			table.add_row([
+				status,
+				" / ".join(k),
+				value_self.replace("\n", "\\n"),
+				value_other.replace("\n", "\\n")
+			])
 
-		report("")
+		for line in table.draw().split("\n"):
+			report(line)
 
 		if not all_ok:
-			report("DUMP of properties A:")
+			report("\n")
+			report("full dump of properties of %s:" % self.get_origin().name.upper())
 			_dump_properties(self.properties, report)
-			report("DUMP of properties B:")
+
+			report("\n")
+			report("full dump of properties of %s:" % other.get_origin().name.upper())
 			_dump_properties(other.properties, report)
 
 		if self.errors:

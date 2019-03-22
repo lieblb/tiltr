@@ -9,7 +9,9 @@ from decimal import *
 import itertools
 import json
 from collections import namedtuple
+
 from selenium.common.exceptions import NoSuchElementException
+from texttable import Texttable
 
 from .question import Question
 from tiltr.driver.utils import set_element_value
@@ -145,15 +147,22 @@ class MultipleChoiceQuestion(Question):
 				if choices[key] != score:
 					raise IntegrityException("wrong choice score in readjustment.")
 
+		table = Texttable()
+		table.set_deco(Texttable.HEADER)
+		table.set_cols_dtype(['t', 't', 't'])
+		table.add_row(['', 'old', 'readjusted'])
+
 		for key, score in list(choices.items()):
 			new_score = _readjust_choice_item(context.random, score)
 			choices[key] = new_score
-			report('readjusted score for "%s" from (%f, %f) to (%f, %f).' % (key, *score, *new_score))
+			table.add_row([key, '(%f, %f)' % score, '(%f, %f)' % new_score])
+
+		report(table)
 
 		self._set_ui(driver, choices)
 		self.choices = choices
 
-		return True
+		return True, list()
 
 	def compute_score(self, answers, context):
 		score = Decimal(0)

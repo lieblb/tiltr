@@ -64,7 +64,7 @@ class LongTextQuestion(Question):
 		self._set_ui(driver, maximum_score)
 		self._maximum_score = maximum_score
 		report('readjusted score to %s.' % maximum_score)
-		return True
+		return True, list()
 
 	def compute_score(self, text, context):
 		return Decimal(0)

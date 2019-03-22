@@ -11,6 +11,7 @@ from collections import defaultdict, namedtuple
 
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.select import Select
+from texttable import Texttable
 
 from .question import Question
 from ...data.exceptions import *
@@ -551,26 +552,49 @@ class ClozeQuestion(Question):
 		self._create_gaps()
 		self._set_ui(driver, self.scoring)
 
-		report("readjusted identical_scoring from %s to %s." % (
-			old_scoring.identical_scoring, self.scoring.identical_scoring))
-		report("readjusted comparator from %s to %s." % (
-			old_scoring.comparator, self.scoring.comparator))
+		table = Texttable()
+		table.set_deco(Texttable.HEADER)
+		table.set_cols_dtype(['t', 'a', 'a'])
+		table.add_row(['', 'old', 'readjusted'])
+
+		table.add_row([
+			'identical_scoring',
+			old_scoring.identical_scoring,
+			self.scoring.identical_scoring])
+
+		table.add_row([
+			'comparator',
+			old_scoring.comparator.name,
+			self.scoring.comparator.name])
 
 		for i, (old_gap, new_gap) in enumerate(zip(old_scoring.gaps, self.scoring.gaps)):
-			report("readjusted gap %d:" % i)
+			table.add_row(["", "", ""])
+			table.add_row(["gap %d" % (1 + i), "", ""])
+
 			assert old_gap.cloze_type == new_gap.cloze_type
 			if old_gap.cloze_type == ClozeType.numeric:
 				for key in ('value', 'lower', 'upper', 'score'):
-					report("  %s: %s -> %s" % (key, getattr(old_gap, key), getattr(new_gap, key)))
+					table.add_row([
+						key,
+						getattr(old_gap, key),
+						getattr(new_gap, key)])
 			else:
-				report("  size: %s -> %s" % (old_gap.size, new_gap.size))
+				table.add_row([
+					'size',
+					old_gap.size or "no limit",
+					new_gap.size or "no limit"])
 
-				report("  options:")
 				assert len(old_gap.options) == len(new_gap.options)
-				for key in old_gap.options.keys():
-					report("    %s: %s -> %s" % (key, old_gap.options[key], new_gap.options[key]))
 
-		return True
+				for key in old_gap.options.keys():
+					table.add_row([
+						key,
+						old_gap.options[key],
+						new_gap.options[key]])
+
+		report(table)
+
+		return True, list()
 
 	def compute_score(self, answers, context):
 		name_to_index = dict()

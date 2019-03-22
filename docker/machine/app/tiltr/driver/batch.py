@@ -29,6 +29,7 @@ from contextlib import contextmanager
 import selenium
 from selenium.common.exceptions import TimeoutException
 from openpyxl import load_workbook
+from texttable import Texttable
 
 from tiltr.data.exceptions import *
 from tiltr.data.result import Result, Origin
@@ -333,9 +334,13 @@ class Run:
 		protocol = self.protocols["readjustments"]
 
 		def report(s):
-			protocol.append(s)
-			if s:
-				master.report(s)
+			if isinstance(s, Texttable):
+				for line in s.draw().split('\n'):
+					report(line)
+			else:
+				protocol.append(s)
+				if s:
+					master.report(s)
 
 		report("")
 		report("## READJUSTMENT ROUND %d%s" % (index + 1, " (AFTER REIMPORT)" if is_reimport else ""))
@@ -344,6 +349,16 @@ class Run:
 		index = 0
 		retries = 0
 		modified_questions = set()
+
+		def close_stats_window():
+			master.driver.execute_script("""
+			(function() {
+				var overlay = document.getElementsByClassName("ilOverlay")[0];
+				if (overlay) {
+					overlay.style.display = "none";
+				}
+			}())
+			""")
 
 		while True:
 			with wait_for_page_load(master.driver):
@@ -362,17 +377,9 @@ class Run:
 			with wait_for_page_load(master.driver):
 				link.click()
 
-			def close_stats_window():
-				master.driver.execute_script("""
-				(function() {
-					var overlay = document.getElementsByClassName("ilOverlay")[0];
-					if (overlay) {
-						overlay.style.display = "none";
-					}
-				}())
-				""")
-
 			close_stats_window()
+
+			old_maximum_score = question.get_maximum_score()
 
 			try:
 				while True:
@@ -380,27 +387,39 @@ class Run:
 					report('### QUESTION "%s"' % question.title.upper())
 					report('')
 
-					if question.readjust_scores(master.driver, context, report):
-						modified_questions.add(question.title)
+					readjusted, removed_answer_keys = question.readjust_scores(
+						master.driver, context, report)
 
-						master.report("saving.")
-
-						with wait_for_page_load(master.driver):
-							master.driver.find_element_by_name("cmd[savescoringfortest]").click()
-
-						close_stats_window()
-
-						if master.driver.find_elements_by_css_selector(".alert-danger"):
-							maximum_score = question.get_maximum_score()
-
-							if maximum_score > 0:
-								report("ILIAS rejected new scores even though they are valid (%f)." % maximum_score)
-							else:
-								report("ILIAS rejected invalid new scores.")
-						else:
-							break
-					else:
+					if not readjusted:
+						# this question type does not support readjustments.
 						break
+
+					modified_questions.add(question.title)
+
+					master.report("saving.")
+
+					with wait_for_page_load(master.driver):
+						master.driver.find_element_by_name("cmd[savescoringfortest]").click()
+
+					close_stats_window()
+
+					if not master.driver.find_elements_by_css_selector(".alert-danger"):
+						# readjustment was applied successfully.
+
+						# in certain cases (matching questions), reassessment can remove already given answers
+						# from the result sets.
+						for key in removed_answer_keys:
+							for result in all_recorded_results:
+								result.remove(Result.key("question", question.title, "answer", key))
+
+						break
+					else:
+						maximum_score = question.get_maximum_score()
+
+						if maximum_score > 0:
+							report("ILIAS rejected new scores even though they are valid (%f)." % maximum_score)
+						else:
+							report("ILIAS rejected invalid new scores.")
 
 			except TimeoutException:
 				retries += 1
@@ -409,6 +428,9 @@ class Run:
 				else:
 					master.report("readjustment failed, retrying.")
 				continue
+
+			report("")
+			report("maximum score went from %s to %s." % (old_maximum_score, question.get_maximum_score()))
 
 			index += 1
 			retries = 0
@@ -421,16 +443,18 @@ class Run:
 		for user, result in zip(self.users, all_recorded_results):
 			report("### USER %s" % user.get_username())
 
+			new_scores_table = Texttable()
+			new_scores_table.set_deco(Texttable.HEADER)
+			new_scores_table.set_cols_dtype(['a', 'a'])
+
+			answers_table = Texttable()
+			answers_table.set_deco(Texttable.HEADER)
+			answers_table.set_cols_dtype(['a', 'a'])
+
 			for question_title, question in self.questions.items():
 
 				if question_title not in modified_questions:
 					continue
-
-				answers = dict()
-				for key, value in result.properties.items():
-					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
-						dimension = key[3]
-						answers[dimension] = value
 
 				score = question.compute_score_from_result(result, context)
 				score = remove_trailing_zeros(str(score))
@@ -438,9 +462,9 @@ class Run:
 				for key in Result.score_keys(question_title):
 					result.update(key, score)
 
-				report("#### %s" % question_title)
-				report("recomputed expected score: %s" % score)
-				report("    | based on answer:")
+				new_scores_table.add_row([question_title, score])
+
+				answers_table.add_row(["QUESTION " + question_title, ""])
 				for key, value in result.properties.items():
 					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
 						dimensions = key[3:]
@@ -448,9 +472,16 @@ class Run:
 							dimension = str(dimensions[0])
 						else:
 							dimension = str(list(map(lambda x: '"%s"' % str(x), dimensions)))
-						report("    | %s: %s" % (dimension, value))
-				report("")
+						answers_table.add_row([dimension, value])
+				answers_table.add_row(["", ""])
 
+			report("recomputed these scores:")
+			for line in new_scores_table.draw().split("\n"):
+				report(line)
+			report("")
+			report("based on these answers:")
+			for line in answers_table.draw().split("\n"):
+				report(line)
 			report("")
 
 		maximum_score = Decimal(0)
@@ -521,8 +552,17 @@ class Run:
 		# now configure test.
 		test_driver.configure_test(self.workarounds, self.exam_configuration)
 
-		for mark in self.exam_configuration.marks:
-			self.protocols["mark_schema"].append(" / ".join(str(x) for x in mark))
+		# print out sorted mark scheme.
+		table = Texttable()
+		table.set_deco(Texttable.HEADER)
+		table.set_cols_dtype(['f', 't', 't'])
+		table.add_row(['percentage', 'grade (short)', 'grade (long)'])
+
+		for mark in sorted(self.exam_configuration.marks, key=lambda x: float(x[0])):
+			table.add_row(mark)
+
+		for line in table.draw().split('\n'):
+			self.protocols["mark_schema"].append(line)
 
 		# find URL of test, since this saves us a lot of time in the clients.
 		self.test_url = test_driver.get_test_url()

@@ -6,6 +6,7 @@
 #
 
 from .implicit import implicit_text_to_number_xls
+from texttable import Texttable
 
 
 class ValueBag:
@@ -33,8 +34,15 @@ class ValueBag:
 		return dict((o[0], getattr(self, o[0])) for o in self.options)
 
 	def print_status(self, report):
+		table = Texttable()
+		table.set_deco(Texttable.HEADER)
+		table.set_cols_dtype(['t', 'a'])
+
 		for key in self.keys:
-			report("%s = %s" % (key, getattr(self, key)))
+			table.add_row([key, getattr(self, key)])
+
+		for line in table.draw().split('\n'):
+			report(line)
 
 
 class Settings(ValueBag):
@@ -175,7 +183,7 @@ class Workarounds(ValueBag):
 				# e.g. "cv$1a" becomes "cva"
 				# see https://www.ilias.de/mantis/view.php?id=23143.
 				"disallow_dollar_in_cloze",
-				"""W04 Do not use $ in cloze questions."""
+				"""W04 Do not use $ in cloze questions. MANTIS 25136"""
 			),
 			(
 				#  work around a missing numeric value like 0 or the computed score (which might be > 0)
@@ -190,7 +198,7 @@ class Workarounds(ValueBag):
 			(
 				# see https://www.ilias.de/mantis/view.php?id=18720
 				"force_tinymce",
-				"W07 Force TinyMCE to work around encoding and decoding problems in non-TinyMCE mode."
+				"W07 Force TinyMCE to work around encoding and decoding problems in non-TinyMCE mode. MANTIS 18720"
 			),
 			(
 				# see https://github.com/ILIAS-eLearning/ILIAS/pull/1094
@@ -206,7 +214,7 @@ class Workarounds(ValueBag):
 				# see https://www.ilias.de/mantis/view.php?id=23432
 				# works around problems with the error reporting of the current form submit mechanism.
 				"disallow_invalid_answers",
-				"W10 Do not enter text in number cloze gaps."
+				"W10 Do not enter text in number cloze gaps. MANTIS 23432"
 			),
 			(
 				# simulated crash will provoke data loss without this.
@@ -222,7 +230,13 @@ class Workarounds(ValueBag):
 				# https://mantis.ilias.de/view.php?id=25105 and other problems
 				# kprim readjustment errors
 				"dont_readjust_kprim",
-				"W13 Do not perform KPrim readjustments."
+				"W13 Do not perform readjustments on KPrim questions. MANTIS 25105"
+			),
+			(
+				# https://mantis.ilias.de/view.php?id=25136
+				# maximum score of matching questions is wrong after readjustment
+				"dont_readjust_matching",
+				"W14 Do not perform readjustments on matching questions. MANTIS 25136"
 			)
 		], **kwargs)
 

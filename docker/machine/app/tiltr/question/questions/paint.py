@@ -34,7 +34,7 @@ class PaintQuestion(Question):
 		return context.random.randint(1, 255), Decimal(0)
 
 	def readjust_scores(self, driver, context, report):
-		return False
+		return False, list()
 
 	def compute_score(self, answers, context):
 		return Decimal(0)

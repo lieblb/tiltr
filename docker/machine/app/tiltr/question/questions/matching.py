@@ -12,6 +12,7 @@ from collections import defaultdict
 
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.select import Select
+from texttable import Texttable
 
 from tiltr.driver.utils import set_element_value
 from .question import Question
@@ -208,8 +209,8 @@ class MatchingQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, context, report):
-		if True:  # not quite working yet
-			return False
+		if context.workarounds.dont_readjust_matching:
+			return False, list()
 
 		new_scores = dict()
 
@@ -221,31 +222,28 @@ class MatchingQuestion(Question):
 		old_scores = list(self.scores.items())
 		context.random.shuffle(old_scores)
 
+		changes = dict()
+		removed = set()
+
 		for (definition, term), score in old_scores:
 			action = context.random.choice(['keep', 'adjust', 'remove'])
 
 			if action == 'keep':
 				# keep pair and score as is
 				new_scores[(definition, term)] = score
-				report('kept ("%s", "%s") at %s' % (
-					self.definitions[definition],
-					self.terms[term],
-					score))
+				changes[(definition, term)] = (score, score)
 			elif action == 'adjust':
 				# adjust score of existing pair
 				enforce_positive = _get_maximum_score(new_scores) <= Decimal(0)
 				new_scores[(definition, term)] = _readjust_score(
 					context.random, score, enforce_positive)
-				report('adjusted ("%s", "%s") from %s to %s' % (
-					self.definitions[definition],
-					self.terms[term],
+				changes[(definition, term)] = (
 					score,
-					new_scores[(definition, term)]))
+					new_scores[(definition, term)])
 			elif action == 'remove':
 				# remove pair
-				report('removed ("%s", "%s")' % (
-					self.definitions[definition],
-					self.terms[term]))
+				changes[(definition, term)] = (score, 'n/a')
+				removed.add((definition, term))
 			else:
 				raise RuntimeError("illegal readjust action %s" % action)
 
@@ -262,14 +260,32 @@ class MatchingQuestion(Question):
 			enforce_positive = _get_maximum_score(new_scores) <= Decimal(0)
 			new_scores[(new_definition, new_term)] = _readjust_score(
 				context.random, Decimal(0), enforce_positive)
-			report('added ("%s", "%s") with score %s' % (
-				self.definitions[new_definition],
-				self.terms[new_term],
-				new_scores[(new_definition, new_term)]))
+
+			if (new_definition, new_term) in changes:
+				removed.remove((definition, term))
+				changes[(new_definition, new_term)] = (
+					changes[(new_definition, new_term)][0],
+					new_scores[(new_definition, new_term)])
+			else:
+				changes[(new_definition, new_term)] = (
+					"n/a",
+					new_scores[(new_definition, new_term)])
+
+		table = Texttable()
+		table.set_deco(Texttable.HEADER)
+		table.set_cols_dtype(['t', 'a', 'a'])
+		table.add_row(['', 'old', 'readjusted'])
+		for (definition, term), (old_score, new_score) in changes.items():
+			key_as_str = '("%s", "%s")' % (
+				self.definitions[definition], self.terms[term])
+			table.add_row([key_as_str, old_score, new_score])
+		report(table)
 
 		MatchingQuestion._ui_update_scores(driver, new_scores)
+		self.scores = new_scores
 
-		return True
+		removed_keys = [(self.definitions[d], self.terms[t]) for d, t in removed]
+		return True, removed_keys
 
 	def compute_score(self, answers, context):
 		score = Decimal(0)
