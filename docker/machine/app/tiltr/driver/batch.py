@@ -445,9 +445,9 @@ class Run:
 					if key[0] == "question" and key[1] == question_title and key[2] == "answer":
 						dimensions = key[3:]
 						if len(dimensions) == 1:
-							dimension = dimensions[0]
+							dimension = str(dimensions[0])
 						else:
-							dimension = str(dimensions)
+							dimension = str(list(map(lambda x: '"%s"' % str(x), dimensions)))
 						report("    | %s: %s" % (dimension, value))
 				report("")
 
