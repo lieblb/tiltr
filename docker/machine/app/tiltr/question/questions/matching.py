@@ -225,8 +225,12 @@ class MatchingQuestion(Question):
 		changes = dict()
 		removed = set()
 
+		actions = ['keep', 'adjust']
+		if not context.workarounds.no_remove_on_readjust_matching:
+			actions.append('remove')
+
 		for (definition, term), score in old_scores:
-			action = context.random.choice(['keep', 'adjust', 'remove'])
+			action = context.random.choice(actions)
 
 			if action == 'keep':
 				# keep pair and score as is

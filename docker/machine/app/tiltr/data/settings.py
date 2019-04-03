@@ -237,6 +237,12 @@ class Workarounds(ValueBag):
 				# maximum score of matching questions is wrong after readjustment
 				"dont_readjust_matching",
 				"W14 Do not perform readjustments on matching questions. MANTIS 25136"
+			),
+			(
+				# https://mantis.ilias.de/view.php?id=25204
+				# do not remove scoring pairs from matching question in readjustment
+				"no_remove_on_readjust_matching",
+				"W15 Do not remove scoring rules on matching question readjustments. MANTIS 25204"
 			)
 		], **kwargs)
 
