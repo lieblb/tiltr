@@ -223,11 +223,11 @@ class AppHandler(tornado.web.RequestHandler):
 		ilias_url = self.state.ilias_url
 
 		args = self.state.args
-		if args.ext_ilias_port is not None:
+		if args.tiltr_port is not None and args.embedded_ilias_port is not None and int(args.embedded_ilias_port) > 0:
 			# differentiate between internal ILIAS docker container which we usually expose via :11145
 			# and an external ILIAS installation. yes, this is a bit hacky.
-			ilias_url = ilias_url.replace(
-				'web:80', self.request.host.replace(':' + args.tiltr_port, ':' + args.ext_ilias_port))
+			actual_host = self.request.host.replace(':' + str(args.tiltr_port), ':' + str(args.embedded_ilias_port))
+			ilias_url = ilias_url.replace('web:80', actual_host)
 
 		return ilias_url
 

@@ -181,6 +181,7 @@ def set_argument_environ(args):
 			'--ilias-url', ilias_config['url'],
 			'--ilias-admin-user', ilias_config['admin']['user'],
 			'--ilias-admin-password', ilias_config['admin']['password']])
+		entrypoint_args.extend(['--embedded-ilias-port', '0'])
 
 		print("Testing against external ILIAS at %s." % ilias_config['url'])
 	else:
@@ -192,7 +193,7 @@ def set_argument_environ(args):
 			'--ilias-url', 'http://web:80/ILIAS?client_id=ilias',
 			'--ilias-admin-user', 'root',
 			'--ilias-admin-password', 'odysseus'])
-		entrypoint_args.extend(['--ext-ilias-port', str(args.embedded_ilias_port)])
+		entrypoint_args.extend(['--embedded-ilias-port', str(args.embedded_ilias_port)])
 
 	os.environ['ILIASTEST_ARGUMENTS'] = ' '.join(entrypoint_args)
 
@@ -227,19 +228,6 @@ elif args.rebuild:
 tmp_path = os.path.join(base, "data", "tmp")
 if not os.path.exists(tmp_path):
 	os.makedirs(tmp_path)
-
-machines_path = os.path.join(tmp_path, "machines.json")
-if os.path.isfile(machines_path):
-	os.remove(machines_path)
-
-
-def publish_machines(machines):
-	with open(machines_path + ".tmp", "w") as f:
-		f.write(json.dumps(machines))
-	os.rename(machines_path + ".tmp", machines_path)  # hopefully atomic
-	if args.verbose:
-		print("wrote machines.json at %s" % machines_path)
-
 
 class SpinningCursor:
 	def __init__(self):
@@ -382,42 +370,6 @@ try:
 	wait_for_apache()
 	spinning_cursor.hide()
 	print("")
-
-	def find_and_publish_machines():
-		machines = dict()
-		for i in range(args.n):
-			if args.verbose:
-				print("looking for machine %d." % (i + 1))
-			while True:
-				try:
-					machine_ip = subprocess.check_output([
-						"docker", "inspect", "-f",
-						"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
-						"%s_machine_%d" % (docker_compose_name, (i + 1))]).strip()
-					if len(str(machine_ip)) == 0:
-						print("failed to lookup machine %d. shutting down." % i)
-						terminate()
-						sys.exit(1)
-					break
-				except subprocess.CalledProcessError:
-					time.sleep(1)
-			if py3:
-				machine_ip = machine_ip.decode("utf-8")
-			machines["machine_%d" % (1 + i)] = machine_ip
-			if args.verbose:
-				print("detected machine %d at %s." % ((i + 1), machine_ip))
-
-		publish_machines(machines)
-
-
-	def get_exposed_port(docker_name):
-		return subprocess.check_output([
-			"docker", "inspect", "-f",
-			"{{range $p, $conf := .NetworkSettings.Ports}} {{(index $conf 0).HostPort}} {{end}}",
-			docker_name]).strip()
-
-
-	find_and_publish_machines()
 
 	if embedded_ilias:
 		print("Preparing ILIAS. This might take a while. ", end='', flush=True)

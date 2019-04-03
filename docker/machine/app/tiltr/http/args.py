@@ -13,6 +13,6 @@ def parse_args():
 	parser.add_argument('--ilias-admin-password')
 
 	parser.add_argument('--tiltr-port')
-	parser.add_argument('--ext-ilias-port', nargs='?')
+	parser.add_argument('--embedded-ilias-port', nargs='?')
 
 	return parser.parse_args()

@@ -7,6 +7,7 @@
 
 import subprocess
 import os
+import socket
 import requests
 import time
 import json
@@ -26,15 +27,22 @@ def verify_hello(machine):
 	return False
 
 
-def detect_machines(max_wait_time=30):
-	machines_path = os.path.realpath(os.path.join("/tiltr/tmp", "machines.json"))
-	t0 = time.time()
-	while not os.path.isfile(machines_path):
-		if time.time() - t0 > max_wait_time:
-			raise Exception("could not find %s. giving up." % machines_path)
-		time.sleep(1)
-	with open(machines_path, "r") as f:
-		machines = json.loads(f.read())
+def detect_machines():
+	i = 1
+
+	machines = dict()
+	while True:
+		ip = None
+		for t in range(3):
+			try:
+				ip = socket.gethostbyname('tiltr_machine_%d' % i)
+			except socket.gaierror:
+				time.sleep(0.1)
+		if ip is None:
+			break
+		machines['machine_%d' % i] = ip
+		i += 1
+
 	return machines
 
 
