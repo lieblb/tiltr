@@ -26,9 +26,17 @@ def _readjust_score(random, score, enforce_positive):
 		return score + delta
 
 
-def _get_maximum_score(scores):
+def _get_maximum_score(scores, multiplicity):
 	if scores:
-		return sum(max(s, 0) for s in scores.values())
+		if multiplicity == MatchingMultiplicity.ONE_TO_ONE:
+			definition_scores = defaultdict(int)
+			for (definition, term), score in scores.items():
+				definition_scores[definition] = max(definition_scores[definition], score, 0)
+			return sum(definition_scores.values())
+		elif multiplicity == MatchingMultiplicity.MANY_TO_MANY:
+			return sum(max(s, 0) for s in scores.values())
+		else:
+			raise RuntimeError('unknown multiplicity %s' % multiplicity)
 	else:
 		return Decimal(0)
 
@@ -163,7 +171,7 @@ class MatchingQuestion(Question):
 		self.scores = self._ui_get_scores(driver)
 
 	def get_maximum_score(self):
-		return _get_maximum_score(self.scores)
+		return _get_maximum_score(self.scores, self.multiplicity)
 
 	def create_answer(self, driver, *args):
 		from ..answers.matching import MatchingAnswer
@@ -238,7 +246,7 @@ class MatchingQuestion(Question):
 				changes[(definition, term)] = (score, score)
 			elif action == 'adjust':
 				# adjust score of existing pair
-				enforce_positive = _get_maximum_score(new_scores) <= Decimal(0)
+				enforce_positive = _get_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
 				new_scores[(definition, term)] = _readjust_score(
 					context.random, score, enforce_positive)
 				changes[(definition, term)] = (
@@ -261,7 +269,7 @@ class MatchingQuestion(Question):
 		for _ in range(n_to_add):
 			new_definition, new_term = context.random.choice(list(unused_pairs))
 			unused_pairs.remove((new_definition, new_term))
-			enforce_positive = _get_maximum_score(new_scores) <= Decimal(0)
+			enforce_positive = _get_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
 			new_scores[(new_definition, new_term)] = _readjust_score(
 				context.random, Decimal(0), enforce_positive)
 

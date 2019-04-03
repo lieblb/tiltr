@@ -494,7 +494,7 @@ class Run:
 
 			reached_score = Decimal(0)
 			for value in result.scores():
-				reached_score += Decimal(value)
+				reached_score += self.exam_configuration.clip_answer_score(Decimal(value))
 
 			for channel in ("xls", "gui"):
 				result.update((channel, "score_reached"), remove_trailing_zeros(str(reached_score)))
