@@ -458,6 +458,7 @@ class Run:
 					continue
 
 				score = question.compute_score_from_result(result, context)
+				score = self.exam_configuration.clip_answer_score(score)
 				score = remove_trailing_zeros(str(score))
 
 				for key in Result.score_keys(question_title):
