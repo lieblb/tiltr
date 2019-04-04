@@ -33,7 +33,7 @@ class LongTextQuestion(Question):
 		self.length = int(settings.max_long_text_length)
 		self._maximum_score = LongTextQuestion._get_ui(driver)
 
-	def get_maximum_score(self):
+	def get_maximum_score(self, context):
 		return self._maximum_score
 
 	def create_answer(self, driver, *args):

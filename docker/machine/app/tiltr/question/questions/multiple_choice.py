@@ -72,7 +72,7 @@ class MultipleChoiceQuestion(Question):
 		super().__init__(title)
 		self.choices = self._get_ui(driver)
 
-	def get_maximum_score(self):
+	def get_maximum_score(self, context):
 		def max_values():
 			for item in self.choices.values():
 				yield max(item.checked_score, item.unchecked_score)

@@ -17,7 +17,7 @@ class PaintQuestion(Question):
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
 
-	def get_maximum_score(self):
+	def get_maximum_score(self, context):
 		return Decimal(0)
 
 	def create_answer(self, driver, *args):

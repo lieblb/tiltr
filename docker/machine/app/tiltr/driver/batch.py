@@ -379,7 +379,7 @@ class Run:
 
 			close_stats_window()
 
-			old_maximum_score = question.get_maximum_score()
+			old_maximum_score = question.get_maximum_score(context)
 
 			try:
 				while True:
@@ -414,7 +414,7 @@ class Run:
 
 						break
 					else:
-						maximum_score = question.get_maximum_score()
+						maximum_score = question.get_maximum_score(context)
 
 						if maximum_score > 0:
 							report("ILIAS rejected new scores even though they are valid (%f)." % maximum_score)
@@ -430,8 +430,8 @@ class Run:
 				continue
 
 			report("")
-			report("maximum score went from %s to %s." % (old_maximum_score, question.get_maximum_score()))
-			question.explain_maximum_score(report)
+			report("maximum score went from %s to %s." % (old_maximum_score, question.get_maximum_score(context)))
+			question.explain_maximum_score(context, report)
 
 			index += 1
 			retries = 0
@@ -487,7 +487,7 @@ class Run:
 
 		maximum_score = Decimal(0)
 		for question in self.questions.values():
-			maximum_score += question.get_maximum_score()
+			maximum_score += question.get_maximum_score(context)
 
 		# recompute reached scores and marks.
 		for result in all_recorded_results:

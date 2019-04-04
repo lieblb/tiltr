@@ -459,7 +459,7 @@ class ClozeQuestion(Question):
 		self.scoring = self._get_ui(driver)
 		self._create_gaps()
 
-	def get_maximum_score(self):
+	def get_maximum_score(self, context):
 		return sum([gap.get_maximum_score() for gap in self.gaps.values()])
 
 	def create_answer(self, driver, *args):

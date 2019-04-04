@@ -147,6 +147,7 @@ class Workarounds(ValueBag):
 	_solved = dict(
 		disallow_clamps_in_cloze=(5, 3, 12),  # see https://github.com/ILIAS-eLearning/ILIAS/pull/1082
 		disallow_invalid_answers=(5, 3, 12),  # https://www.ilias.de/mantis/view.php?id=23432
+		dont_readjust_matching=(5, 3, 0),
 	)
 
 	@staticmethod
@@ -243,6 +244,11 @@ class Workarounds(ValueBag):
 				# do not remove scoring pairs from matching question in readjustment
 				"no_remove_on_readjust_matching",
 				"W15 Do not remove scoring rules on matching question readjustments. MANTIS 25204"
+			),
+			(
+				# https://mantis.ilias.de/view.php?id=25212
+				"allow_unreachable_max_scores",
+				"W16 Allow maximum scores that are too high and cannot be achieved. MANTIS 25212"
 			)
 		], **kwargs)
 

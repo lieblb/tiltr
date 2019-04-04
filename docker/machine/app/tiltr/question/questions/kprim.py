@@ -79,7 +79,7 @@ class KPrimQuestion(Question):
 		super().__init__(title)
 		self.scoring = KPrimQuestion._get_ui(driver)
 
-	def get_maximum_score(self):
+	def get_maximum_score(self, context):
 		return self.scoring.score
 
 	def create_answer(self, driver, *args):

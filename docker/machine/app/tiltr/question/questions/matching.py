@@ -66,10 +66,13 @@ def _one_to_one_correct(scores, explain=None):
 	return max_score
 
 
-def _compute_maximum_score(scores, multiplicity, explain=None):
+def _compute_maximum_score(scores, multiplicity, context, explain=None):
 	if scores:
 		if multiplicity == MatchingMultiplicity.ONE_TO_ONE:
-			return _one_to_one_correct(scores, explain)
+			if context.workarounds.allow_unreachable_max_scores:
+				return _one_to_one_simple(scores, explain)
+			else:
+				return _one_to_one_correct(scores, explain)
 		elif multiplicity == MatchingMultiplicity.MANY_TO_MANY:
 			return sum(max(s, 0) for s in scores.values())
 		else:
@@ -207,14 +210,14 @@ class MatchingQuestion(Question):
 		self.terms = self._ui_get_items(driver, 'terms')
 		self.scores = self._ui_get_scores(driver)
 
-	def get_maximum_score(self):
-		return _compute_maximum_score(self.scores, self.multiplicity)
+	def get_maximum_score(self, context):
+		return _compute_maximum_score(self.scores, self.multiplicity, context)
 
-	def explain_maximum_score(self, report):
+	def explain_maximum_score(self, context, report):
 		def explain(d, t, score):
 			report('(%s, %s) -> %s' % (self.definitions[d], self.terms[t], score))
 
-		_compute_maximum_score(self.scores, self.multiplicity, explain)
+		_compute_maximum_score(self.scores, self.multiplicity, context, explain)
 
 	def create_answer(self, driver, *args):
 		from ..answers.matching import MatchingAnswer
@@ -289,7 +292,7 @@ class MatchingQuestion(Question):
 				changes[(definition, term)] = (score, score)
 			elif action == 'adjust':
 				# adjust score of existing pair
-				enforce_positive = _compute_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
+				enforce_positive = _compute_maximum_score(new_scores, self.multiplicity, context) <= Decimal(0)
 				new_scores[(definition, term)] = _readjust_score(
 					context.random, score, enforce_positive)
 				changes[(definition, term)] = (
@@ -312,7 +315,7 @@ class MatchingQuestion(Question):
 		for _ in range(n_to_add):
 			new_definition, new_term = context.random.choice(list(unused_pairs))
 			unused_pairs.remove((new_definition, new_term))
-			enforce_positive = _compute_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
+			enforce_positive = _compute_maximum_score(new_scores, self.multiplicity, context) <= Decimal(0)
 			new_scores[(new_definition, new_term)] = _readjust_score(
 				context.random, Decimal(0), enforce_positive)
 

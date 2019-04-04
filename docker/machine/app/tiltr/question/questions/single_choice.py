@@ -53,7 +53,7 @@ class SingleChoiceQuestion(Question):
 		super().__init__(title)
 		self.choices = self._get_ui(driver)
 
-	def get_maximum_score(self):
+	def get_maximum_score(self, context):
 		return max(self.choices.values())
 
 	def create_answer(self, driver, *args):

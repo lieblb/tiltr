@@ -835,7 +835,7 @@ class ExamDriver:
 
 		maximum_score = Decimal(0)
 		for question in self.questions.values():
-			maximum_score += question.get_maximum_score()
+			maximum_score += question.get_maximum_score(self.context)
 
 		expected_reached_score = Decimal(0)
 		for answer in self.answers.values():

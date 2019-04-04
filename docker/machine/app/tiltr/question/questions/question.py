@@ -30,10 +30,10 @@ class Question:
 	def compute_score(self, answers, context):
 		raise NotImplementedError()
 
-	def get_maximum_score(self):
+	def get_maximum_score(self, context):
 		return Decimal(0)
 
-	def explain_maximum_score(self, report):
+	def explain_maximum_score(self, context, report):
 		pass
 
 	def compute_score_from_result(self, result, context):
