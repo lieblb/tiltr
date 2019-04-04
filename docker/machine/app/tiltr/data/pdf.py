@@ -26,6 +26,7 @@ def _extract_pdf_scores(stream):
 	laparams = LAParams(
 		line_overlap=0,
 		char_margin=20,
+		line_margin=1.5,
 		word_margin=0.1,
 		boxes_flow=0,
 		detect_vertical=False)
@@ -81,3 +82,12 @@ class PDF:
 	def __init__(self, bytes):
 		self.bytes = bytes
 		self.scores = _extract_pdf_scores(io.BytesIO(bytes))
+
+
+if __name__ == "__main__":
+	import os
+	path = os.path.dirname(os.path.realpath(__file__))
+	file_path = os.path.join(path, '..', 'pdf', 'tests', 'default_style_5.3.14.pdf')
+	with open(file_path, 'rb') as f:
+		print(PDF(f.read()).scores)
+
