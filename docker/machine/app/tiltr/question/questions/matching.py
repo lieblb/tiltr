@@ -8,6 +8,8 @@
 from decimal import *
 from enum import Enum
 import itertools
+import numpy
+import scipy.optimize
 from collections import defaultdict
 
 from selenium.common.exceptions import NoSuchElementException
@@ -26,13 +28,48 @@ def _readjust_score(random, score, enforce_positive):
 		return score + delta
 
 
-def _get_maximum_score(scores, multiplicity):
+def _one_to_one_simple(scores, explain=None):  # simple, but not correct.
+	definition_scores = defaultdict(int)
+	for (definition, term), score in scores.items():
+		definition_scores[definition] = max(definition_scores[definition], score, 0)
+	return sum(definition_scores.values())
+
+
+def _one_to_one_correct(scores, explain=None):
+	# computing the maximum score for 1:1 matchings means computing the weighted bipartite
+	# matching for the underlying graph (also known as linear sum assignment problem).
+
+	definitions = set()
+	terms = set()
+	for (definition, term) in scores.keys():
+		definitions.add(definition)
+		terms.add(term)
+
+	m = max(Decimal(0), max(scores.values()))
+
+	definitions = list(definitions) + [None]  # always allow not assigning a term at all
+	terms = list(terms)
+	cost = numpy.array(
+		[[float(m - scores.get((d, t), Decimal(0))) for t in terms] for d in definitions],
+		dtype=numpy.float64)
+	row_ind, col_ind = scipy.optimize.linear_sum_assignment(cost)
+
+	max_score = Decimal(0)
+	for def_i, term_i in zip(row_ind, col_ind):
+		d = definitions[def_i]
+		t = terms[term_i]
+		s = scores.get((d, t), Decimal(0))
+		if explain:
+			explain(d, t, s)
+		max_score += s
+
+	return max_score
+
+
+def _compute_maximum_score(scores, multiplicity, explain=None):
 	if scores:
 		if multiplicity == MatchingMultiplicity.ONE_TO_ONE:
-			definition_scores = defaultdict(int)
-			for (definition, term), score in scores.items():
-				definition_scores[definition] = max(definition_scores[definition], score, 0)
-			return sum(definition_scores.values())
+			return _one_to_one_correct(scores, explain)
 		elif multiplicity == MatchingMultiplicity.MANY_TO_MANY:
 			return sum(max(s, 0) for s in scores.values())
 		else:
@@ -171,7 +208,13 @@ class MatchingQuestion(Question):
 		self.scores = self._ui_get_scores(driver)
 
 	def get_maximum_score(self):
-		return _get_maximum_score(self.scores, self.multiplicity)
+		return _compute_maximum_score(self.scores, self.multiplicity)
+
+	def explain_maximum_score(self, report):
+		def explain(d, t, score):
+			report('(%s, %s) -> %s' % (self.definitions[d], self.terms[t], score))
+
+		_compute_maximum_score(self.scores, self.multiplicity, explain)
 
 	def create_answer(self, driver, *args):
 		from ..answers.matching import MatchingAnswer
@@ -246,7 +289,7 @@ class MatchingQuestion(Question):
 				changes[(definition, term)] = (score, score)
 			elif action == 'adjust':
 				# adjust score of existing pair
-				enforce_positive = _get_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
+				enforce_positive = _compute_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
 				new_scores[(definition, term)] = _readjust_score(
 					context.random, score, enforce_positive)
 				changes[(definition, term)] = (
@@ -269,7 +312,7 @@ class MatchingQuestion(Question):
 		for _ in range(n_to_add):
 			new_definition, new_term = context.random.choice(list(unused_pairs))
 			unused_pairs.remove((new_definition, new_term))
-			enforce_positive = _get_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
+			enforce_positive = _compute_maximum_score(new_scores, self.multiplicity) <= Decimal(0)
 			new_scores[(new_definition, new_term)] = _readjust_score(
 				context.random, Decimal(0), enforce_positive)
 

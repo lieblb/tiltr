@@ -431,6 +431,7 @@ class Run:
 
 			report("")
 			report("maximum score went from %s to %s." % (old_maximum_score, question.get_maximum_score()))
+			question.explain_maximum_score(report)
 
 			index += 1
 			retries = 0

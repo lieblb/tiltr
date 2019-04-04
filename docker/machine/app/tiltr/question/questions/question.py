@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+from decimal import *
+
 
 class Question:
 	def __init__(self, title):
@@ -27,6 +29,12 @@ class Question:
 
 	def compute_score(self, answers, context):
 		raise NotImplementedError()
+
+	def get_maximum_score(self):
+		return Decimal(0)
+
+	def explain_maximum_score(self, report):
+		pass
 
 	def compute_score_from_result(self, result, context):
 		answers = dict()
