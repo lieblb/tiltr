@@ -25,7 +25,7 @@ def _extract_pdf_scores(stream):
 
 	laparams = LAParams(
 		line_overlap=0,
-		char_margin=20,
+		char_margin=25,
 		line_margin=1.5,
 		word_margin=0.1,
 		boxes_flow=0,
