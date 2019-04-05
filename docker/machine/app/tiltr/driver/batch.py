@@ -452,10 +452,14 @@ class Run:
 			answers_table.set_deco(Texttable.HEADER)
 			answers_table.set_cols_dtype(['a', 'a'])
 
+			any_readjusted = False
+
 			for question_title, question in self.questions.items():
 
 				if question_title not in modified_questions:
 					continue
+
+				any_readjusted = True
 
 				score = question.compute_score_from_result(result, context)
 				score = self.exam_configuration.clip_answer_score(score)
@@ -477,14 +481,15 @@ class Run:
 						answers_table.add_row([dimension, value])
 				answers_table.add_row(["", ""])
 
-			report("recomputed these scores:")
-			for line in new_scores_table.draw().split("\n"):
-				report(line)
-			report("")
-			report("based on these answers:")
-			for line in answers_table.draw().split("\n"):
-				report(line)
-			report("")
+			if any_readjusted:
+				report("recomputed these scores:")
+				for line in new_scores_table.draw().split("\n"):
+					report(line)
+				report("")
+				report("based on these answers:")
+				for line in answers_table.draw().split("\n"):
+					report(line)
+				report("")
 
 		maximum_score = Decimal(0)
 		for question in self.questions.values():
