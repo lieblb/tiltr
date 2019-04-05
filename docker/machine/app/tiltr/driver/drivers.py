@@ -916,18 +916,18 @@ class PackagedTest(AbstractTest):
 
 	@staticmethod
 	def list():
-		tests = dict()
+		tests = list()
 
 		for filename in os.listdir("/tiltr/tests"):
 			if filename.endswith(".zip"):
 				try:
 					test = PackagedTest(os.path.splitext(filename)[0])
-					tests[test.get_title()] = test.get_id()
+					tests.append((test.get_title(), test.get_id()))
 				except:
 					print("could not inspect Test %s." % filename)
 					traceback.print_exc()
 
-		return tests
+		return sorted(tests, key=lambda t: t[0])
 
 
 class ImportedTest(AbstractTest):

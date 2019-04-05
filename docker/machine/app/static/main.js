@@ -190,10 +190,10 @@ $(function() {
 
 	$.getJSON(host + "/tests.json", function(tests) {
 		$("#select-test").empty();
-		for (var test in tests) {
+		for (var i = 0; i < tests.length; i++) {
 			var option = $("<option></option>");
-			option.attr("value", tests[test]);
-			option.text(test);
+			option.attr("value", tests[i][1]);
+			option.text(tests[i][0]);
 			$("#select-test").append(option);
 		}
 
