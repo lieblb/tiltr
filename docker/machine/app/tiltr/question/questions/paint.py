@@ -17,8 +17,11 @@ class PaintQuestion(Question):
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
 
+		self._maximum_score = Decimal(
+			driver.find_element_by_css_selector('input[name="points"]').get_attribute('value'))
+
 	def get_maximum_score(self, context):
-		return Decimal(0)
+		return self._maximum_score
 
 	def create_answer(self, driver, *args):
 		from ..answers.paint import PaintAnswer
