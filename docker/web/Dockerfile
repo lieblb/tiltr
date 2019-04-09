@@ -20,6 +20,8 @@ COPY custom/php.ini /usr/local/etc/php/php.ini
 COPY custom/prologue.php /var/www/html/prologue.php
 COPY custom/ilias-startup.sh /usr/local/bin/
 
+COPY custom/index.php /var/www/html/index.php
+
 # install a recent phantomjs so we have a working PDF export environment. older (apt) phantomjs versions
 # produce absolute garbage. install script from https://gist.github.com/telbiyski/ec56a92d7114b8631c906c18064ce620
 
