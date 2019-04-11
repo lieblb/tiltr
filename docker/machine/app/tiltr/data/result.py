@@ -131,6 +131,13 @@ class Result:
 		if key in self.properties:
 			del self.properties[key]
 
+	def gather(self, key):
+		answers = dict()
+		for k, v in self.properties.items():
+			if k[:len(key)] == key:
+				answers[k[len(key):]] = v
+		return answers
+
 	def add_as_formatted_score(self, key, score):
 		s = str(score)
 		if '.' in s:
@@ -224,14 +231,15 @@ class Result:
 		for line in table.draw().split("\n"):
 			report(line)
 
-		if not all_ok:
-			report("\n")
-			report("full dump of properties of %s:" % self.get_origin().name.upper())
-			_dump_properties(self.properties, report)
+		if False:  # enable for further debugging
+			if not all_ok:
+				report("\n")
+				report("full dump of properties of %s:" % self.get_origin().name.upper())
+				_dump_properties(self.properties, report)
 
-			report("\n")
-			report("full dump of properties of %s:" % other.get_origin().name.upper())
-			_dump_properties(other.properties, report)
+				report("\n")
+				report("full dump of properties of %s:" % other.get_origin().name.upper())
+				_dump_properties(other.properties, report)
 
 		if self.errors:
 			for type, err in self.errors.items():
