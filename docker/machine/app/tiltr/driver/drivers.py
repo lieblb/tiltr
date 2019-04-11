@@ -14,7 +14,7 @@ import requests
 import traceback
 from urllib.parse import urlparse, parse_qs
 from decimal import *
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
@@ -1102,6 +1102,43 @@ class TestDriver:
 			with wait_for_page_load(self.driver):
 				self.driver.find_element_by_name("cmd[delete]").click()
 
+	def _iterate_detailed_results(self, f):
+		driver = self.driver
+		ref_id = self._get_ref_id()
+
+		row_index = 0
+		while True:
+			with wait_for_page_load(driver):
+				self.goto_participants()
+
+			# set filter to display up to 800 participants.
+			dropdown = driver.find_element_by_id("ilAdvSelListAnchorText_sellst_rows_tst_participants_%d" % ref_id)
+			dropdown.click()
+			driver.find_element_by_id("sellst_rows_tst_participants_%d_800" % ref_id).click()
+
+			trs = list(driver.find_elements_by_css_selector("#tst_participants_%d tbody tr" % ref_id))
+			if row_index >= len(trs):
+				break
+			tr = trs[row_index]
+
+			tds = list(tr.find_elements_by_css_selector("td"))
+			if len(tds) < 2:
+				row_index += 1
+				continue
+
+			user_id = tds[2].find_element_by_css_selector("label").text.strip()
+
+			tr.find_element_by_css_selector("input[name='chbUser[]']").click()
+
+			with wait_for_page_load(driver):
+				select = Select(driver.find_element_by_css_selector(".ilTableCommandRowTop select"))
+				select.select_by_value("showDetailedResults")
+				driver.find_element_by_css_selector(".ilTableCommandRowTop input[type='submit']").click()
+
+			f(user_id)
+
+			row_index += 1
+
 	def _export(self, format, filetype):
 		self.goto_export()
 
@@ -1137,39 +1174,10 @@ class TestDriver:
 	def export_pdf(self):
 		self.report("exporting PDFs.")
 
-		driver = self.driver
-		ref_id = self._get_ref_id()
-
 		pdfs = dict()
-		row_index = 0
-		while True:
-			with wait_for_page_load(driver):
-				self.goto_participants()
 
-			# set filter to display up to 800 participants.
-			dropdown = driver.find_element_by_id("ilAdvSelListAnchorText_sellst_rows_tst_participants_%d" % ref_id)
-			dropdown.click()
-			driver.find_element_by_id("sellst_rows_tst_participants_%d_800" % ref_id).click()
-
-			trs = list(driver.find_elements_by_css_selector("#tst_participants_%d tbody tr" % ref_id))
-			if row_index >= len(trs):
-				break
-			tr = trs[row_index]
-
-			tds = list(tr.find_elements_by_css_selector("td"))
-			if len(tds) < 2:
-				row_index += 1
-				continue
-
-			user_id = tds[2].find_element_by_css_selector("label").text.strip()
+		def get_pdf(user_id):
 			assert user_id not in pdfs
-
-			tr.find_element_by_css_selector("input[name='chbUser[]']").click()
-
-			with wait_for_page_load(driver):
-				select = Select(driver.find_element_by_css_selector(".ilTableCommandRowTop select"))
-				select.select_by_value("showDetailedResults")
-				driver.find_element_by_css_selector(".ilTableCommandRowTop input[type='submit']").click()
 
 			toolbar = self.driver.find_element_by_css_selector(".ilToolbarItems")
 			for navbar in toolbar.find_elements_by_css_selector(".navbar-form"):
@@ -1179,15 +1187,38 @@ class TestDriver:
 				self.report("downloading PDF for %s." % user_id)
 
 				url = navbar.find_element_by_css_selector("a").get_attribute("href")
-				cookies = dict((cookie['name'], cookie['value']) for cookie in driver.get_cookies())
+				cookies = dict((cookie['name'], cookie['value']) for cookie in self.driver.get_cookies())
 				result = requests.get(url, cookies=cookies)
 
 				pdfs[user_id] = PDF(result.content)
-				break
 
-			row_index += 1
+		self._iterate_detailed_results(get_pdf)
 
 		return pdfs
+
+	def get_answers_from_details_view(self, questions):
+		answers = defaultdict(dict)  # by user id
+
+		def get_user_answers(user_id):
+			user_answers = answers[user_id]
+
+			for printview in self.driver.find_elements_by_css_selector(".questionPrintview"):
+				text = printview.find_element_by_css_selector(".questionTitle").text
+
+				# match e.g. "1. Zeichenaufgabe [ID: 197783]"
+				m = re.match(r'^[0-9]+\.\s+([^[]+)\s+\[', text.strip())
+				if m:
+					question_title = m.group(1)
+
+					if question_title in questions:
+						a = questions[question_title].get_answer_from_details_view(printview)
+						if a is not None:
+							for k, v in a.items():
+								user_answers[("question", self.question.title, "answer", k)] = v
+
+		self._iterate_detailed_results(get_user_answers)
+
+		return answers
 
 	def get_statistics_from_web_gui(self, user_ids):
 		def fetch_scores():
