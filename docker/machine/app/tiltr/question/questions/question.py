@@ -57,3 +57,6 @@ class Question:
 			value = ""  # an empty gap in cloze question, for example
 
 		return key, value
+
+	def get_answer_from_details_view(self, view):
+		return None

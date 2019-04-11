@@ -44,3 +44,8 @@ class PaintQuestion(Question):
 
 	def has_xls_score(self):
 		return False
+
+	def get_answer_from_details_view(self, view):
+		answer_view = view.find_element_by_css_selector(".ilc_question_Standard")
+		answer_view.find_element_by_css_selector("img")
+		return None
