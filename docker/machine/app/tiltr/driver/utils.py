@@ -228,14 +228,17 @@ def try_submit(driver, css, f, allow_reload=True, allow_empty=True, n_tries=7, m
 				f(button)
 			break
 		except (TimeoutException, ElementClickInterceptedException, ElementNotInteractableException) as e:
+			traceback.print_exc()
 			if i >= n_tries - 1:
 				raise create_detailed_exception(driver) from e
 			time.sleep(min(max_sleep_time, 2 ** i))
 		except NoSuchElementException:
+			traceback.print_exc()
 			# we've seen css before, and now it's gone. usually this means that
 			# we succeeded.
 			break
 		except StaleElementReferenceException:
+			traceback.print_exc()
 			# this usually indicates our click and page change has finally succeeded.
 			break
 

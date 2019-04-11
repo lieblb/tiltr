@@ -683,6 +683,8 @@ class ExamDriver:
 
 	def confirm_save(self):
 		for i in range(2):
+			time.sleep(1)
+
 			try:
 				button = self.driver.find_element_by_id("tst_save_on_navigation_button")
 			except NoSuchElementException:
@@ -692,11 +694,10 @@ class ExamDriver:
 				if button.is_displayed():
 					# prevent popup on future navigation.
 					self.driver.find_element_by_id("save_on_navigation_prevent_confirmation").click()
-
-					with wait_for_page_load(self.driver):
-						button.click()
+					button.click()
 			except:
 				# guard against StaleElementReferenceException
+				traceback.print_exc()
 				pass
 
 	def get_sequence_id(self, allow_reload=False):
