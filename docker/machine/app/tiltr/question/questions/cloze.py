@@ -8,6 +8,7 @@
 from enum import Enum
 from decimal import *
 from collections import defaultdict, namedtuple
+import time
 
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.select import Select
@@ -26,15 +27,72 @@ NumericGapScoring = namedtuple(
 	'NumericGapScoring', ['cloze_type', 'value', 'lower', 'upper', 'score'])
 
 
+def _create_gaps(scoring):
+	constructors = dict((
+		(ClozeType.text, ClozeQuestionTextGap),
+		(ClozeType.select, ClozeQuestionSelectGap),
+		(ClozeType.numeric, ClozeQuestionNumericGap)))
+
+	gaps = dict()
+	for gap_index, gap_scoring in enumerate(scoring.gaps):
+		construct_gap = constructors[gap_scoring.cloze_type]
+		gap = construct_gap(scoring, gap_index)
+		gaps[gap_index] = gap
+
+	return gaps
+
+
+def _max_entry_size(size, context):
+	# get the maximum number of characters we write into this gap. note that
+	# this might be != the real maximum size, which might be unlimited, so we
+	# choose some configured maximum number for entry purposes.
+	if size is not None:
+		return size
+	else:
+		return int(context.settings.max_cloze_text_length)
+
+
+def _modify_answer(text, context, max_len=None):
+	max_len = _max_entry_size(max_len, context)
+
+	mode = context.random.choices(
+		("unmodified", "randchar", "randcase", "randperm", "randfull"),
+		weights=(0.5, 0.2, 0.1, 0.1, 0.1))[0]
+
+	if mode == "unmodified":
+		# keep exactly as specified.
+		return text
+	elif mode == "randperm":
+		text = ''.join(context.random.sample(text, len(text)))
+		return text
+	elif mode == "randfull":
+		return context.produce_text(max_len, context.cloze_random_chars)
+	else:
+		# modify case or content.
+		chars = []
+		for i in range(len(text)):
+			r = context.random.random()
+			if mode == "randchar" and r < 0.2:
+				chars.append(context.random.choice(context.cloze_random_chars))
+			elif mode == "randcase" and r < 0.2:
+				chars.append(text[i].swapcase())
+			else:
+				chars.append(text[i])
+		text = "".join(chars)
+		return text
+
+
 def _readjust_score(random, score, boost):
-	delta = Decimal(random.randint(-8, 8 + (2 ** boost))) / Decimal(4)
-	score += delta
-	score = max(score, Decimal(0))
-	return score
+	if random.randint(1, 10) == 5:
+		return Decimal(0)
+	else:
+		return Decimal(random.randint(1, 3 * 4)) / Decimal(4)
 
 
-def _readjust(random, scoring):
+def _readjust(context, scoring, gap):
 	# FIXME: rejection of entry of zero points should be checked via UI
+
+	random = context.random
 
 	if scoring.cloze_type == ClozeType.numeric:
 		new_score = Decimal(0)
@@ -47,19 +105,41 @@ def _readjust(random, scoring):
 		return scoring._replace(
 			score=new_score)
 	else:
+		# FIXME remove options here. currently not possible due to
+		# https://mantis.ilias.de/view.php?id=25238
+
+		new_options = dict()
+		for k, v in scoring.options.items():
+			new_options[k] = v
+
+		# add new answers
+		for _ in range(random.randint(0, 2)):
+			while True:
+				new_answer, ignored_score = gap.get_random_choice(context)
+
+				if scoring.cloze_type == ClozeType.select:
+					new_answer = _modify_answer(new_answer, context)
+
+				new_answer = new_answer.strip()
+				new_answer = new_answer.replace('\t', '')
+
+				if len(new_answer) > 0 and new_answer not in new_options:
+					new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
+					break
+
 		i = 0
-
 		while True:
-			new_options = dict()
-			for k, score in scoring.options.items():
-				new_options[k] = _readjust_score(random, score, i)
+			readjusted_options = dict()
 
-			if any(score > Decimal(0) for score in new_options.values()):
+			for k, score in new_options.items():
+				readjusted_options[k] = _readjust_score(random, score, i)
+
+			if any(score > Decimal(0) for score in readjusted_options.values()):
 				break
 
 			i += 1
 
-		return scoring._replace(options=new_options)
+		return scoring._replace(options=readjusted_options)
 
 
 class ClozeType(Enum):
@@ -101,13 +181,7 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		return max(self.options.values())
 
 	def _get_maximum_entry_size(self, context):
-		# get the maximum number of characters we write into this gap. note that
-		# this might be != the real maximum size, which might be unlimited, so we
-		# choose some configured maximum number for entry purposes.
-		if self.size is not None:
-			return self.size
-		else:
-			return int(context.settings.max_cloze_text_length)
+		return _max_entry_size(self.size, context)
 
 	def initialize_coverage(self, question, coverage, context):
 		size = self._get_maximum_entry_size(context)
@@ -124,33 +198,15 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 		if value in self.options:
 			coverage.case_occurred(question, self.index, channel, "solution", value)
 
-	def _modify_solution(self, text, score, context):
-		mode = context.random.choices(
-			("unmodified", "randchar", "randcase"),
-			weights=(0.5, 0.25, 0.25))[0]
-
-		if mode == "unmodified":
-			# keep exactly as specified.
-			return text, score
-		else:
-			# modify case or content.
-			chars = []
-			for i in range(len(text)):
-				r = context.random.random()
-				if mode == "randchar" and r < 0.2:
-					chars.append(context.random.choice(context.cloze_random_chars))
-				elif mode == "randcase" and r < 0.2:
-					chars.append(text[i].swapcase())
-				else:
-					chars.append(text[i])
-			text = "".join(chars)
-			return text, self.get_score(text)
+	def _modify_answer(self, text, context):
+		text = _modify_answer(text, context, self.size)
+		return text, self.get_score(text)
 
 	def get_random_choice(self, context):
 		if context.random.random() < float(context.settings.cloze_text_enter_scored_p) and not context.prefer_text():
 			# pick scored answer.
-			text, score = context.random.choice(list(self.options.items()))
-			return self._modify_solution(text, score, context)
+			text, _ = context.random.choice(list(self.options.items()))
+			return self._modify_answer(text, context)
 		else:
 			# make up something random and probably wrong.
 			if context.random.random() < float(context.settings.cloze_text_enter_random_number_p):
@@ -171,11 +227,12 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 			return self.options.get(text, Decimal(0))
 
 		assert self.comparator == ClozeComparator.ignore_case
+		best_score = Decimal(0)
 		for option, score in self.options.items():
 			if option.casefold() == text.casefold():
-				return score
+				best_score = max(best_score, score)
 
-		return Decimal(0)
+		return best_score
 
 	def is_valid_answer(self, value):
 		if self.size is None:  # no restriction?
@@ -350,15 +407,73 @@ def parse_gap_options(driver, gap_index):
 
 
 def update_gap_options(driver, gap_index, options):
-	for option_index, (key, score) in enumerate(options.items()):
-		answer = driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, option_index))
-		answer_key = answer.get_attribute("value")
-		if answer_key != key:
-			raise InteractionException("must not change title for gap %d, option %d from '%s' to '%s'" % (
-				gap_index, option_index, answer_key, key))
+	old_keys = set()
+	new_keys = set(options.keys())
+
+	# for some obscure reason, setting answers and scores via set_element_value() won't
+	# work here. send_keys() works though.
+
+	def get_option_answer_element(option_index):
+		return driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, option_index))
+
+	def get_option_answer(option_index):
+		return get_option_answer_element(option_index).get_attribute("value")
+
+	option_index = 0
+	while True:
+		try:
+			option_key = get_option_answer(option_index)
+		except NoSuchElementException:
+			break
+
+		old_keys.add(option_key)
+
+		option_index += 1
+
+	# add options.
+	for option_key in new_keys - old_keys:
+		driver.find_element_by_name("add_gap_%d_%d" % (gap_index, option_index - 1)).click()
+
+		element = get_option_answer_element(option_index)
+		element.send_keys(option_key)
+		#set_element_value(driver, element, option_key)
+
+		if element.get_attribute("value") != option_key:
+			print("gap option name mismatch: '%s' != '%s'" % (element.get_attribute("value"), option_key))
+			raise InteractionException("failed to set gap option name")
+
+		# debug
+		#for i in range(option_index):
+		#	answer = get_option_answer(i)
+		#	print("debug option %d %s" % (i, answer))
+
+		option_index += 1
+
+	# remove options.
+	option_index = 0
+	while True:
+		try:
+			option_key = get_option_answer(option_index)
+		except NoSuchElementException:
+			break
+
+		if len(option_key.strip()) == 0:
+			raise InteractionException("illegal empty option name")
+
+		if option_key not in new_keys:
+			driver.find_element_by_name("remove_gap_%d_%d" % (gap_index, option_index)).click()
+		else:
+			option_index += 1
+
+	option_count = option_index
+
+	# set all scores.
+	for option_index in range(option_count):
+		option_key = get_option_answer(option_index)
 
 		points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, option_index))
-		set_element_value(driver, points, str(score))
+		points.clear()
+		points.send_keys(str(options[option_key]))
 
 
 class ClozeQuestion(Question):
@@ -442,16 +557,7 @@ class ClozeQuestion(Question):
 						raise
 
 	def _create_gaps(self):
-		constructors = dict((
-			(ClozeType.text, ClozeQuestionTextGap),
-			(ClozeType.select, ClozeQuestionSelectGap),
-			(ClozeType.numeric, ClozeQuestionNumericGap)))
-
-		self.gaps = dict()
-		for gap_index, gap_scoring in enumerate(self.scoring.gaps):
-			construct_gap = constructors[gap_scoring.cloze_type]
-			gap = construct_gap(self.scoring, gap_index)
-			self.gaps[gap_index] = gap
+		self.gaps = _create_gaps(self.scoring)
 
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
@@ -548,7 +654,7 @@ class ClozeQuestion(Question):
 		self.scoring = ClozeScoring(
 			identical_scoring=random_flip(self.scoring.identical_scoring),
 			comparator=random_flip_comparator(self.scoring.comparator),
-			gaps=[_readjust(context.random, s) for s in self.scoring.gaps])
+			gaps=[_readjust(context, s, self.gaps[i]) for i, s in enumerate(self.scoring.gaps)])
 		self._create_gaps()
 		self._set_ui(driver, self.scoring)
 
@@ -584,13 +690,11 @@ class ClozeQuestion(Question):
 					old_gap.size or "no limit",
 					new_gap.size or "no limit"])
 
-				assert len(old_gap.options) == len(new_gap.options)
-
-				for key in old_gap.options.keys():
+				for key in set(old_gap.options.keys()) | set(new_gap.options.keys()):
 					table.add_row([
 						key,
-						old_gap.options[key],
-						new_gap.options[key]])
+						old_gap.options.get(key, "n/a"),
+						new_gap.options.get(key, "n/a")])
 
 		report(table)
 
