@@ -28,6 +28,8 @@ from contextlib import contextmanager
 
 import selenium
 from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.action_chains import ActionChains
+
 from openpyxl import load_workbook
 from texttable import Texttable
 
@@ -279,6 +281,8 @@ class Run:
 		gui_stats = test_driver.get_statistics_from_web_gui(
 			[user.get_username() for user in self.users])
 
+		web_answers = test_driver.get_answers_from_details_view(self.questions)
+
 		pdfs = test_driver.export_pdf()
 		prefix = 'reimport/' if is_reimport else 'original/'
 
@@ -387,6 +391,17 @@ class Run:
 					report('### QUESTION "%s"' % question.title.upper())
 					report('')
 
+					# gather all given answer keys for this answer across all users.
+					answers = defaultdict(list)
+					for result in all_recorded_results:
+						for k, v in result.gather(Result.key("question", question.title, "answer")).items():
+							answers[k].append(v)
+
+					report("gathered answers:")
+					for k, v in answers.items():
+						report('%s: %s' % (k, str(v)))
+					report('')
+
 					readjusted, removed_answer_keys = question.readjust_scores(
 						master.driver, context, report)
 
@@ -399,12 +414,23 @@ class Run:
 					master.report("saving.")
 
 					with wait_for_page_load(master.driver):
-						master.driver.find_element_by_name("cmd[savescoringfortest]").click()
+						save_element = master.driver.find_element_by_name("cmd[savescoringfortest]")
+
+						# without scrolling into view, clicking save will sometimes produce a
+						# WebDriverException ("element is not clickable at point")
+						master.driver.execute_script("arguments[0].scrollIntoView();", save_element)
+
+						#chain = ActionChains(master.driver)
+						#chain.move_to_element(save_element).click().perform()
+
+						master.driver.execute_script("$(arguments[0]).click();", save_element)
+
+					# save_element.click()
 
 					close_stats_window()
 
-					if not master.driver.find_elements_by_css_selector(".alert-danger"):
-						# readjustment was applied successfully.
+					if master.driver.find_elements_by_css_selector(".alert-success"):
+						# readjustment seems to have been applied successfully.
 
 						# in certain cases (matching questions), reassessment can remove already given answers
 						# from the result sets.
@@ -413,13 +439,19 @@ class Run:
 								result.remove(Result.key("question", question.title, "answer", key))
 
 						break
-					else:
+
+					elif master.driver.find_elements_by_css_selector(".alert-danger"):
 						maximum_score = question.get_maximum_score(context)
 
 						if maximum_score > 0:
 							report("ILIAS rejected new scores even though they are valid (%f)." % maximum_score)
 						else:
 							report("ILIAS rejected invalid new scores.")
+
+					else:
+						# we should either see a success or failure alert.
+
+						raise InteractionError("readjustment save went wrong, could not determine status.")
 
 			except TimeoutException:
 				retries += 1
@@ -634,6 +666,10 @@ class Run:
 				verify_result = self._verify_xls(
 					master, reimported_test_driver, all_recorded_results, is_reimport=True)
 
+			except Exception as e:
+				self._save_error_screenshot(master)
+				raise e
+
 			finally:
 				try:
 					master.user_driver.delete_test(temp_test_name)
@@ -761,6 +797,19 @@ class Run:
 		self.users_factory.release(self._users_backend(master))
 		# keep self.users for storing some information on them later.
 
+	def _save_error_screenshot(self, master):
+		try:
+			i = 1
+			while True:
+				name = 'error/master.%d.png' % i
+				if name not in self.files:
+					break
+				i += 1
+			self.files[name] = base64.b64decode(
+				master.driver.get_screenshot_as_base64())
+		except:
+			pass  # ignore
+
 	def run(self):
 		t0 = time.time()
 
@@ -794,11 +843,7 @@ class Run:
 					if temp_test:
 						self.test.cache.transfer_invariants(temp_test.cache)
 				except Exception as e:
-					try:
-						self.files['error/master.png'] = base64.b64decode(
-							master.driver.get_screenshot_as_base64())
-					except:
-						pass  # ignore
+					self._save_error_screenshot(master)
 					raise e
 
 			try:
@@ -822,11 +867,7 @@ class Run:
 						master.user_driver.delete_test(temp_test.get_title())
 						temp_test = None
 				except Exception as e:
-					try:
-						self.files['error/master.png'] = base64.b64decode(
-							master.driver.get_screenshot_as_base64())
-					except:
-						pass  # ignore
+					self._save_error_screenshot(master)
 					raise e
 
 		except selenium.common.exceptions.WebDriverException as e:
