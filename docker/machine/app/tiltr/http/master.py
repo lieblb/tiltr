@@ -76,6 +76,10 @@ class FetchILIASVersion(threading.Thread):
 			m = re.search(r'"ILIAS_VERSION"\s*,\s*"([^"]+)"', php_code)
 			if m:
 				self.state.ilias_version = m.group(1)
+
+				m = re.search(r"^(\d+\.\d+\.\d+)", self.state.ilias_version)
+				if m:
+					self.state.ilias_version_tuple = tuple(int(x) for x in m[1].split("."))
 		else:
 			n_tries = 0
 			while True:
@@ -92,6 +96,11 @@ class FetchILIASVersion(threading.Thread):
 							s = re.split(r"\(|\)", bdo.text)
 							if len(s) >= 2:
 								self.state.ilias_version = s[1]
+
+								m = re.search(r"^v(\d+\.\d+\.\d+)", self.state.ilias_version)
+								if m:
+									self.state.ilias_version_tuple = tuple(int(x) for x in m[1].split("."))
+
 								return
 				except:
 					traceback.print_exc()
@@ -159,6 +168,8 @@ class GlobalState:
 		self.ilias_url = args.ilias_url
 
 		self.ilias_version = None
+		self.ilias_version_tuple = None
+
 		FetchILIASVersion(self).start()
 
 	def get_ilias_url(self):
@@ -168,12 +179,9 @@ class GlobalState:
 		return self.ilias_version
 
 	def get_ilias_version_tuple(self):
-		version = self.get_ilias_version()
-		if version:
-			m = re.search(r"^v(\d+\.\d+\.\d+)", version)
-			if m:
-				return tuple(int(x) for x in m[1].split("."))
-		raise Exception("could not retrieve ILIAS version")
+		if self.ilias_version_tuple:
+			return self.ilias_version_tuple
+		raise RuntimeError("could not retrieve ILIAS version")
 
 	@property
 	def is_looping(self):
