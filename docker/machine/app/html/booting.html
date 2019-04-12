@@ -11,14 +11,17 @@
 				  <img src="/static/default/tiltr.png" alt="TiltR" width="200">
 				  &nbsp; is launching.
 			  </h1>
-			  {% if is_installing %}
-				  <h2 class="is-pulled-right">installing...</h2>
-			  {% end %}
 			</div>
 		  </div>
 		</section>
 		<section class="section">
 		    <div class="container">
+                {% if is_installing %}
+                    <div class="notification is-warning">
+                        ILIAS looks like it's still installing. If this takes forever, you might want to look
+                        inside ILIAS' DB.
+                    </div>
+                {% end %}
 				<div class="sk-folding-cube">
 				  <div class="sk-cube1 sk-cube"></div>
 				  <div class="sk-cube2 sk-cube"></div>

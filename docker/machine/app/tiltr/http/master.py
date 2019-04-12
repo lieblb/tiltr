@@ -31,9 +31,6 @@ from tiltr.data.result import open_results
 from tiltr.data.settings import Settings, Workarounds
 from tiltr.data.database import DB
 
-
-NUM_ILIAS_TABLES = 966  # version dependent
-
 def _uses_embedded_ilias(args):
 	return args.embedded_ilias_port is not None and int(args.embedded_ilias_port) > 0
 
@@ -260,14 +257,15 @@ class AppHandler(tornado.web.RequestHandler):
 		if ilias_version is None:
 			self.render(
 				"booting.html",
-				is_installing=num_db_tables < NUM_ILIAS_TABLES)
+				is_installing=num_db_tables == 0,
+				num_db_tables=num_db_tables)
 		else:
 			self.render(
 				"master.html",
 				num_machines=len(self.state.machines),
 				ilias_url=self._get_ilias_url(),
 				ilias_version=ilias_version or "unavailable",
-				is_installing=num_db_tables < NUM_ILIAS_TABLES)
+				is_installing=num_db_tables == 0)
 
 
 class StatusHandler(tornado.web.RequestHandler):
