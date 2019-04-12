@@ -7,6 +7,7 @@
 
 import subprocess
 import os
+import re
 import sys
 import shutil
 import zipfile
@@ -63,7 +64,30 @@ up_parser.add_argument('--rebuild-no-cache', help='rebuild docker containers wit
 args = parser.parse_args()
 
 os.environ['TILTR_PORT'] = str(args.port)
-os.environ['EMBEDDED_ILIAS_PORT'] = str(args.embedded_ilias_port)
+os.environ['TILTR_EMBEDDED_ILIAS_PORT'] = str(args.embedded_ilias_port)
+
+def determine_ilias_db_version():
+	# determine embedded version of ILIAS to determine which DB we need to install if we do a fresh install.
+
+	base = os.path.dirname(os.path.realpath(__file__))
+
+	with open(os.path.join(base, 'data', 'ILIAS', 'include', 'inc.ilias_version.php')) as f:
+		php_code = f.read()
+
+	m = re.search(r'"ILIAS_VERSION"\s*,\s*"([^"]+)"', php_code)
+	if not m:
+		print("failed to determine ILIAS version.")
+		sys.exit(1)
+
+	ilias_version_text = m.group(1)
+
+	m = re.search(r"^(\d+\.\d+\.\d+)", ilias_version_text)
+	if not m:
+		print("failed to determine ILIAS version.")
+		sys.exit(1)
+
+	ilias_version_tuple = tuple(x for x in m[1].split("."))
+	os.environ['TILTR_ILIAS_DB_VERSION'] = '.'.join(ilias_version_tuple[:2])
 
 if hasattr(args, 'fork') and args.fork:
 	pid = os.fork()
@@ -142,6 +166,8 @@ def instrument_ilias():
 		print("aborting.")
 		sys.exit(1)
 
+	determine_ilias_db_version()
+
 	# instrument ILIAS source code for test runner.
 
 	web_path = os.path.join(base, "docker", "web")
@@ -195,7 +221,7 @@ def set_argument_environ(args):
 			'--ilias-admin-password', 'odysseus'])
 		entrypoint_args.extend(['--embedded-ilias-port', str(args.embedded_ilias_port)])
 
-	os.environ['ILIASTEST_ARGUMENTS'] = ' '.join(entrypoint_args)
+	os.environ['TILTR_ARGUMENTS'] = ' '.join(entrypoint_args)
 
 	return embedded_ilias
 

@@ -1,5 +1,8 @@
 FROM alpine AS build-stage
-ADD ilias.sql.zip /ilias.sql.zip
+
+ARG TILTR_ILIAS_DB_VERSION
+
+ADD ilias.${TILTR_ILIAS_DB_VERSION}.sql.zip /ilias.sql.zip
 ADD changes.sql /changes.sql
 RUN apk update && apk upgrade && apk add zip && unzip /ilias.sql.zip -d /
 RUN cat /ilias.sql /changes.sql > /ilias.new.sql && cp /ilias.new.sql /ilias.sql

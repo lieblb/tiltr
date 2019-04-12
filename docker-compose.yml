@@ -4,7 +4,7 @@ services:
   web:
     build: docker/web
     ports:
-      - "${EMBEDDED_ILIAS_PORT}:80"
+      - "${TILTR_EMBEDDED_ILIAS_PORT}:80"
     expose:
       - "80"
     volumes:
@@ -13,7 +13,10 @@ services:
       - net
 
   db:
-    build: docker/db
+    build:
+      context: docker/db
+      args:
+        TILTR_ILIAS_DB_VERSION: ${TILTR_ILIAS_DB_VERSION}
     environment:
       MYSQL_ROOT_PASSWORD: dev
       MYSQL_USER: dev
@@ -34,7 +37,7 @@ services:
       - ./data/ILIAS:/tiltr/ILIAS
       - ./data/tmp:/tiltr/tmp
     working_dir: /tiltr/app
-    entrypoint: python3 -m tiltr --master $ILIASTEST_ARGUMENTS
+    entrypoint: python3 -m tiltr --master $TILTR_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'
@@ -47,7 +50,7 @@ services:
       - ./docker/machine/app:/tiltr/app
       - ./data/tests:/tiltr/tests
     working_dir: /tiltr/app
-    entrypoint: python3 -m tiltr --machine $ILIASTEST_ARGUMENTS
+    entrypoint: python3 -m tiltr --machine $TILTR_ARGUMENTS
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING='utf8'
