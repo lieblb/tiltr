@@ -31,6 +31,7 @@ services:
     volumes:
       - ./docker/machine/app:/tiltr/app
       - ./data/tests:/tiltr/tests
+      - ./data/ILIAS:/tiltr/ILIAS
       - ./data/tmp:/tiltr/tmp
     working_dir: /tiltr/app
     entrypoint: python3 -m tiltr --master $ILIASTEST_ARGUMENTS

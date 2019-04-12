@@ -32,6 +32,9 @@ from tiltr.data.settings import Settings, Workarounds
 from tiltr.data.database import DB
 
 
+def _uses_embedded_ilias(args):
+	return args.embedded_ilias_port is not None and int(args.embedded_ilias_port) > 0
+
 def _query_database_table_count():
 	try:
 		import pymysql
@@ -64,26 +67,34 @@ class FetchILIASVersion(threading.Thread):
 		self.state = state
 
 	def run(self):
-		n_tries = 0
-		while True:
-			try:
-				with pandora.Browser('chrome') as browser:
-					driver = browser.driver
+		if _uses_embedded_ilias(self.state.args):
+			with open('/tiltr/ILIAS/include/inc.ilias_version.php', 'r') as f:
+				php_code = f.read()
 
-					driver.set_page_load_timeout(60)  # give up after this time
-					driver.get(self.state.ilias_url)
+			m = re.search(r'"ILIAS_VERSION"\s*,\s*"([^"]+)"', php_code)
+			if m:
+				self.state.ilias_version = m.group(1)
+		else:
+			n_tries = 0
+			while True:
+				try:
+					with pandora.Browser('chrome') as browser:
+						driver = browser.driver
 
-					bdo = driver.find_element_by_css_selector("footer bdo")
-					if bdo:
-						print("found ILIAS version text '%s'" % bdo.text)
-						s = re.split(r"\(|\)", bdo.text)
-						if len(s) >= 2:
-							self.state.ilias_version = s[1]
-							return
-			except:
-				traceback.print_exc()
-				time.sleep(2 ** min(n_tries, 5))
-				n_tries += 1
+						driver.set_page_load_timeout(60)  # give up after this time
+						driver.get(self.state.ilias_url)
+
+						bdo = driver.find_element_by_css_selector("footer bdo")
+						if bdo:
+							print("found ILIAS version text '%s'" % bdo.text)
+							s = re.split(r"\(|\)", bdo.text)
+							if len(s) >= 2:
+								self.state.ilias_version = s[1]
+								return
+				except:
+					traceback.print_exc()
+					time.sleep(2 ** min(n_tries, 5))
+					n_tries += 1
 
 
 class Looper(threading.Thread):
@@ -223,7 +234,7 @@ class AppHandler(tornado.web.RequestHandler):
 		ilias_url = self.state.ilias_url
 
 		args = self.state.args
-		if args.tiltr_port is not None and args.embedded_ilias_port is not None and int(args.embedded_ilias_port) > 0:
+		if args.tiltr_port is not None and _uses_embedded_ilias(args):
 			# differentiate between internal ILIAS docker container which we usually expose via :11145
 			# and an external ILIAS installation. yes, this is a bit hacky.
 			actual_host = self.request.host.replace(':' + str(args.tiltr_port), ':' + str(args.embedded_ilias_port))
