@@ -36,7 +36,7 @@ class PaintQuestion(Question):
 	def get_random_answer(self, context):
 		return context.random.randint(1, 255), Decimal(0)
 
-	def readjust_scores(self, driver, context, report):
+	def readjust_scores(self, driver, actual_answers, context, report):
 		return False, list()
 
 	def compute_score(self, answers, context):

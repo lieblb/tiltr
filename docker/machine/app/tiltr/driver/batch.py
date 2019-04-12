@@ -392,18 +392,18 @@ class Run:
 					report('')
 
 					# gather all given answer keys for this answer across all users.
-					answers = defaultdict(list)
+					actual_answers = defaultdict(list)
 					for result in all_recorded_results:
 						for k, v in result.gather(Result.key("question", question.title, "answer")).items():
-							answers[k].append(v)
+							actual_answers[k].append(v)
 
 					report("gathered answers:")
-					for k, v in answers.items():
+					for k, v in actual_answers.items():
 						report('%s: %s' % (k, str(v)))
 					report('')
 
 					readjusted, removed_answer_keys = question.readjust_scores(
-						master.driver, context, report)
+						master.driver, actual_answers, context, report)
 
 					if not readjusted:
 						# this question type does not support readjustments.

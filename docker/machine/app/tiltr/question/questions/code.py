@@ -33,7 +33,7 @@ class CodeQuestion(Question):
 		text = context.produce_text(self.length, context.long_text_random_chars)
 		return text, self.compute_score(text, context)
 
-	def readjust_scores(self, driver, context, report):
+	def readjust_scores(self, driver, actual_answers, context, report):
 		return False, list()
 
 	def compute_score(self, answers, context):

@@ -89,7 +89,7 @@ def _readjust_score(random, score, boost):
 		return Decimal(random.randint(1, 3 * 4)) / Decimal(4)
 
 
-def _readjust(context, scoring, gap):
+def _readjust(context, scoring, gap, actual_answers):
 	# FIXME: rejection of entry of zero points should be checked via UI
 
 	random = context.random
@@ -104,24 +104,32 @@ def _readjust(context, scoring, gap):
 
 		return scoring._replace(
 			score=new_score)
-	else:
+
+	else:  # text and select gaps
+
 		# FIXME remove options here. currently not possible due to
 		# https://mantis.ilias.de/view.php?id=25238
+
+		unscored_answers = set(actual_answers) - set(gap.get_scored_options().keys())
 
 		new_options = dict()
 		for k, v in scoring.options.items():
 			new_options[k] = v
 
 		# add new answers
-		for _ in range(random.randint(0, 2)):
+		for _ in range(random.randint(0, min(max(2, len(unscored_answers)), 10))):
 			while True:
-				new_answer, ignored_score = gap.get_random_choice(context)
+				if scoring.cloze_type == ClozeType.text and len(unscored_answers) > 0 and random.randint(1, 10) > 1:
+					new_answer = context.random.choice(list(unscored_answers))
+					unscored_answers.remove(new_answer)
+				else:
+					new_answer, ignored_score = gap.get_random_choice(context)
 
-				if scoring.cloze_type == ClozeType.select:
-					new_answer = _modify_answer(new_answer, context)
+					if scoring.cloze_type == ClozeType.select:
+						new_answer = _modify_answer(new_answer, context)
 
-				new_answer = new_answer.strip()
-				new_answer = new_answer.replace('\t', '')
+					new_answer = new_answer.strip()
+					new_answer = new_answer.replace('\t', '')
 
 				if len(new_answer) > 0 and new_answer not in new_options:
 					new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
@@ -234,6 +242,9 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 		return best_score
 
+	def get_scored_options(self):
+		return self.options
+
 	def is_valid_answer(self, value):
 		if self.size is None:  # no restriction?
 			return True
@@ -266,6 +277,9 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 
 	def get_score(self, text):
 		return self.options.get(text, Decimal(0))
+
+	def get_scored_options(self):
+		return self.options
 
 	def is_valid_answer(self, value):
 		return value in self.options
@@ -347,6 +361,9 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 				return Decimal(0)
 		except ValueError:
 			return Decimal(0)
+
+	def get_scored_options(self):
+		return dict((self.numeric_value, self.score))
 
 	def is_valid_answer(self, value):
 		value = value.strip()
@@ -636,7 +653,7 @@ class ClozeQuestion(Question):
 			else:
 				return answers, valid, self.compute_score_by_indices(answers, context)
 
-	def readjust_scores(self, driver, context, report):
+	def readjust_scores(self, driver, actual_answers, context, report):
 		def random_flip(f):
 			if context.random.randint(0, 3) == 0:  # flip?
 				return not f
@@ -654,7 +671,8 @@ class ClozeQuestion(Question):
 		self.scoring = ClozeScoring(
 			identical_scoring=random_flip(self.scoring.identical_scoring),
 			comparator=random_flip_comparator(self.scoring.comparator),
-			gaps=[_readjust(context, s, self.gaps[i]) for i, s in enumerate(self.scoring.gaps)])
+			gaps=[_readjust(context, s, self.gaps[i], actual_answers[self.gaps[i].get_export_name(context.language)])
+				  for i, s in enumerate(self.scoring.gaps)])
 		self._create_gaps()
 		self._set_ui(driver, self.scoring)
 

@@ -75,7 +75,7 @@ class SingleChoiceQuestion(Question):
 		choice = context.random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
 
-	def readjust_scores(self, driver, context, report):
+	def readjust_scores(self, driver, actual_answers, context, report):
 		choices = self._get_ui(driver)
 
 		if False:

@@ -134,7 +134,7 @@ class KPrimQuestion(Question):
 		answers = [context.random.random() < 0.5 for _ in range(4)]
 		return answers, self.compute_score_by_indices(answers)
 
-	def readjust_scores(self, driver, context, report):
+	def readjust_scores(self, driver, actual_answers, context, report):
 		if context.workarounds.dont_readjust_kprim:
 			return False, list()
 

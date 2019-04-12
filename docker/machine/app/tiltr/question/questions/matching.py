@@ -262,7 +262,7 @@ class MatchingQuestion(Question):
 
 		return answers, self.compute_score(answers, context)
 
-	def readjust_scores(self, driver, context, report):
+	def readjust_scores(self, driver, actual_answers, context, report):
 		if context.workarounds.dont_readjust_matching:
 			return False, list()
 

@@ -137,7 +137,7 @@ class MultipleChoiceQuestion(Question):
 
 		return answers, self.compute_score(answers, context)
 
-	def readjust_scores(self, driver, context, report):
+	def readjust_scores(self, driver, actual_answers, context, report):
 		choices = self._get_ui(driver)
 
 		if False:
