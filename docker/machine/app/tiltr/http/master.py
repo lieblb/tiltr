@@ -32,6 +32,8 @@ from tiltr.data.settings import Settings, Workarounds
 from tiltr.data.database import DB
 
 
+NUM_ILIAS_TABLES = 966  # version dependent
+
 def _uses_embedded_ilias(args):
 	return args.embedded_ilias_port is not None and int(args.embedded_ilias_port) > 0
 
@@ -51,14 +53,14 @@ def _query_database_table_count():
 			with connection.cursor() as cursor:
 				sql = "SELECT COUNT(*) AS n_tables FROM information_schema.tables WHERE table_schema=%s"
 				cursor.execute(sql, ('ilias',))
-				n_tables = cursor.fetchone()["n_tables"]
+				n_tables = int(cursor.fetchone()["n_tables"])
 
 		finally:
 			connection.close()
 
 		return n_tables
 	except:
-		return "n/a"
+		return 0
 
 
 class FetchILIASVersion(threading.Thread):
@@ -245,16 +247,19 @@ class AppHandler(tornado.web.RequestHandler):
 	def get(self):
 		ilias_version = self.state.get_ilias_version()
 
+		num_db_tables = _query_database_table_count() if _uses_embedded_ilias(self.state.args) else -1
+
 		if ilias_version is None:
 			self.render(
 				"booting.html",
-				num_db_tables=_query_database_table_count())
+				is_installing=num_db_tables < NUM_ILIAS_TABLES)
 		else:
 			self.render(
 				"master.html",
 				num_machines=len(self.state.machines),
 				ilias_url=self._get_ilias_url(),
-				ilias_version=ilias_version or "unavailable")
+				ilias_version=ilias_version or "unavailable",
+				is_installing=num_db_tables < NUM_ILIAS_TABLES)
 
 
 class StatusHandler(tornado.web.RequestHandler):

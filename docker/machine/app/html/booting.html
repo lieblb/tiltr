@@ -11,7 +11,9 @@
 				  <img src="/static/default/tiltr.png" alt="TiltR" width="200">
 				  &nbsp; is launching.
 			  </h1>
-			  <h2 class="is-pulled-right">{{ num_db_tables }} tables in ILIAS DB.</h2>
+			  {% if is_installing %}
+				  <h2 class="is-pulled-right">installing...</h2>
+			  {% end %}
 			</div>
 		  </div>
 		</section>

@@ -88,6 +88,17 @@
 		  </div>
 		</section>
 		<section class="section">
+			  {% if is_installing %}
+				  <div class="notification is-warning">
+					  This is the first run. Please wait while ILIAS is installing...
+				  </div>
+				  <script>
+					setTimeout(function(){
+					   window.location.reload(1);
+					}, 2000);
+				  </script>
+			  {% end %}
+
 		    <div class="unconnected-ui container">
 				<div class="sk-folding-cube">
 				  <div class="sk-cube1 sk-cube"></div>
