@@ -633,6 +633,9 @@ class ExamDriver:
 		return False
 
 	def assert_error_on_save(self, invalid_answers, context):
+		if context.dont_test_invalid_save:
+			return
+
 		self.protocol.append((
 			time.time(), "test",
 			"checking error when saving %d invalid answers:" % len(invalid_answers)))
@@ -656,6 +659,8 @@ class ExamDriver:
 				err_text = "save succeeded even though saved data was invalid."
 
 			if err_text is None:
+				self.confirm_save()
+
 				try:
 					self.driver.find_element_by_css_selector('div.alert-danger')
 				except NoSuchElementException:

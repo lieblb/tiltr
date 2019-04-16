@@ -48,12 +48,16 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 
 class TestContext:
 	def __init__(self, questions, settings, workarounds, language):
+		allow_cloze_clamps = not (
+			workarounds.dont_use_clamps_in_cloze_readjustments or
+			workarounds.disallow_clamps_in_cloze)
+
 		self.settings = settings
 		self.workarounds = workarounds
 		self.cloze_random_chars = get_random_chars(
 			allow_newlines=False,
 			allow_dollar=not workarounds.disallow_dollar_in_cloze,
-			allow_clamps=not workarounds.disallow_clamps_in_cloze)
+			allow_clamps=allow_cloze_clamps)
 		self.long_text_random_chars = get_random_chars(
 			allow_newlines=True,
 			allow_dollar=True,

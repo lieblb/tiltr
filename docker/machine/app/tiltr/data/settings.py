@@ -249,6 +249,16 @@ class Workarounds(ValueBag):
 				# https://mantis.ilias.de/view.php?id=25212
 				"allow_unreachable_max_scores",
 				"W16 Allow maximum scores that are too high and cannot be achieved. MANTIS 25212"
+			),
+			(
+				# https://mantis.ilias.de/view.php?id=25268
+				"dont_use_clamps_in_cloze_readjustments",
+				"W17 Do not use clamps in cloze texts during readjustments. MANTIS 25268"
+			),
+			(
+				# https://mantis.ilias.de/view.php?id=25272
+				"dont_test_invalid_save",
+				"W18 Do not test save behaviour on invalid input."
 			)
 		], **kwargs)
 
