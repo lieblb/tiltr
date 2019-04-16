@@ -633,7 +633,7 @@ class ExamDriver:
 		return False
 
 	def assert_error_on_save(self, invalid_answers, context):
-		if context.dont_test_invalid_save:
+		if context.workarounds.dont_test_invalid_save:
 			return
 
 		self.protocol.append((
