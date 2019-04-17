@@ -1093,6 +1093,53 @@ class TestDriver:
 		# administration settings. should have been checked by verify_admin_settings().
 		self.driver.find_element_by_css_selector("#tab_scoringadjust a").click()
 
+	def goto_manual_scoring(self):
+		assert self.goto()
+		self.driver.find_element_by_css_selector("#tab_manscoring").click()
+
+	def apply_manual_scoring(self, question_title, scores):
+		found = False
+
+		select = self.driver.find_element_by_css_selector(".ilTableFilterInput #question")
+		for option in select.find_elements_by_css_selector("option"):
+			if question_title in option.text:
+				Select(select).select_by_value(option.get_attribute("value"))
+				found = True
+				break
+
+		if not found:
+			raise InteractionException(
+				"did not find question %s in manual scoring selection" % question_title)
+
+		with wait_for_page_load(self.driver):
+			apply_filter = self.driver.find_element_by_css_selector(
+				'input[name="cmd[applyManScoringByQuestionFilter]"]')
+			apply_filter.click()
+
+		scoring_table = None
+		for table in self.driver.find_elements_by_css_selector("table"):
+			if table.get_attribute("id").startswith("man_scor_by_qst_"):
+				scoring_table = table
+				break
+
+		if not scoring_table:
+			raise InteractionException("did not find scoring table")
+
+		for tr in scoring_table.find_elements_by_css_selector("tr"):
+			cols = list(tr.find_elements_by_css_selector("td"))
+			if cols:
+				name = cols[0].text
+				for username, score in scores.items():
+					if username in name:
+						points_input = cols[1].find_element_by_css_selector("input")
+						set_element_value(self.driver, points_input, str(score))
+						break
+
+		with wait_for_page_load(self.driver):
+			self.driver.find_element_by_css_selector(
+				'input[name="cmd[saveManScoringByQuestion]"]').click()
+
+
 	def _clean_exports(self):
 		self.report("cleaning current exports.")
 		select_all = None

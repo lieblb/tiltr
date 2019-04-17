@@ -68,3 +68,6 @@ class LongTextQuestion(Question):
 
 	def compute_score(self, text, context):
 		return Decimal(0)
+
+	def can_score_manually(self):
+		return True

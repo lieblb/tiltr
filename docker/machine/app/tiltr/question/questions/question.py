@@ -60,3 +60,6 @@ class Question:
 
 	def get_answer_from_details_view(self, view):
 		return None
+
+	def can_score_manually(self):
+		return False

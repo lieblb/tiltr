@@ -329,6 +329,52 @@ class Run:
 
 		return all_assertions_ok
 
+	def _propagate_score_changes(self, all_recorded_results, context):
+		maximum_score = Decimal(0)
+		for question in self.questions.values():
+			maximum_score += question.get_maximum_score(context)
+
+		# recompute reached scores and marks.
+		for result in all_recorded_results:
+			result.update(("xls", "score_maximum"), maximum_score)
+
+			reached_score = Decimal(0)
+			for value in result.scores():
+				reached_score += self.exam_configuration.clip_answer_score(Decimal(value))
+
+			for channel in ("xls", "gui"):
+				result.update((channel, "score_reached"), remove_trailing_zeros(str(reached_score)))
+
+			mark = Marks(self.exam_configuration.marks).lookup(
+				(100 * reached_score) / maximum_score)
+			for channel in ("xls", "gui"):
+				result.update((channel, "short_mark"), str(mark.short).strip())
+
+	def _apply_manual_scoring(self, master, test_driver, all_recorded_results):
+		context = RandomContext(self.questions, self.settings, self.workarounds, self.language)
+
+		for question_title, question in self.questions.items():
+			if question.can_score_manually():
+				with wait_for_page_load(master.driver):
+					test_driver.goto_manual_scoring()
+
+				max_score = question.get_maximum_score(context)
+				manual_scores = dict()
+
+				for user, result in zip(self.users, all_recorded_results):
+					accuracy = 4
+					score = min(Decimal(context.random.randint(
+						0, (1 + int(max_score)) * accuracy)) / Decimal(accuracy), max_score)
+					for key in Result.score_keys(question.title):
+						result.update(key, score)
+
+					username = user.get_username()
+					manual_scores[username] = score
+
+				test_driver.apply_manual_scoring(question.title, manual_scores)
+
+		self._propagate_score_changes(all_recorded_results, context)
+
 	def _apply_readjustment(self, index, master, test_driver, all_recorded_results, is_reimport):
 		# note that this will destroy the original test's scores. usually we should have copied
 		# this test and this should only run on a temporary copy.
@@ -523,25 +569,7 @@ class Run:
 					report(line)
 				report("")
 
-		maximum_score = Decimal(0)
-		for question in self.questions.values():
-			maximum_score += question.get_maximum_score(context)
-
-		# recompute reached scores and marks.
-		for result in all_recorded_results:
-			result.update(("xls", "score_maximum"), maximum_score)
-
-			reached_score = Decimal(0)
-			for value in result.scores():
-				reached_score += self.exam_configuration.clip_answer_score(Decimal(value))
-
-			for channel in ("xls", "gui"):
-				result.update((channel, "score_reached"), remove_trailing_zeros(str(reached_score)))
-
-			mark = Marks(self.exam_configuration.marks).lookup(
-				(100 * reached_score) / maximum_score)
-			for channel in ("xls", "gui"):
-				result.update((channel, "short_mark"), str(mark.short).strip())
+		self._propagate_score_changes(all_recorded_results, context)
 
 	def _users_backend(self, master):
 		return lambda: UsersBackend(master.driver, self.batch.ilias_url, master.report)
@@ -684,49 +712,73 @@ class Run:
 		return verify_result
 
 	def _verify_xls(self, master, test_driver, all_recorded_results, is_reimport=False):
+		rounds = list()
+
+		rounds.append("check")
 		if not is_reimport:
-			num_readjustments = max(0, int(self.settings.num_readjustments))
+			rounds.append("reimport")
+
+		if not is_reimport:
+			# operations we do on the main test (not the reimported version).
+
+			for i in range(max(0, int(self.settings.num_readjustments))):
+				rounds.append("readjust")
+				rounds.append("check")
+
+			rounds.append("manual")
+			rounds.append("check")
 		else:
+			# operations we do on the reimported test (not the main version).
+
 			# always do one readjustment on the reimported test. this might look superfluous, but
 			# in fact it's an essential regression test: scores and marks are imported from the xml,
 			# but not recomputed by default, i.e. if there's an error in the underlying data import
 			# of the responses given, score errors will only be visible after one readjustment. this
 			# error has happened before, see Mantis bug 18553.
-			num_readjustments = 1
+
+			rounds.append("readjust")
+			rounds.append("check")
 
 		prefix = 'reimport/' if is_reimport else 'original/'
 
 		all_assertions_ok = False
 
-		for readjustment_round in range(num_readjustments + 1):
-			xls = test_driver.export_xls()
-			workbook = load_workbook(filename=io.BytesIO(xls))
+		for round_index, round in enumerate(rounds):
+			if round == "check":
+				xls = test_driver.export_xls()
+				workbook = load_workbook(filename=io.BytesIO(xls))
 
-			try:
-				check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
-			except:
-				raise IntegrityException("failed to check workbook consistency")
+				try:
+					check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
+				except:
+					raise IntegrityException("failed to check workbook consistency")
 
-			if readjustment_round == 0:
-				self.files[prefix + "exported_r%d.xlsx" % readjustment_round] = xls
+				if round_index == 0:
+					self.files[prefix + "exported_r%d.xlsx" % round_index] = xls
 
-			all_assertions_ok = self._check_results(
-				readjustment_round, master, test_driver, workbook, all_recorded_results, is_reimport)
-			if not all_assertions_ok:
-				break
+				all_assertions_ok = self._check_results(
+					round_index, master, test_driver, workbook, all_recorded_results, is_reimport)
+				if not all_assertions_ok:
+					break
 
-			if readjustment_round == 0 and not is_reimport:
+			elif round == "reimport":
 				all_assertions_ok = all_assertions_ok and self._verify_reimport(
 					master, test_driver, all_recorded_results) == "OK"
-			if not all_assertions_ok:
-				break
+				if not all_assertions_ok:
+					break
 
-			if readjustment_round < num_readjustments:
+			elif round == "readjust":
 				self._apply_readjustment(
-					readjustment_round, master, test_driver, all_recorded_results, is_reimport)
+					round_index, master, test_driver, all_recorded_results, is_reimport)
 
 				xmlres_zip = test_driver.export_xmlres()
-				self.files["readjustments/round%d.zip" % (1 + readjustment_round)] = xmlres_zip
+				self.files["readjustments/round%d.zip" % (1 + round_index)] = xmlres_zip
+
+			elif round == "manual":
+				self._apply_manual_scoring(master, test_driver, all_recorded_results)
+
+			else:
+				raise RuntimeError("illegal round type %s" % round)
 
 		return "OK" if all_assertions_ok else "FAIL"
 
