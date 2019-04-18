@@ -52,19 +52,27 @@ class XlsResultRow:
 		return scores
 
 
-def _is_question_header(sheet, row):
+def _is_question_header_ilias53(sheet, row):
 	return sheet.cell(row=row, column=1).fill.patternType == "solid"
 
 
-def get_workbook_user_answers(sheet, questions, report=None):
+def get_workbook_user_answers(sheet, questions, ilias_version, report=None):
 	sections = list()
 
-	for row in range(1, sheet.max_row + 1):
-		if _is_question_header(sheet, row):
-			title = sheet.cell(row=row, column=2).value
-			assert isinstance(title, str)
-			question = questions[title.strip()]
-			sections.append((question, row))
+	if ilias_version < (5, 4):
+		for row in range(1, sheet.max_row + 1):
+			if _is_question_header_ilias53(sheet, row):
+				title = sheet.cell(row=row, column=2).value
+				assert isinstance(title, str)
+				question = questions[title.strip()]
+				sections.append((question, row))
+	else:
+		for row in range(3, sheet.max_row + 1):
+			value = sheet.cell(row=row - 1, column=1).value
+			if value is None or len(value.strip()) == 0:
+				title = sheet.cell(row=row, column=2).value
+				question = questions[title.strip()]
+				sections.append((question, row))
 
 	sections.append((None, sheet.max_row + 1))
 
@@ -87,7 +95,7 @@ def get_workbook_user_answers(sheet, questions, report=None):
 	return answers
 
 
-def check_workbook_consistency(wb, questions, workarounds, report):
+def check_workbook_consistency(wb, questions, workarounds, ilias_version, report):
 	if report:
 		report("checking workbook participant sheet existence.")
 
@@ -113,10 +121,10 @@ def check_workbook_consistency(wb, questions, workarounds, report):
 		report("checking workbook participant sheet consistency.")
 
 	if not workarounds.random_xls_participant_sheet_orders:
-		answers = get_workbook_user_answers(wb.worksheets[1], questions, report)
+		answers = get_workbook_user_answers(wb.worksheets[1], questions, ilias_version, report)
 		for user_index in range(2, num_users + 1):
 			user_sheet = wb.worksheets[user_index]
-			other_answers = get_workbook_user_answers(user_sheet, questions, report)
+			other_answers = get_workbook_user_answers(user_sheet, questions, ilias_version, report)
 			assert len(answers) == len(other_answers)
 			for i in range(len(answers)):
 				question_title, dimensions = answers[i]
@@ -127,7 +135,7 @@ def check_workbook_consistency(wb, questions, workarounds, report):
 					assert dimensions[j][0] == other_dimensions[j][0]
 
 
-def workbook_to_result(wb, username, questions, workarounds, report):
+def workbook_to_result(wb, username, questions, workarounds, ilias_version, report):
 	if report:
 		report("gathering data from XLS.")
 
@@ -157,7 +165,7 @@ def workbook_to_result(wb, username, questions, workarounds, report):
 
 	result = Result(origin=Origin.exported)
 
-	for question_title, dimensions in get_workbook_user_answers(user_sheet, questions):
+	for question_title, dimensions in get_workbook_user_answers(user_sheet, questions, ilias_version):
 		for dimension_title, dimension_value in dimensions:
 			result.add(Result.key("question", question_title, "answer", dimension_title), dimension_value)
 

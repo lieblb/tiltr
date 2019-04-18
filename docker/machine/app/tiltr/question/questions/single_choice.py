@@ -76,6 +76,9 @@ class SingleChoiceQuestion(Question):
 		return choice, self.choices[choice]
 
 	def readjust_scores(self, driver, actual_answers, context, report):
+		if context.ilias_version >= (5, 4):  # FIXME implement
+			return False, list()
+
 		choices = self._get_ui(driver)
 
 		if False:

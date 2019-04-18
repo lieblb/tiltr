@@ -56,7 +56,7 @@ class Settings(ValueBag):
 			(
 				'resolution',
 				"""Pixel resolution of virtual browser windows.""",
-				"1024x2000"
+				"1600x2000"  # if not wide enough, some tabs in the test gui won't be found
 			),
 			(
 				'num_deterministic_machines',

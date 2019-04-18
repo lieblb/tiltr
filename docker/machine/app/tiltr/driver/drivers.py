@@ -137,173 +137,159 @@ class Login:
 			self.report(traceback.format_exc())
 
 
-def goto_administration_page(driver, ilias_url, panel_id):
-	for i in range(2):
-		try:
-			wait_for_css(driver, "#mm_adm_tr", 1)
-			driver.find_element_by_css_selector("#mm_adm_tr").click()
+class ILIASVersion:
+	def __init__(self, text, tuple):
+		self.text = text
+		self.tuple = tuple
 
-			wait_for_css(driver, "#%s" % panel_id)
-			with wait_for_page_load(driver):
-				driver.find_element_by_css_selector("#%s" % panel_id).click()
+	def __lt__(self, v):
+		return self.tuple < v
 
-			return
-		except:
-			with wait_for_page_load(driver):
-				driver.get(ilias_url)
+	def __gt__(self, v):
+		return self.tuple > v
 
-	raise InteractionException("going to admin page %s failed." % panel_id)
+	def __le__(self, v):
+		return self.tuple <= v
 
-
-def goto_test_administration(driver, ilias_url):
-	goto_administration_page(driver, ilias_url, "mm_adm_assf")
+	def __ge__(self, v):
+		return self.tuple >= v
 
 
-def goto_user_administration(driver, ilias_url):
-	goto_administration_page(driver, ilias_url, "mm_adm_usrf")
+class ILIASDriver:
+	def __init__(self, driver, url, version, workarounds, settings, report):
+		self.driver = driver
 
+		self.url = url
+		self.version = version
 
-def goto_editor_administration(driver, ilias_url):
-	goto_administration_page(driver, ilias_url, "mm_adm_adve")
+		self.workarounds = workarounds
+		self.settings = settings
 
+		self.report = report
 
-def add_user(driver, username, password):
-	with wait_for_page_load(driver):
-		driver.find_element_by_xpath("//a[contains(@href, 'cmd=addUser')]").click()
+	def _goto_administration_page(self, panel_id):
+		driver = self.driver
 
-	driver.find_element_by_css_selector("input[id='gender_m']").click()
+		for i in range(2):
+			try:
+				if self.version >= (5, 4):
+					for a in driver.find_elements_by_css_selector("#ilTopNav li.dropdown > a"):
+						if a.text.strip().lower() == "administration":
+							a.click()
+							break
+				else:
+					wait_for_css(driver, "#mm_adm_tr", 1)
+					driver.find_element_by_css_selector("#mm_adm_tr").click()
 
-	set_inputs(
-		driver,
-		login=username,
-		passwd=password,
-		passwd_retype=password,
-		firstname=username,
-		lastname="user",
-		email="ilias@localhost")
+				wait_for_css(driver, "#%s" % panel_id)
 
-	with wait_for_page_load(driver):
-		driver.find_element_by_css_selector("input[name='cmd[save]']").click()
+				with wait_for_page_load(driver):
+					href = driver.find_element_by_css_selector("#%s" % panel_id).get_attribute("href")
+					driver.get(href)
+					return
 
+					# work around "element not clickable" exception in Selenium
+					#element = driver.find_element_by_css_selector("#%s" % panel_id)
+					#driver.execute_script("$(arguments[0]).click();", element)
+					#driver.find_element_by_css_selector("#%s" % panel_id).click()
 
-def delete_users(driver, ilias_url, username_prefix, n):
-	n_clicked = 0
+				return
+			except:
+				traceback.print_exc()
 
-	while n_clicked < n:
-		goto_user_administration(driver, ilias_url)
+				with wait_for_page_load(driver):
+					driver.get(self.url)
 
-		try:
-			activator = driver.find_element_by_css_selector(".ilTableFilterActivator")
-			activator.click()
-		except WebDriverException:
-			pass
+		raise InteractionException("going to admin page %s failed." % panel_id)
 
-		apply_filter = "input[name='cmd[applyFilter]']"
-		wait_for_css_visible(driver, apply_filter)
+	def goto_test_administration(self):
+		self._goto_administration_page("mm_adm_assf")
 
-		set_element_value_by_css(driver, "input[name='query']", username_prefix)
-		driver.find_element_by_css_selector(apply_filter).click()
-		n_clicked_old = n_clicked
+	def goto_user_administration(self):
+		self._goto_administration_page("mm_adm_usrf")
 
-		for tr in driver.find_elements_by_css_selector("table tr"):
-			for a in tr.find_elements_by_css_selector("td a"):
-				if a.text.strip().startswith(username_prefix):
-					for checkbox in tr.find_elements_by_css_selector("input[type='checkbox']"):
-						checkbox.click()
-						n_clicked += 1
+	def goto_editor_administration(self):
+		self._goto_administration_page("mm_adm_adve")
 
-		if n_clicked_old == n_clicked:  # error - not all users found.
-			break
+	def _verify_admin_setting(self, name, value, expected, log):
+		if value != expected:
+			raise InteractionException("wrong administration setting: %s must be %s." % (name, expected))
+		log.append("%s is %s." % (name, expected))
 
-		Select(driver.find_element_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
-		with wait_for_page_load(driver):
-			driver.find_element_by_css_selector('input[name="select_cmd"]').click()
+	def verify_admin_settings(self):
+		log = []
+		driver = self.driver
 
-		with wait_for_page_load(driver):
-			driver.find_element_by_name('cmd[confirmdelete]').click()
+		# test admin settings.
 
-	return n_clicked
+		self.goto_test_administration()
+		self.report("verifying test admin settings.")
 
-
-def verify_admin_setting(name, value, expected, log):
-	if value != expected:
-		raise InteractionException("wrong administration setting: %s must be %s." % (name, expected))
-	log.append("%s is %s." % (name, expected))
-
-
-def verify_admin_settings(driver, workarounds, settings, ilias_url, report):
-	log = []
-
-	# test admin settings.
-
-	goto_test_administration(driver, ilias_url)
-	report("verifying test admin settings.")
-
-	verify_admin_setting(
-		"locking for tests",
-		driver.find_element_by_id("ass_process_lock").is_selected(),
-		True,
-		log)
-
-	lock_mode = dict()
-	for s in ('ass_process_lock_mode_file', 'ass_process_lock_mode_db'):
-		lock_mode[s] = driver.find_element_by_id(s).is_selected()
-		log.append("%s is %s." % (s, lock_mode[s]))
-
-	# only ass_process_lock_mode_db is safe, as only ilAssQuestionProcessLockerDb
-	# uses ilAtomQuery to build an atomic write using a DB transaction.
-
-	if not lock_mode['ass_process_lock_mode_db']:
-		raise Exception("need lock mode to be db")
-
-	verify_admin_setting(
-		"html export for essay questions",
-		driver.find_element_by_id("export_essay_qst_with_html").is_selected(),
-		True,
-		log)
-
-	if int(settings.num_readjustments) > 0:
-		def checked(css):
-			return [e.is_selected() for e in driver.find_elements_by_css_selector(css)]
-
-		enabled = checked('input[name="chb_scoring_adjustment[]"]')
-		enabled.extend(checked("#il_prop_cont_chb_scoring_adjust input"))
-
-		if not all(enabled):
-			raise InteractionException(
-				"in order to verify readjustments, please enable readjustments "
-				"for all question types in the T&A administration")
-
-	# editor admin settings.
-
-	goto_editor_administration(driver, ilias_url)
-	report("verifying editor admin settings.")
-
-	driver.find_element_by_css_selector("#tab_adve_rte_settings a").click()
-
-	if workarounds.force_tinymce:
-		verify_admin_setting(
-			"TinyMCE",
-			driver.find_element_by_id("use_tiny").is_selected(),
+		self._verify_admin_setting(
+			"locking for tests",
+			driver.find_element_by_id("ass_process_lock").is_selected(),
 			True,
 			log)
 
-	driver.find_element_by_css_selector("#subtab_adve_assessment_settings a").click()
+		lock_mode = dict()
+		for s in ('ass_process_lock_mode_file', 'ass_process_lock_mode_db'):
+			lock_mode[s] = driver.find_element_by_id(s).is_selected()
+			log.append("%s is %s." % (s, lock_mode[s]))
 
-	for checkbox in driver.find_elements_by_css_selector('input[name="html_tags[]"]'):
-		if checkbox.get_attribute("id") == "html_tags_all__toggle":
-			continue  # ignore
-		if checkbox.get_attribute("value") == "p":
-			allow = True  # we must allow <p>, otherwise no new lines
-		else:
-			allow = False
-		verify_admin_setting(
-			"TinyMCE setting for <%s>" % checkbox.get_attribute("value"),
-			checkbox.is_selected(),
-			allow,
+		# only ass_process_lock_mode_db is safe, as only ilAssQuestionProcessLockerDb
+		# uses ilAtomQuery to build an atomic write using a DB transaction.
+
+		if not lock_mode['ass_process_lock_mode_db']:
+			raise Exception("need lock mode to be db")
+
+		self._verify_admin_setting(
+			"html export for essay questions",
+			driver.find_element_by_id("export_essay_qst_with_html").is_selected(),
+			True,
 			log)
 
-	return log
+		if int(self.settings.num_readjustments) > 0:
+			def checked(css):
+				return [e.is_selected() for e in driver.find_elements_by_css_selector(css)]
+
+			enabled = checked('input[name="chb_scoring_adjustment[]"]')
+			enabled.extend(checked("#il_prop_cont_chb_scoring_adjust input"))
+
+			if not all(enabled):
+				raise InteractionException(
+					"in order to verify readjustments, please enable readjustments "
+					"for all question types in the T&A administration")
+
+		# editor admin settings.
+
+		self.goto_editor_administration()
+		self.report("verifying editor admin settings.")
+
+		driver.find_element_by_css_selector("#tab_adve_rte_settings a").click()
+
+		if self.workarounds.force_tinymce:
+			self._verify_admin_setting(
+				"TinyMCE",
+				driver.find_element_by_id("use_tiny").is_selected(),
+				True,
+				log)
+
+		driver.find_element_by_css_selector("#subtab_adve_assessment_settings a").click()
+
+		for checkbox in driver.find_elements_by_css_selector('input[name="html_tags[]"]'):
+			if checkbox.get_attribute("id") == "html_tags_all__toggle":
+				continue  # ignore
+			if checkbox.get_attribute("value") == "p":
+				allow = True  # we must allow <p>, otherwise no new lines
+			else:
+				allow = False
+			self._verify_admin_setting(
+				"TinyMCE setting for <%s>" % checkbox.get_attribute("value"),
+				checkbox.is_selected(),
+				allow,
+				log)
+
+		return log
 
 
 class TemporaryUser:
@@ -353,11 +339,67 @@ def create_users_xml(base_url, tmp_users):
 
 
 class UsersBackend:
-	def __init__(self, driver, ilias_url, report):
-		self.driver = driver
-		self.ilias_url = ilias_url
+	def __init__(self, ilias_driver, report):
+		self.ilias_driver = ilias_driver
+		self.driver = ilias_driver.driver
 		self.report = report
 		self.batch_limit = 2
+
+	def _add_user(self, driver, username, password):
+		with wait_for_page_load(driver):
+			driver.find_element_by_xpath("//a[contains(@href, 'cmd=addUser')]").click()
+
+		driver.find_element_by_css_selector("input[id='gender_m']").click()
+
+		set_inputs(
+			driver,
+			login=username,
+			passwd=password,
+			passwd_retype=password,
+			firstname=username,
+			lastname="user",
+			email="ilias@localhost")
+
+		with wait_for_page_load(driver):
+			driver.find_element_by_css_selector("input[name='cmd[save]']").click()
+
+	def _delete_users(self, driver, username_prefix, n):
+		n_clicked = 0
+
+		while n_clicked < n:
+			self.ilias_driver.goto_user_administration()
+
+			try:
+				activator = driver.find_element_by_css_selector(".ilTableFilterActivator")
+				activator.click()
+			except WebDriverException:
+				pass
+
+			apply_filter = "input[name='cmd[applyFilter]']"
+			wait_for_css_visible(driver, apply_filter)
+
+			set_element_value_by_css(driver, "input[name='query']", username_prefix)
+			driver.find_element_by_css_selector(apply_filter).click()
+			n_clicked_old = n_clicked
+
+			for tr in driver.find_elements_by_css_selector("table tr"):
+				for a in tr.find_elements_by_css_selector("td a"):
+					if a.text.strip().startswith(username_prefix):
+						for checkbox in tr.find_elements_by_css_selector("input[type='checkbox']"):
+							checkbox.click()
+							n_clicked += 1
+
+			if n_clicked_old == n_clicked:  # error - not all users found.
+				break
+
+			Select(driver.find_element_by_css_selector('select[name="selected_cmd"]')).select_by_value("deleteUsers")
+			with wait_for_page_load(driver):
+				driver.find_element_by_css_selector('input[name="select_cmd"]').click()
+
+			with wait_for_page_load(driver):
+				driver.find_element_by_name('cmd[confirmdelete]').click()
+
+		return n_clicked
 
 	def create(self, prefix, n):
 		self.report("creating %d users." % n)
@@ -401,7 +443,7 @@ class UsersBackend:
 		with open(xml_path, "w") as f:
 			f.write(xml)
 
-		goto_user_administration(self.driver, self.ilias_url)
+		self.ilias_driver.goto_user_administration()
 
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_xpath("//a[contains(@href, 'cmd=importUserForm')]").click()
@@ -423,7 +465,7 @@ class UsersBackend:
 
 	def _delete_n_users(self, prefix, users):
 		try:
-			n = delete_users(self.driver, self.ilias_url, prefix, len(users))
+			n = self._delete_users(self.driver, prefix, len(users))
 			self.report("deleted %d user(s)." % n)
 		except:
 			self.report("deletion of user failed.")
@@ -433,9 +475,9 @@ class UsersBackend:
 		user = self._create_temporary_user(prefix, unique_id)
 
 		def perform_action():
-			goto_user_administration(self.driver, self.ilias_url)
+			self.ilias_driver.goto_user_administration()
 			self.report("creating user %s." % user.username)
-			add_user(self.driver, user.username, user.password)
+			self._add_user(self.driver, user.username, user.password)
 
 		interact(self.driver, perform_action)
 
@@ -443,7 +485,7 @@ class UsersBackend:
 
 	def _delete_1_user(self, prefix, user):
 		try:
-			n = delete_users(self.driver, self.ilias_url, user.username, 1)
+			n = self._delete_users(self.driver, user.username, 1)
 			self.report("deleted %d user(s)." % n)
 		except:
 			self.report("deletion of user failed.")
@@ -954,6 +996,7 @@ class TestDriver:
 		self.ilias_url = user_driver.ilias_url
 		self.ilias_base_url = user_driver.ilias_base_url
 		self.client_id = user_driver.client_id
+		self.ilias_version = user_driver.ilias_version
 
 		self.report = user_driver.report
 		self.autosave_time = 5
@@ -1061,7 +1104,10 @@ class TestDriver:
 
 	def goto_participants(self):
 		assert self.goto()
-		self.driver.find_element_by_css_selector("#tab_participants a").click()
+		if self.ilias_version >= (5, 4):
+			self.driver.find_element_by_css_selector("#tab_results a").click()
+		else:
+			self.driver.find_element_by_css_selector("#tab_participants a").click()
 
 	def goto_settings(self):
 		assert self.goto()
@@ -1479,7 +1525,7 @@ class TestDriver:
 
 
 class UserDriver:
-	def __init__(self, driver, ilias_url, report):
+	def __init__(self, driver, ilias_url, ilias_version, report):
 		self.driver = driver
 
 		self.ilias_url = ilias_url
@@ -1487,6 +1533,7 @@ class UserDriver:
 		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
 		self.client_id = parse_qs(parsed_url.query)['client_id'][0]
 
+		self.ilias_version = ilias_version
 		self.report = report
 
 	def login(self, username, password):

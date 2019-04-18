@@ -106,6 +106,7 @@ class TakeExamCommand:
 			self.workarounds = kwargs["workarounds"]
 
 		self.ilias_url = data["ilias_url"]
+		self.ilias_version = data["ilias_version"]
 		self.machine = data["machine"]
 		self.machine_index = data["machine_index"]
 		self.username = data["username"]
@@ -121,6 +122,7 @@ class TakeExamCommand:
 		return json.dumps(dict(
 			command="take_exam",
 			ilias_url=self.ilias_url,
+			ilias_version=self.ilias_version,
 			machine=self.machine,
 			machine_index=self.machine_index,
 			username=self.username,
@@ -164,7 +166,7 @@ class TakeExamCommand:
 		try:
 			with run_interaction():
 
-				user_driver = UserDriver(driver, self.ilias_url, master_report)
+				user_driver = UserDriver(driver, self.ilias_url, self.ilias_version, master_report)
 
 				with user_driver.login(self.username, self.password):
 
@@ -178,13 +180,15 @@ class TakeExamCommand:
 							self.questions,
 							self.settings,
 							self.workarounds,
-							self.admin_lang)
+							self.admin_lang,
+							self.ilias_version)
 					else:
 						context = RandomContext(
 							self.questions,
 							self.settings,
 							self.workarounds,
-							self.admin_lang)
+							self.admin_lang,
+							self.ilias_version)
 
 					exam_driver = test_driver.start(
 						self.username, context, self.questions, self.exam_configuration)

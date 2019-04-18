@@ -46,7 +46,7 @@ from tiltr.driver.exam_configuration import * # needed for pickling
 import pandora
 
 from .commands import TakeExamCommand
-from .drivers import UsersBackend, UsersFactory, UserDriver, verify_admin_settings, ImportedTest, Marks
+from .drivers import UsersBackend, UsersFactory, UserDriver, ImportedTest, Marks, ILIASDriver
 from .utils import wait_for_page_load, run_interaction
 
 
@@ -293,7 +293,7 @@ class Run:
 			assert self.questions is not None
 
 			ilias_result = workbook_to_result(
-				workbook, user.get_username(), self.questions, self.workarounds, master.report)
+				workbook, user.get_username(), self.questions, self.workarounds, self.ilias_version, master.report)
 
 			# check score via statistics gui as well.
 			ilias_result.add(("gui", "score_reached"), gui_stats[user.get_username()].score)
@@ -351,7 +351,8 @@ class Run:
 				result.update((channel, "short_mark"), str(mark.short).strip())
 
 	def _apply_manual_scoring(self, master, test_driver, all_recorded_results):
-		context = RandomContext(self.questions, self.settings, self.workarounds, self.language)
+		context = RandomContext(
+			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.tuple)
 
 		for question_title, question in self.questions.items():
 			if question.can_score_manually():
@@ -379,7 +380,8 @@ class Run:
 		# note that this will destroy the original test's scores. usually we should have copied
 		# this test and this should only run on a temporary copy.
 
-		context = RandomContext(self.questions, self.settings, self.workarounds, self.language)
+		context = RandomContext(
+			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.tuple)
 
 		protocol = self.protocols["readjustments"]
 
@@ -460,7 +462,10 @@ class Run:
 					master.report("saving.")
 
 					with wait_for_page_load(master.driver):
-						save_element = master.driver.find_element_by_name("cmd[savescoringfortest]")
+						if self.ilias_version >= (5, 4):
+							save_element = master.driver.find_element_by_name("cmd[saveQuestion]")
+						else:
+							save_element = master.driver.find_element_by_name("cmd[savescoringfortest]")
 
 						# without scrolling into view, clicking save will sometimes produce a
 						# WebDriverException ("element is not clickable at point")
@@ -475,7 +480,7 @@ class Run:
 
 					close_stats_window()
 
-					if master.driver.find_elements_by_css_selector(".alert-success"):
+					if self.ilias_version >= (5, 4) or master.driver.find_elements_by_css_selector(".alert-success"):
 						# readjustment seems to have been applied successfully.
 
 						# in certain cases (matching questions), reassessment can remove already given answers
@@ -572,7 +577,13 @@ class Run:
 		self._propagate_score_changes(all_recorded_results, context)
 
 	def _users_backend(self, master):
-		return lambda: UsersBackend(master.driver, self.batch.ilias_url, master.report)
+		ilias_driver = ILIASDriver(
+			master.driver,
+			self.batch.ilias_url, self.ilias_version,
+			self.workarounds, self.settings,
+			master.report)
+
+		return lambda: UsersBackend(ilias_driver, master.report)
 
 	def prepare(self, master, test_driver):
 		self.language = master.language
@@ -587,16 +598,17 @@ class Run:
 		self.settings.print_status(self.protocols["preferences/settings"].append)
 
 		header = self.protocols["header"]
-		header.append("Tested on ILIAS %s." % self.ilias_version)
+		header.append("Tested on ILIAS %s." % self.ilias_version.text)
 		header.append('Using test "%s".' % self.test.get_title())
 
+		ilias_driver = ILIASDriver(
+			master.driver,
+			self.batch.ilias_url, self.ilias_version,
+			self.workarounds, self.settings,
+			master.report)
+
 		self.protocols["settings"].extend(
-			verify_admin_settings(
-				master.driver,
-				self.workarounds,
-				self.settings,
-				self.batch.ilias_url,
-				master.report))
+			ilias_driver.verify_admin_settings())
 
 		self.users = self.users_factory.acquire(self._users_backend(master))
 
@@ -644,6 +656,7 @@ class Run:
 					report=self.report,
 					command=TakeExamCommand(
 						ilias_url=self.batch.ilias_url,
+						ilias_version=self.batch.ilias_version.tuple,
 						machine=machine,
 						machine_index=i + 1,
 						username=user.get_username(),
@@ -749,7 +762,8 @@ class Run:
 				workbook = load_workbook(filename=io.BytesIO(xls))
 
 				try:
-					check_workbook_consistency(workbook, self.questions, self.workarounds, master.report)
+					check_workbook_consistency(
+						workbook, self.questions, self.workarounds, self.ilias_version, master.report)
 				except:
 					raise IntegrityException("failed to check workbook consistency")
 
@@ -1030,7 +1044,7 @@ class Batch(threading.Thread):
 					'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
 
 				context.driver = browser.driver
-				context.user_driver = UserDriver(browser.driver, self.ilias_url, context.report)
+				context.user_driver = UserDriver(browser.driver, self.ilias_url, self.ilias_version, context.report)
 
 				with context.user_driver.login(self.ilias_admin_user, self.ilias_admin_password) as login:
 					context.language = login.language
@@ -1060,7 +1074,7 @@ class Batch(threading.Thread):
 		try:
 			asyncio.set_event_loop(asyncio.new_event_loop())
 
-			self.report("master", "connecting to ILIAS %s." % self.ilias_version)
+			self.report("master", "connecting to ILIAS %s." % self.ilias_version.text)
 
 			run = Run(self)
 			success = run.run()

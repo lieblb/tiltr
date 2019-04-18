@@ -138,6 +138,9 @@ class MultipleChoiceQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, actual_answers, context, report):
+		if context.ilias_version >= (5, 4):  # FIXME implement
+			return False, list()
+
 		choices = self._get_ui(driver)
 
 		if False:

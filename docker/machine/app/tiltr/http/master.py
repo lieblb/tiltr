@@ -26,7 +26,7 @@ from .discovery import connect_machines
 from .utils import clear_tmp
 from .args import parse_args
 from tiltr.driver.batch import Batch
-from tiltr.driver.drivers import PackagedTest
+from tiltr.driver.drivers import PackagedTest, ILIASVersion
 from tiltr.data.result import open_results
 from tiltr.data.settings import Settings, Workarounds
 from tiltr.data.database import DB
@@ -72,11 +72,13 @@ class FetchILIASVersion(threading.Thread):
 
 			m = re.search(r'"ILIAS_VERSION"\s*,\s*"([^"]+)"', php_code)
 			if m:
-				self.state.ilias_version = m.group(1)
+				version_text = m.group(1)
 
-				m = re.search(r"^(\d+\.\d+\.\d+)", self.state.ilias_version)
-				if m:
-					self.state.ilias_version_tuple = tuple(int(x) for x in m[1].split("."))
+				m = re.search(r"^(\d+\.\d+\.\d+)", version_text)
+				assert(m)
+				version_tuple = tuple(int(x) for x in m[1].split("."))
+
+				self.state.ilias_version = ILIASVersion(version_text, version_tuple)
 		else:
 			n_tries = 0
 			while True:
@@ -92,11 +94,13 @@ class FetchILIASVersion(threading.Thread):
 							print("found ILIAS version text '%s'" % bdo.text)
 							s = re.split(r"\(|\)", bdo.text)
 							if len(s) >= 2:
-								self.state.ilias_version = s[1]
+								version_text = s[1]
 
-								m = re.search(r"^v(\d+\.\d+\.\d+)", self.state.ilias_version)
-								if m:
-									self.state.ilias_version_tuple = tuple(int(x) for x in m[1].split("."))
+								m = re.search(r"^v(\d+\.\d+\.\d+)", version_text)
+								assert(m)
+								version_tuple = tuple(int(x) for x in m[1].split("."))
+
+								self.state.ilias_version = ILIASVersion(version_text, version_tuple)
 
 								return
 				except:
@@ -165,7 +169,6 @@ class GlobalState:
 		self.ilias_url = args.ilias_url
 
 		self.ilias_version = None
-		self.ilias_version_tuple = None
 
 		FetchILIASVersion(self).start()
 
@@ -174,11 +177,6 @@ class GlobalState:
 
 	def get_ilias_version(self):
 		return self.ilias_version
-
-	def get_ilias_version_tuple(self):
-		if self.ilias_version_tuple:
-			return self.ilias_version_tuple
-		raise RuntimeError("could not retrieve ILIAS version")
 
 	@property
 	def is_looping(self):
@@ -264,7 +262,7 @@ class AppHandler(tornado.web.RequestHandler):
 				"master.html",
 				num_machines=len(self.state.machines),
 				ilias_url=self._get_ilias_url(),
-				ilias_version=ilias_version or "unavailable",
+				ilias_version=ilias_version.text or "unavailable",
 				is_installing=num_db_tables == 0)
 
 
@@ -299,7 +297,7 @@ class StartBatchHandler(tornado.web.RequestHandler):
 
 		workarounds_dict = data["workarounds"]
 		Workarounds.disable_solved(
-			workarounds_dict, self.state.get_ilias_version_tuple())
+			workarounds_dict, self.state.get_ilias_version().tuple)
 
 		settings = Settings(from_dict=data["settings"])
 		workarounds = Workarounds(from_dict=workarounds_dict)
@@ -371,7 +369,7 @@ class PreferencesHandler(tornado.web.RequestHandler):
 			workarounds = Workarounds()
 
 		fixed_workarounds = Workarounds.get_solved(
-			self.state.get_ilias_version_tuple())
+			self.state.get_ilias_version().tuple)
 
 		self.write(json.dumps(dict(
 			settings=settings.get_catalog(),
@@ -465,7 +463,7 @@ class ReportHandler(tornado.web.RequestHandler):
 				nprotocols[name] = sections
 
 			self.render("report.html",
-				ilias_version=self.state.get_ilias_version() or "unavailable",
+				ilias_version=self.state.get_ilias_version().text or "unavailable",
 				results=db.get_results(),
 				protocols=nprotocols)
 

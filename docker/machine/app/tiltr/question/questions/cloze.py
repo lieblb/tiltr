@@ -107,9 +107,6 @@ def _readjust(context, scoring, gap, actual_answers):
 
 	else:  # text and select gaps
 
-		# FIXME remove options here. currently not possible due to
-		# https://mantis.ilias.de/view.php?id=25238
-
 		unscored_answers = set(actual_answers) - set(gap.get_scored_options().keys())
 
 		new_options = dict()
@@ -117,23 +114,24 @@ def _readjust(context, scoring, gap, actual_answers):
 			new_options[k] = v
 
 		# add new answers
-		for _ in range(random.randint(0, min(max(2, len(unscored_answers)), 10))):
-			while True:
-				if scoring.cloze_type == ClozeType.text and len(unscored_answers) > 0 and random.randint(1, 10) > 1:
-					new_answer = context.random.choice(list(unscored_answers))
-					unscored_answers.remove(new_answer)
-				else:
-					new_answer, ignored_score = gap.get_random_choice(context)
+		if context.ilias_version < (5, 4):  # FIXME implement for 5.4
+			for _ in range(random.randint(0, min(max(2, len(unscored_answers)), 10))):
+				while True:
+					if scoring.cloze_type == ClozeType.text and len(unscored_answers) > 0 and random.randint(1, 10) > 1:
+						new_answer = context.random.choice(list(unscored_answers))
+						unscored_answers.remove(new_answer)
+					else:
+						new_answer, ignored_score = gap.get_random_choice(context)
 
-					if scoring.cloze_type == ClozeType.select:
-						new_answer = _modify_answer(new_answer, context)
+						if scoring.cloze_type == ClozeType.select:
+							new_answer = _modify_answer(new_answer, context)
 
-					new_answer = new_answer.strip()
-					new_answer = new_answer.replace('\t', '')
+						new_answer = new_answer.strip()
+						new_answer = new_answer.replace('\t', '')
 
-				if len(new_answer) > 0 and new_answer not in new_options:
-					new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
-					break
+					if len(new_answer) > 0 and new_answer not in new_options:
+						new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
+						break
 
 		i = 0
 		while True:
@@ -423,74 +421,75 @@ def parse_gap_options(driver, gap_index):
 	return options
 
 
-def update_gap_options(driver, gap_index, options):
-	old_keys = set()
-	new_keys = set(options.keys())
-
+def update_gap_options(driver, gap_index, options, context):
 	# for some obscure reason, setting answers and scores via set_element_value() won't
 	# work here. send_keys() works though.
 
-	def get_option_answer_element(option_index):
-		return driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, option_index))
+	if context.ilias_version >= (5, 4):
+		def option_answers():
+			for tr in driver.find_elements_by_css_selector("#il_prop_cont_gap_%d .answerwizard tbody tr" % gap_index):
+				for td in tr.find_elements_by_css_selector("td"):
+					yield td.text
+					break
+	else:
+		def get_option_answer_element(option_index):
+			return driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, option_index))
 
-	def get_option_answer(option_index):
-		return get_option_answer_element(option_index).get_attribute("value")
+		def option_answers():
+			option_index = 0
+			while True:
+				try:
+					element = get_option_answer_element(option_index)
+					yield element.get_attribute("value")
+				except NoSuchElementException:
+					break
+				option_index += 1
 
-	option_index = 0
-	while True:
-		try:
-			option_key = get_option_answer(option_index)
-		except NoSuchElementException:
-			break
+		def add_answer(option_index, option_key):
+			driver.find_element_by_name("add_gap_%d_%d" % (gap_index, option_index - 1)).click()
 
-		old_keys.add(option_key)
+			element = get_option_answer_element(option_index)
+			element.send_keys(option_key)
 
-		option_index += 1
+			if element.get_attribute("value") != option_key:
+				print("gap option name mismatch: '%s' != '%s'" % (element.get_attribute("value"), option_key))
+				raise InteractionException("failed to set gap option name")
+
+
+	old_keys = set(option_answers())
+	new_keys = set(options.keys())
+
+	print("!", old_keys, new_keys)
 
 	# add options.
-	for option_key in new_keys - old_keys:
-		driver.find_element_by_name("add_gap_%d_%d" % (gap_index, option_index - 1)).click()
-
-		element = get_option_answer_element(option_index)
-		element.send_keys(option_key)
-		#set_element_value(driver, element, option_key)
-
-		if element.get_attribute("value") != option_key:
-			print("gap option name mismatch: '%s' != '%s'" % (element.get_attribute("value"), option_key))
-			raise InteractionException("failed to set gap option name")
-
-		# debug
-		#for i in range(option_index):
-		#	answer = get_option_answer(i)
-		#	print("debug option %d %s" % (i, answer))
-
-		option_index += 1
+	if context.ilias_version < (5, 4):
+		option_index = len(old_keys)
+		for option_key in new_keys - old_keys:
+			add_answer(option_index, option_key)
+			option_index += 1
+	else:
+		if len(new_keys - old_keys) > 0:
+			raise InteractionException("could not add new keys in ILIAS >= 5.4")
 
 	# remove options.
-	option_index = 0
-	while True:
-		try:
-			option_key = get_option_answer(option_index)
-		except NoSuchElementException:
-			break
+	if context.ilias_version < (5, 4):
+		keys = list(option_answers())
 
-		if len(option_key.strip()) == 0:
-			raise InteractionException("illegal empty option name")
+		option_index = 0
+		for option_key in keys:
+			if len(option_key.strip()) == 0:
+				raise InteractionException("illegal empty option name")
 
-		if option_key not in new_keys:
-			driver.find_element_by_name("remove_gap_%d_%d" % (gap_index, option_index)).click()
-		else:
-			option_index += 1
-
-	option_count = option_index
+			if option_key not in new_keys:
+				driver.find_element_by_name("remove_gap_%d_%d" % (gap_index, option_index)).click()
+			else:
+				option_index += 1
 
 	# set all scores.
-	for option_index in range(option_count):
-		option_key = get_option_answer(option_index)
-
+	for option_index, option_answer in enumerate(option_answers()):
 		points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, option_index))
 		points.clear()
-		points.send_keys(str(options[option_key]))
+		points.send_keys(str(options[option_answer]))
 
 
 class ClozeQuestion(Question):
@@ -551,20 +550,21 @@ class ClozeQuestion(Question):
 			gaps=gaps)
 
 	@staticmethod
-	def _set_ui(driver, scoring):
-		identical_scoring_checkbox = driver.find_element_by_name("identical_scoring")
-		if identical_scoring_checkbox.is_selected() != scoring.identical_scoring:
-			identical_scoring_checkbox.click()
+	def _set_ui(driver, scoring, context):
+		if context.ilias_version < (5, 4):
+			identical_scoring_checkbox = driver.find_element_by_name("identical_scoring")
+			if identical_scoring_checkbox.is_selected() != scoring.identical_scoring:
+				identical_scoring_checkbox.click()
 
-		Select(driver.find_element_by_id("textgap_rating")).select_by_value(
-			scoring.comparator.value)
+			Select(driver.find_element_by_id("textgap_rating")).select_by_value(
+				scoring.comparator.value)
 
 		for gap_index, gap in enumerate(scoring.gaps):
 			n_tries = 0
 			while True:
 				try:
 					if gap.cloze_type in (ClozeType.text, ClozeType.select):
-						update_gap_options(driver, gap_index, gap.options)
+						update_gap_options(driver, gap_index, gap.options, context)
 					else:
 						update_numeric_gap_scoring(driver, gap_index, gap)
 					break
@@ -654,13 +654,17 @@ class ClozeQuestion(Question):
 				return answers, valid, self.compute_score_by_indices(answers, context)
 
 	def readjust_scores(self, driver, actual_answers, context, report):
-		def random_flip(f):
+		def random_flip_scoring(f):
+			if context.ilias_version >= (5, 4):
+				return f  # never flip
 			if context.random.randint(0, 3) == 0:  # flip?
 				return not f
 			else:
 				return f
 
 		def random_flip_comparator(c):
+			if context.ilias_version >= (5, 4):
+				return c  # never flip
 			if context.random.randint(0, 3) == 0:  # flip?
 				return context.random.choice([x for x in list(ClozeComparator) if x != c])
 			else:
@@ -669,12 +673,12 @@ class ClozeQuestion(Question):
 		old_scoring = self.scoring
 
 		self.scoring = ClozeScoring(
-			identical_scoring=random_flip(self.scoring.identical_scoring),
+			identical_scoring=random_flip_scoring(self.scoring.identical_scoring),
 			comparator=random_flip_comparator(self.scoring.comparator),
 			gaps=[_readjust(context, s, self.gaps[i], actual_answers[self.gaps[i].get_export_name(context.language)])
 				  for i, s in enumerate(self.scoring.gaps)])
 		self._create_gaps()
-		self._set_ui(driver, self.scoring)
+		self._set_ui(driver, self.scoring, context)
 
 		table = Texttable()
 		table.set_deco(Texttable.HEADER)

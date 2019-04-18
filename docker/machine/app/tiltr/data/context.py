@@ -47,7 +47,7 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 
 
 class TestContext:
-	def __init__(self, questions, settings, workarounds, language):
+	def __init__(self, questions, settings, workarounds, language, ilias_version):
 		allow_cloze_clamps = not (
 			workarounds.dont_use_clamps_in_cloze_readjustments or
 			workarounds.disallow_clamps_in_cloze)
@@ -64,6 +64,7 @@ class TestContext:
 			allow_clamps=True)
 		self.coverage = Coverage(questions, self)
 		self.language = language
+		self.ilias_version = ilias_version
 
 	def _random_text(self, n, random_chars, allow_numbers=True):
 		if allow_numbers and self.random.random() < self.settings.numbers_in_text_fields_p:
