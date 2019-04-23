@@ -5,10 +5,10 @@
 # GPLv3, see LICENSE
 #
 
+import time
 from enum import Enum
 from decimal import *
 from collections import defaultdict, namedtuple
-import time
 
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.select import Select
@@ -114,8 +114,18 @@ def _readjust(context, scoring, gap, actual_answers):
 			new_options[k] = v
 
 		# add new answers
-		if context.ilias_version < (5, 4):  # FIXME implement for 5.4
-			for _ in range(random.randint(0, min(max(2, len(unscored_answers)), 10))):
+		n_answers_to_add = random.randint(0, min(max(2, len(unscored_answers)), 10))
+
+		if context.ilias_version >= (5, 4):
+			if scoring.cloze_type == ClozeType.text:
+				for _ in range(min(n_answers_to_add, len(unscored_answers))):
+					new_answer = context.random.choice(list(unscored_answers))
+					unscored_answers.remove(new_answer)
+					new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
+			else:
+				pass  # cannot add new answers for "select" or "numeric" gaps
+		else:  # ILIAS < 5.4
+			for _ in range(n_answers_to_add):
 				while True:
 					if scoring.cloze_type == ClozeType.text and len(unscored_answers) > 0 and random.randint(1, 10) > 1:
 						new_answer = context.random.choice(list(unscored_answers))
@@ -458,18 +468,65 @@ def update_gap_options(driver, gap_index, options, context):
 
 	old_keys = set(option_answers())
 	new_keys = set(options.keys())
-
-	print("!", old_keys, new_keys)
+	added_keys = new_keys - old_keys
+	keep_score = set()
 
 	# add options.
 	if context.ilias_version < (5, 4):
 		option_index = len(old_keys)
-		for option_key in new_keys - old_keys:
+		for option_key in added_keys:
 			add_answer(option_index, option_key)
 			option_index += 1
-	else:
-		if len(new_keys - old_keys) > 0:
-			raise InteractionException("could not add new keys in ILIAS >= 5.4")
+	elif added_keys:
+		# go to readjustment statistics ("given answers") tab
+		driver.find_element_by_id("tab_answers").click()
+
+		# gather answer statstics tables - they are not numbered
+		# and all have the same id. hm.
+
+		still_to_add = set(list(added_keys))
+
+		while still_to_add:
+			s_tables = list()
+			for table in driver.find_elements_by_css("table"):
+				if table.get_attribute("id") == "tstAnswerStatistic":
+					s_tables.append(table)
+					if len(s_tables) > gap_index:  # exit early
+						return
+
+			# pick the one table for our gap.
+			s_table = s_tables[gap_index]
+
+			# click next appropriate "add" button.
+			answer_text = None
+			for tr in s_table.find_elements_by_css("tbody tr"):
+				tds = list(tr.find_elements_by_css("td"))
+
+				answer_text = tds[0].text.strip()
+				if answer_text in still_to_add:
+					tds[2].find_element_by_css("a").click()  # clicks to add
+					break
+
+			# scoring popup will show now. we need to enter a value.
+			points_input = driver.find_element_by_css("input#points")
+			points_input.clear()
+			points_input.send_keys(str(options[answer_text]))
+
+			driver.find_element_by_name("cmd[addAnswerAsynch]").click()
+
+			still_to_add.remove(answer_text)
+			keep_score.add(answer_text)
+
+			# wait until popup has gone.
+			while True:
+				try:
+					driver.find_element_by_name("cmd[addAnswerAsynch]")
+				except NoSuchElementException:
+					break
+				time.sleep(1)
+
+		# go back to readjustment scoring tab
+		driver.find_element_by_id("tab_question").click()
 
 	# remove options.
 	if context.ilias_version < (5, 4):
@@ -485,11 +542,12 @@ def update_gap_options(driver, gap_index, options, context):
 			else:
 				option_index += 1
 
-	# set all scores.
+	# set all scores (not yet set, i.e. not in keep_score).
 	for option_index, option_answer in enumerate(option_answers()):
-		points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, option_index))
-		points.clear()
-		points.send_keys(str(options[option_answer]))
+		if option_answer not in keep_score:
+			points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, option_index))
+			points.clear()
+			points.send_keys(str(options[option_answer]))
 
 
 class ClozeQuestion(Question):
