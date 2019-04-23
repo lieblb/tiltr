@@ -34,6 +34,48 @@ def _print_readjustments(old_scoring, new_scoring, report):
 			bool_to_str[old_choice.is_correct],
 			bool_to_str[new_choice.is_correct]))
 
+def _readjust_ui(context, driver, scoring):
+	halfpoints_checkbox = driver.find_element_by_name("score_partsol_enabled")
+	if halfpoints_checkbox.is_selected() != scoring.halfpoints:
+		halfpoints_checkbox.click()
+
+	set_element_value(driver, driver.find_element_by_name("points"), str(scoring.score))
+
+	def ilias_5_4(driver, scoring):
+		choices = dict((choice.name.strip(), choice) for choice in scoring.choices)
+
+		for tr in driver.find_elements_by_css_selector("#kprim_answers table tbody tr"):
+			answer_text_element, *points_elements = list(tr.find_elements_by_css_selector("td"))
+			answer_text = answer_text_element.text.strip()
+
+			choice = choices[answer_text]
+			del choices[answer_text]
+
+			radio_value = 1 if choice.is_correct else 0
+
+			for element in points_elements:
+				radio = element.find_element_by_css_selector("input")
+				if int(radio.get_attribute("value")) == radio_value:
+					radio.click()
+					break
+
+		if choices:
+			raise InteractionException("some choices were not listed in readjustment ui")
+
+	def ilias_5_3(driver, scoring):
+		for i, choice in enumerate(scoring.choices):
+			radio_value = 1 if choice.is_correct else 0
+
+			for radio in driver.find_elements_by_name("kprim_answers[correctness][%d]" % i):
+				if int(radio.get_attribute("value")) == radio_value:
+					radio.click()
+					break
+
+	if context.ilias_version >= (5, 4):
+		ilias_5_4(driver, scoring)
+	else:
+		ilias_5_3(driver, scoring)
+
 
 class KPrimQuestion(Question):
 	@staticmethod
@@ -58,22 +100,6 @@ class KPrimQuestion(Question):
 
 		return KPrimScoring(
 			halfpoints=halfpoints, score=score, choices=choices)
-
-	@staticmethod
-	def _set_ui(driver, scoring):
-		halfpoints_checkbox = driver.find_element_by_name("score_partsol_enabled")
-		if halfpoints_checkbox.is_selected() != scoring.halfpoints:
-			halfpoints_checkbox.click()
-
-		set_element_value(driver, driver.find_element_by_name("points"), str(scoring.score))
-
-		for i, choice in enumerate(scoring.choices):
-			radio_value = 1 if choice.is_correct else 0
-
-			for radio in driver.find_elements_by_name("kprim_answers[correctness][%d]" % i):
-				if int(radio.get_attribute("value")) == radio_value:
-					radio.click()
-					break
 
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
@@ -135,9 +161,6 @@ class KPrimQuestion(Question):
 		return answers, self.compute_score_by_indices(answers)
 
 	def readjust_scores(self, driver, actual_answers, context, report):
-		if context.ilias_version >= (5, 4):  # FIXME implement
-			return False, list()
-
 		if context.workarounds.dont_readjust_kprim:
 			return False, list()
 
@@ -162,7 +185,7 @@ class KPrimQuestion(Question):
 			score=Decimal(random.randint(1, 8)) / Decimal(4),
 			choices=new_choices)
 
-		KPrimQuestion._set_ui(driver, self.scoring)
+		_readjust_ui(context, driver, self.scoring)
 
 		_print_readjustments(old_scoring, self.scoring, report)
 
