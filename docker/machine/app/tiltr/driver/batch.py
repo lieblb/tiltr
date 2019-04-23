@@ -480,7 +480,16 @@ class Run:
 
 					close_stats_window()
 
-					if self.ilias_version >= (5, 4) or master.driver.find_elements_by_css_selector(".alert-success"):
+					if master.driver.find_elements_by_css_selector(".alert-danger"):
+						maximum_score = question.get_maximum_score(context)
+
+						if maximum_score > 0:
+							raise InteractionException(
+								"ILIAS rejected new scores even though they are valid (%f)." % maximum_score)
+						else:
+							report("ILIAS rejected invalid new scores.")
+
+					elif self.ilias_version >= (5, 4) or master.driver.find_elements_by_css_selector(".alert-success"):
 						# readjustment seems to have been applied successfully.
 
 						# in certain cases (matching questions), reassessment can remove already given answers
@@ -490,14 +499,6 @@ class Run:
 								result.remove(Result.key("question", question.title, "answer", key))
 
 						break
-
-					elif master.driver.find_elements_by_css_selector(".alert-danger"):
-						maximum_score = question.get_maximum_score(context)
-
-						if maximum_score > 0:
-							report("ILIAS rejected new scores even though they are valid (%f)." % maximum_score)
-						else:
-							report("ILIAS rejected invalid new scores.")
 
 					else:
 						# we should either see a success or failure alert.
