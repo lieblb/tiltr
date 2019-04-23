@@ -24,6 +24,7 @@ class LongTextQuestion(Question):
 
 	@staticmethod
 	def _set_ui(driver, score):
+		driver.find_element_by_id("scoring_mode_non").click()
 		points = driver.find_element_by_id("non_keyword_points")
 		set_element_value(driver, points, str(score))
 
@@ -60,9 +61,6 @@ class LongTextQuestion(Question):
 		return text, self.compute_score(text, context)
 
 	def readjust_scores(self, driver, actual_answers, context, report):
-		if context.ilias_version >= (5, 4):  # FIXME implement
-			return False, list()
-
 		maximum_score = Decimal(context.random.randint(1, 100)) / Decimal(10)
 		self._set_ui(driver, maximum_score)
 		self._maximum_score = maximum_score

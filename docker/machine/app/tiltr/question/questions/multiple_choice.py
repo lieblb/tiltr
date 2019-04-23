@@ -9,15 +9,20 @@ from decimal import *
 import itertools
 import json
 from collections import namedtuple
+from enum import Enum
 
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support.select import Select
 from texttable import Texttable
 
 from .question import Question
-from tiltr.driver.utils import set_element_value
-
+from tiltr.driver.utils import set_element_value, wait_for_css_visible
 
 MultipleChoiceItem = namedtuple('MultipleChoiceItem', ['checked_score', 'unchecked_score'])
+
+class AnswerType(Enum):
+	SINGLE_LINE = 0
+	MULTI_LINE = 1
 
 
 def _readjust_score(random, score):
@@ -31,28 +36,19 @@ def _readjust_choice_item(random, scores):
 	return MultipleChoiceItem(*[_readjust_score(random, scores[i]) for i in range(2)])
 
 
-class MultipleChoiceQuestion(Question):
-	@staticmethod
-	def _get_ui(driver):
-		choices = dict()
+def _readjust_ui(context, *args):
+	def ilias_5_4(driver, choices):
+		for tr in driver.find_elements_by_css_selector("#form_tst_question_correction table tbody tr"):
+			answer_text_element, *points_elements = list(
+				tr.find_elements_by_css_selector("td"))
+			assert(len(points_elements) == 2)
 
-		while True:
-			try:
-				choice = driver.find_element_by_name("choice[answer][%d]" % len(choices))
-			except NoSuchElementException:
-				break
+			item = choices[answer_text_element.text.strip()]
 
-			values = []
-			for name in ('points', 'points_unchecked'):
-				points = driver.find_element_by_name("choice[%s][%d]" % (name, len(choices)))
-				values.append(Decimal(points.get_attribute("value")))
+			for element, value in zip(points_elements, (item.checked_score, item.unchecked_score)):
+				set_element_value(driver, element.find_element_by_css_selector("input"), str(value))
 
-			choices[choice.get_attribute("value")] = MultipleChoiceItem(*values)
-
-		return choices
-
-	@staticmethod
-	def _set_ui(driver, choices):
+	def ilias_5_3(driver, choices):
 		i = 0
 		while True:
 			try:
@@ -67,6 +63,46 @@ class MultipleChoiceQuestion(Question):
 				set_element_value(driver, points, str(value))
 
 			i += 1
+
+	if context.ilias_version >= (5, 4):
+		ilias_5_4(*args)
+	else:
+		ilias_5_3(*args)
+
+
+class MultipleChoiceQuestion(Question):
+	@staticmethod
+	def _get_ui(driver):
+		choices = dict()
+
+		answer_type = AnswerType(int(Select(driver.find_element_by_css_selector(
+			"#il_prop_cont_types select")).first_selected_option.get_attribute("value")))
+
+		while True:
+			try:
+				if answer_type == AnswerType.SINGLE_LINE:
+					choice_element = driver.find_element_by_name("choice[answer][%d]" % len(choices))
+					choice_name = choice_element.get_attribute("value")
+				elif answer_type == AnswerType.MULTI_LINE:
+					choice_iframe = driver.find_element_by_id("choice[answer][%d]_ifr" % len(choices))
+					try:
+						driver.switch_to_frame(choice_iframe)
+						choice_name = driver.find_element_by_id("tinymce").text.strip()
+					finally:
+						driver.switch_to_default_content()
+				else:
+					raise RuntimeError("unsupported answer type %s" % answer_type)
+			except NoSuchElementException:
+				break
+
+			values = []
+			for name in ('points', 'points_unchecked'):
+				points = driver.find_element_by_name("choice[%s][%d]" % (name, len(choices)))
+				values.append(Decimal(points.get_attribute("value")))
+
+			choices[choice_name] = MultipleChoiceItem(*values)
+
+		return choices
 
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
@@ -138,10 +174,7 @@ class MultipleChoiceQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, actual_answers, context, report):
-		if context.ilias_version >= (5, 4):  # FIXME implement
-			return False, list()
-
-		choices = self._get_ui(driver)
+		choices = self.choices
 
 		if False:
 			if len(choices) != len(self.choices):
@@ -162,8 +195,7 @@ class MultipleChoiceQuestion(Question):
 
 		report(table)
 
-		self._set_ui(driver, choices)
-		self.choices = choices
+		_readjust_ui(context, driver, choices)
 
 		return True, list()
 

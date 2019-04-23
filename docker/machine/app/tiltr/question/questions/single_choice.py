@@ -21,6 +21,32 @@ def _readjust_score(random, score):
 	score = max(score, Decimal(0))
 	return score
 
+def _readjust_ui(context, *args):
+	def ilias_5_4(driver, choices):
+		for tr in driver.find_elements_by_css_selector("#form_tst_question_correction table tbody tr"):
+			answer_text_element, points_element = list(tr.find_elements_by_css_selector("td"))
+
+			set_element_value(
+				driver,
+				points_element.find_element_by_css_selector("input"),
+				str(choices[answer_text_element.text.strip()]))
+
+	def ilias_5_3(driver, choices):
+		i = 0
+		while True:
+			try:
+				choice = driver.find_element_by_name("choice[answer][%d]" % i)
+			except NoSuchElementException:
+				break
+			points = driver.find_element_by_name("choice[points][%d]" % i)
+			set_element_value(driver, points, str(choices[choice.get_attribute("value")]))
+			i += 1
+
+	if context.ilias_version >= (5, 4):
+		ilias_5_4(*args)
+	else:
+		ilias_5_3(*args)
+
 
 class SingleChoiceQuestion(Question):
 	@staticmethod
@@ -36,18 +62,6 @@ class SingleChoiceQuestion(Question):
 			choices[choice.get_attribute("value")] = Decimal(points.get_attribute("value"))
 
 		return choices
-
-	@staticmethod
-	def _set_ui(driver, choices):
-		i = 0
-		while True:
-			try:
-				choice = driver.find_element_by_name("choice[answer][%d]" % i)
-			except NoSuchElementException:
-				break
-			points = driver.find_element_by_name("choice[points][%d]" % i)
-			set_element_value(driver, points, str(choices[choice.get_attribute("value")]))
-			i += 1
 
 	def __init__(self, driver, title, settings):
 		super().__init__(title)
@@ -76,10 +90,7 @@ class SingleChoiceQuestion(Question):
 		return choice, self.choices[choice]
 
 	def readjust_scores(self, driver, actual_answers, context, report):
-		if context.ilias_version >= (5, 4):  # FIXME implement
-			return False, list()
-
-		choices = self._get_ui(driver)
+		choices = self.choices
 
 		if False:
 			if len(choices) != len(self.choices):
@@ -100,8 +111,7 @@ class SingleChoiceQuestion(Question):
 
 		report(table)
 
-		self._set_ui(driver, choices)
-		self.choices = choices
+		_readjust_ui(context, driver, choices)
 
 		return True, list()
 
