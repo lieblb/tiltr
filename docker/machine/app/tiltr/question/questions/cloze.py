@@ -6,18 +6,18 @@
 #
 
 import time
+import traceback
 from enum import Enum
 from decimal import *
 from collections import defaultdict, namedtuple
 
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, ElementNotVisibleException
 from selenium.webdriver.support.select import Select
 from texttable import Texttable
 
 from .question import Question
 from ...data.exceptions import *
-from tiltr.driver.utils import set_element_value
-
+from tiltr.driver.utils import set_element_value, wait_for_page_load
 
 ClozeScoring = namedtuple('ClozeScoring', ['identical_scoring', 'comparator', 'gaps'])
 
@@ -107,11 +107,14 @@ def _readjust(context, scoring, gap, actual_answers):
 
 	else:  # text and select gaps
 
+		print("! actual answers: ", actual_answers)
+
 		unscored_answers = set(actual_answers) - set(gap.get_scored_options().keys())
 
 		new_options = dict()
 		for k, v in scoring.options.items():
 			new_options[k] = v
+		just_added = set()
 
 		# add new answers
 		n_answers_to_add = random.randint(0, min(max(2, len(unscored_answers)), 10))
@@ -120,8 +123,11 @@ def _readjust(context, scoring, gap, actual_answers):
 			if scoring.cloze_type == ClozeType.text:
 				for _ in range(min(n_answers_to_add, len(unscored_answers))):
 					new_answer = context.random.choice(list(unscored_answers))
+					print("adding new answer", new_answer)
 					unscored_answers.remove(new_answer)
+					assert new_answer not in new_options
 					new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
+					just_added.add(new_answer)
 			else:
 				pass  # cannot add new answers for "select" or "numeric" gaps
 		else:  # ILIAS < 5.4
@@ -141,6 +147,7 @@ def _readjust(context, scoring, gap, actual_answers):
 
 					if len(new_answer) > 0 and new_answer not in new_options:
 						new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
+						just_added.add(new_answer)
 						break
 
 		i = 0
@@ -148,7 +155,10 @@ def _readjust(context, scoring, gap, actual_answers):
 			readjusted_options = dict()
 
 			for k, score in new_options.items():
-				readjusted_options[k] = _readjust_score(random, score, i)
+				if k in just_added:
+					readjusted_options[k] = score
+				else:
+					readjusted_options[k] = _readjust_score(random, score, i)
 
 			if any(score > Decimal(0) for score in readjusted_options.values()):
 				break
@@ -405,10 +415,6 @@ def parse_numeric_gap_scoring(driver, gap_index):
 	return dict(value=value, lower=lower, upper=upper, score=score)
 
 
-def update_numeric_gap_scoring(driver, gap_index, gap):
-	set_element_value(driver, driver.find_element_by_name("gap_%d_numeric_points" % gap_index), str(gap.score))
-
-
 def parse_gap_options(driver, gap_index):
 	options = dict()
 	seen = set()
@@ -431,106 +437,78 @@ def parse_gap_options(driver, gap_index):
 	return options
 
 
-def update_gap_options(driver, gap_index, options, context):
-	# for some obscure reason, setting answers and scores via set_element_value() won't
-	# work here. send_keys() works though.
+class GapReadjuster:
+	def __init__(self, driver, gap_index, gap, context):
+		self.driver = driver
+		self.gap_index = gap_index
+		self.gap = gap
+		self.context = context
 
-	if context.ilias_version >= (5, 4):
-		def option_answers():
-			for tr in driver.find_elements_by_css_selector("#il_prop_cont_gap_%d .answerwizard tbody tr" % gap_index):
-				for td in tr.find_elements_by_css_selector("td"):
-					yield td.text
-					break
-	else:
-		def get_option_answer_element(option_index):
-			return driver.find_element_by_id("gap_%d[answer][%d]" % (gap_index, option_index))
+	def initialize(self):  # happens on main tab
+		pass
 
-		def option_answers():
-			option_index = 0
-			while True:
-				try:
-					element = get_option_answer_element(option_index)
-					yield element.get_attribute("value")
-				except NoSuchElementException:
-					break
-				option_index += 1
+class NumericGapReadjuster(GapReadjuster):
+	def extend_scores(self):
+		pass
 
-		def add_answer(option_index, option_key):
-			driver.find_element_by_name("add_gap_%d_%d" % (gap_index, option_index - 1)).click()
-
-			element = get_option_answer_element(option_index)
-			element.send_keys(option_key)
-
-			if element.get_attribute("value") != option_key:
-				print("gap option name mismatch: '%s' != '%s'" % (element.get_attribute("value"), option_key))
-				raise InteractionException("failed to set gap option name")
+	def update_scores(self):
+		set_element_value(
+			self.driver,
+			self.driver.find_element_by_name("gap_%d_numeric_points" % self.gap_index),
+			str(self.gap.score))
 
 
-	old_keys = set(option_answers())
-	new_keys = set(options.keys())
-	added_keys = new_keys - old_keys
-	keep_score = set()
+class TextGapReadjuster(GapReadjuster):
+	def initialize(self):  # happens on main tab
+		self._old_keys = set(self._option_answers())
 
-	# add options.
-	if context.ilias_version < (5, 4):
-		option_index = len(old_keys)
-		for option_key in added_keys:
-			add_answer(option_index, option_key)
+	def update_scores(self):
+		# for some obscure reason, setting answers and scores via set_element_value() won't
+		# work here. send_keys() works though.
+
+		# set all scores (not yet set, i.e. not in keep_score).
+		for option_index, option_answer in enumerate(self._option_answers()):
+			#if option_answer not in keep_score:
+			points = self.driver.find_element_by_id("gap_%d[points][%d]" % (self.gap_index, option_index))
+			points.clear()
+			points.send_keys(str(self.gap.options[option_answer]))
+
+class TextGapReadjuster53(TextGapReadjuster):
+	def _get_option_answer_element(self, option_index):
+		return self.driver.find_element_by_id("gap_%d[answer][%d]" % (self.gap_index, option_index))
+
+	def _option_answers(self):
+		option_index = 0
+		while True:
+			try:
+				element = self._get_option_answer_element(option_index)
+				yield element.get_attribute("value")
+			except NoSuchElementException:
+				break
 			option_index += 1
-	elif added_keys:
-		# go to readjustment statistics ("given answers") tab
-		driver.find_element_by_id("tab_answers").click()
 
-		# gather answer statstics tables - they are not numbered
-		# and all have the same id. hm.
+	def _add_answer(self, option_index, option_key):
+		self.driver.find_element_by_name("add_gap_%d_%d" % (self.gap_index, option_index - 1)).click()
 
-		still_to_add = set(list(added_keys))
+		element = self._get_option_answer_element(option_index)
+		element.send_keys(option_key)
 
-		while still_to_add:
-			s_tables = list()
-			for table in driver.find_elements_by_css("table"):
-				if table.get_attribute("id") == "tstAnswerStatistic":
-					s_tables.append(table)
-					if len(s_tables) > gap_index:  # exit early
-						return
+		if element.get_attribute("value") != option_key:
+			print("gap option name mismatch: '%s' != '%s'" % (element.get_attribute("value"), option_key))
+			raise InteractionException("failed to set gap option name")
 
-			# pick the one table for our gap.
-			s_table = s_tables[gap_index]
+	def _add(self):
+		new_keys = set(self.gap.options.keys())
+		added_keys = new_keys - self._old_keys
 
-			# click next appropriate "add" button.
-			answer_text = None
-			for tr in s_table.find_elements_by_css("tbody tr"):
-				tds = list(tr.find_elements_by_css("td"))
+		option_index = len(self._old_keys)
+		for option_key in added_keys:
+			self._add_answer(option_index, option_key)
+			option_index += 1
 
-				answer_text = tds[0].text.strip()
-				if answer_text in still_to_add:
-					tds[2].find_element_by_css("a").click()  # clicks to add
-					break
-
-			# scoring popup will show now. we need to enter a value.
-			points_input = driver.find_element_by_css("input#points")
-			points_input.clear()
-			points_input.send_keys(str(options[answer_text]))
-
-			driver.find_element_by_name("cmd[addAnswerAsynch]").click()
-
-			still_to_add.remove(answer_text)
-			keep_score.add(answer_text)
-
-			# wait until popup has gone.
-			while True:
-				try:
-					driver.find_element_by_name("cmd[addAnswerAsynch]")
-				except NoSuchElementException:
-					break
-				time.sleep(1)
-
-		# go back to readjustment scoring tab
-		driver.find_element_by_id("tab_question").click()
-
-	# remove options.
-	if context.ilias_version < (5, 4):
-		keys = list(option_answers())
+	def _remove(self):
+		keys = list(self._option_answers())
+		new_keys = set(self.gap.options.keys())
 
 		option_index = 0
 		for option_key in keys:
@@ -538,16 +516,122 @@ def update_gap_options(driver, gap_index, options, context):
 				raise InteractionException("illegal empty option name")
 
 			if option_key not in new_keys:
-				driver.find_element_by_name("remove_gap_%d_%d" % (gap_index, option_index)).click()
+				self.driver.find_element_by_name(
+					"remove_gap_%d_%d" % (self.gap_index, option_index)).click()
 			else:
 				option_index += 1
 
-	# set all scores (not yet set, i.e. not in keep_score).
-	for option_index, option_answer in enumerate(option_answers()):
-		if option_answer not in keep_score:
-			points = driver.find_element_by_id("gap_%d[points][%d]" % (gap_index, option_index))
-			points.clear()
-			points.send_keys(str(options[option_answer]))
+	def extend_scores(self):
+		self._add()
+		self._remove()
+
+
+class TextGapReadjuster54(TextGapReadjuster):
+	def _option_answers(self):
+		for tr in self.driver.find_elements_by_css_selector(
+			"#il_prop_cont_gap_%d .answerwizard tbody tr" % self.gap_index):
+
+			for td in tr.find_elements_by_css_selector("td"):
+				yield td.text
+				break
+
+	def extend_scores(self):
+		driver = self.driver
+		gap_index = self.gap_index
+		options = self.gap.options
+		# context = self.context
+
+		new_keys = set(options.keys())
+		added_keys = new_keys - self._old_keys
+		keep_score = set()
+
+		# add options.
+		if added_keys:
+			# gather answer statstics tables - they are not numbered
+			# and all have the same id. hm.
+
+			still_to_add = set(list(added_keys))
+
+			def find_table():
+				s_tables = list()
+				for table in driver.find_elements_by_css_selector("table"):
+					if table.get_attribute("id") == "tstAnswerStatistic":
+						s_tables.append(table)
+						if len(s_tables) > gap_index:  # exit early
+							break
+
+				# pick the one table for our gap.
+				return s_tables[gap_index]
+
+			while still_to_add:
+				print("starting iteration", still_to_add)
+
+				print("finding table")
+				# pick the one table for our gap.
+				s_table = find_table()
+
+				print("clicking add")
+
+				# click next appropriate "add" button.
+				answer_text = None
+				found_add_button = False
+
+				for tr in s_table.find_elements_by_css_selector("tbody tr"):
+					tds = list(tr.find_elements_by_css_selector("td"))
+
+					answer_text = tds[0].text.strip()
+					if answer_text in still_to_add:
+						tds[2].find_element_by_css_selector("a").click()  # clicks to add
+						found_add_button = True
+						break
+
+				if not found_add_button:
+					raise InteractionException("did not find add button for answers %s" % still_to_add)
+
+				def wait(cond, desc, num_tries=7):
+					for i in range(num_tries):
+						print("retry %d: state of %s: %d" % (i, desc, int(cond())))
+						if cond():
+							return
+						time.sleep(1)
+					raise InteractionException("failed to wait for: %s" % desc)
+
+				def is_modal_visible():
+					return driver.execute_script('return $(".modal.fade.in .modal-content").length > 0;')
+
+				def has_modal_error():
+					return driver.execute_script('return $(".modal.fade.in .modal-content .alert-danger").length > 0;')
+
+				wait(lambda: is_modal_visible(), "scoring popup show")
+
+				num_tries = 0
+				while True:
+					print("filling out popup")
+					# scoring popup will show now. we need to enter a value and save.
+					driver.execute_script('''
+							(function(args) {
+								var points = args[0];
+	
+								var modal_content = $(".modal.fade.in .modal-content");
+								modal_content.find("input#points").val(points);
+	
+								modal_content.find('input[name="cmd[addAnswerAsynch]"]').click();
+							}(arguments))
+						''', str(options[answer_text]))
+
+					print("entered %s" % str(options[answer_text]))
+
+					wait(lambda: has_modal_error() or not is_modal_visible(), "scoring popup hide")
+
+					if not is_modal_visible():
+						break
+
+					num_tries += 1
+					if num_tries > 3:
+						raise InteractionException("failed to enter readjusted score in modal popup")
+
+				still_to_add.remove(answer_text)
+				keep_score.add(answer_text)
 
 
 class ClozeQuestion(Question):
@@ -609,6 +693,39 @@ class ClozeQuestion(Question):
 
 	@staticmethod
 	def _set_ui(driver, scoring, context):
+		readjusters = dict()
+		for gap_index, gap in enumerate(scoring.gaps):
+			if gap.cloze_type in (ClozeType.text, ClozeType.select):
+				if context.ilias_version >= (5, 4):
+					construct_readjuster = TextGapReadjuster54
+				else:
+					construct_readjuster = TextGapReadjuster53
+			else:
+				construct_readjuster = NumericGapReadjuster
+
+			readjusters[gap_index] = construct_readjuster(
+				driver, gap_index, gap, context)
+
+			readjusters[gap_index].initialize()
+
+		if context.ilias_version >= (5, 4):
+			with wait_for_page_load(driver):
+				# go to readjustment statistics ("given answers") tab
+				driver.find_element_by_id("tab_answers").click()
+
+		# add new scored answers.
+		for gap_index, gap in enumerate(scoring.gaps):
+			readjusters[gap_index].extend_scores()
+
+		if context.ilias_version >= (5, 4):
+			with wait_for_page_load(driver):
+				# go to readjustment scoring tab
+				driver.find_element_by_id("tab_question").click()
+
+		# we're now on the main tab (scoring tab) and stay there. this is important as
+		# the save only happens in our caller and we would lose all data if we switched
+		# to another tab without saving.
+
 		if context.ilias_version < (5, 4):
 			identical_scoring_checkbox = driver.find_element_by_name("identical_scoring")
 			if identical_scoring_checkbox.is_selected() != scoring.identical_scoring:
@@ -617,19 +734,10 @@ class ClozeQuestion(Question):
 			Select(driver.find_element_by_id("textgap_rating")).select_by_value(
 				scoring.comparator.value)
 
+		# update scores.
+
 		for gap_index, gap in enumerate(scoring.gaps):
-			n_tries = 0
-			while True:
-				try:
-					if gap.cloze_type in (ClozeType.text, ClozeType.select):
-						update_gap_options(driver, gap_index, gap.options, context)
-					else:
-						update_numeric_gap_scoring(driver, gap_index, gap)
-					break
-				except NoSuchElementException:
-					n_tries += 1
-					if n_tries > 5:
-						raise
+			readjusters[gap_index].update_scores()
 
 	def _create_gaps(self):
 		self.gaps = _create_gaps(self.scoring)
@@ -730,10 +838,17 @@ class ClozeQuestion(Question):
 
 		old_scoring = self.scoring
 
+		print("!", actual_answers)
+		actual_answers_by_index = dict()
+		for i in range(len(self.scoring.gaps)):
+			answer_key = (self.gaps[i].get_export_name(context.language),)
+			assert answer_key in actual_answers
+			actual_answers_by_index[i] = actual_answers[answer_key]
+
 		self.scoring = ClozeScoring(
 			identical_scoring=random_flip_scoring(self.scoring.identical_scoring),
 			comparator=random_flip_comparator(self.scoring.comparator),
-			gaps=[_readjust(context, s, self.gaps[i], actual_answers[self.gaps[i].get_export_name(context.language)])
+			gaps=[_readjust(context, s, self.gaps[i], actual_answers_by_index[i])
 				  for i, s in enumerate(self.scoring.gaps)])
 		self._create_gaps()
 		self._set_ui(driver, self.scoring, context)

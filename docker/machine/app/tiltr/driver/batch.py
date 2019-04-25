@@ -403,14 +403,15 @@ class Run:
 		modified_questions = set()
 
 		def close_stats_window():
-			master.driver.execute_script("""
-			(function() {
-				var overlay = document.getElementsByClassName("ilOverlay")[0];
-				if (overlay) {
-					overlay.style.display = "none";
-				}
-			}())
-			""")
+			if self.ilias_version < (5, 4):
+				master.driver.execute_script("""
+				(function() {
+					var overlay = document.getElementsByClassName("ilOverlay")[0];
+					if (overlay) {
+						overlay.style.display = "none";
+					}
+				}())
+				""")
 
 		while True:
 			with wait_for_page_load(master.driver):
