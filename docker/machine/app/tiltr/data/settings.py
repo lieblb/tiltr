@@ -259,6 +259,11 @@ class Workarounds(ValueBag):
 				# https://mantis.ilias.de/view.php?id=25272
 				"dont_test_invalid_save",
 				"W18 Do not test save behaviour on invalid input."
+			),
+			(
+				# cloze question readjustment ILIAS 5.4
+				"mantis_25329",
+				"W19 mantis_25329"
 			)
 		], **kwargs)
 

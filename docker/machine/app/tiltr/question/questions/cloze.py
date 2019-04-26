@@ -7,6 +7,7 @@
 
 import time
 import traceback
+import html
 from enum import Enum
 from decimal import *
 from collections import defaultdict, namedtuple
@@ -90,8 +91,6 @@ def _readjust_score(random, score, boost):
 
 
 def _readjust(context, scoring, gap, actual_answers):
-	# FIXME: rejection of entry of zero points should be checked via UI
-
 	random = context.random
 
 	if scoring.cloze_type == ClozeType.numeric:
@@ -107,7 +106,10 @@ def _readjust(context, scoring, gap, actual_answers):
 
 	else:  # text and select gaps
 
-		print("! actual answers: ", actual_answers)
+		# if two variants with different border spaces exist, only choose the stripped
+		# variant, since we won't be able to differentiate the two in the readjustment
+		# UI later on. that means "a" and "a " are both "a" for us.
+		actual_answers = set([s.strip() for s in actual_answers])
 
 		unscored_answers = set(actual_answers) - set(gap.get_scored_options().keys())
 
@@ -123,7 +125,6 @@ def _readjust(context, scoring, gap, actual_answers):
 			if scoring.cloze_type == ClozeType.text:
 				for _ in range(min(n_answers_to_add, len(unscored_answers))):
 					new_answer = context.random.choice(list(unscored_answers))
-					print("adding new answer", new_answer)
 					unscored_answers.remove(new_answer)
 					assert new_answer not in new_options
 					new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
@@ -482,7 +483,7 @@ class TextGapReadjuster53(TextGapReadjuster):
 		while True:
 			try:
 				element = self._get_option_answer_element(option_index)
-				yield element.get_attribute("value")
+				yield element.get_attribute("value").strip()
 			except NoSuchElementException:
 				break
 			option_index += 1
@@ -579,7 +580,11 @@ class TextGapReadjuster54(TextGapReadjuster):
 				for tr in s_table.find_elements_by_css_selector("tbody tr"):
 					tds = list(tr.find_elements_by_css_selector("td"))
 
-					answer_text = tds[0].text.strip()
+					if self.context.workarounds.mantis_25329:
+						answer_text = tds[0].get_attribute("innerHTML").strip()
+					else:
+						answer_text = tds[0].text.strip()
+
 					if answer_text in still_to_add:
 						tds[2].find_element_by_css_selector("a").click()  # clicks to add
 						found_add_button = True
@@ -604,31 +609,36 @@ class TextGapReadjuster54(TextGapReadjuster):
 
 				wait(lambda: is_modal_visible(), "scoring popup show")
 
-				num_tries = 0
-				while True:
-					print("filling out popup")
-					# scoring popup will show now. we need to enter a value and save.
-					driver.execute_script('''
-							(function(args) {
-								var points = args[0];
-	
-								var modal_content = $(".modal.fade.in .modal-content");
-								modal_content.find("input#points").val(points);
-	
-								modal_content.find('input[name="cmd[addAnswerAsynch]"]').click();
-							}(arguments))
-						''', str(options[answer_text]))
+				assert options[answer_text] > Decimal(0)  # must be positive
 
-					print("entered %s" % str(options[answer_text]))
+				#num_tries = 0
+				#while True:
+				print("filling out popup")
+				# scoring popup will show now. we need to enter a value and save.
+				driver.execute_script('''
+						(function(args) {
+							var points = args[0];
 
-					wait(lambda: has_modal_error() or not is_modal_visible(), "scoring popup hide")
+							var modal_content = $(".modal.fade.in .modal-content");
+							modal_content.find("input#points").val(points);
 
-					if not is_modal_visible():
-						break
+							modal_content.find('input[name="cmd[addAnswerAsynch]"]').click();
+						}(arguments))
+					''', str(options[answer_text]))
 
-					num_tries += 1
-					if num_tries > 3:
-						raise InteractionException("failed to enter readjusted score in modal popup")
+				print("entered %s" % str(options[answer_text]))
+
+				wait(lambda: has_modal_error() or not is_modal_visible(), "scoring popup hide")
+
+				if has_modal_error():
+					raise InteractionException("scoring modal gave an unexpected error")
+
+				#if not is_modal_visible():
+				#	break
+
+				#	num_tries += 1
+				#	if num_tries > 3:
+				#		raise InteractionException("failed to enter readjusted score in modal popup")
 
 				still_to_add.remove(answer_text)
 				keep_score.add(answer_text)
@@ -832,13 +842,12 @@ class ClozeQuestion(Question):
 			if context.ilias_version >= (5, 4):
 				return c  # never flip
 			if context.random.randint(0, 3) == 0:  # flip?
-				return context.random.choice([x for x in list(ClozeComparator) if x != c])
+				return context.random.choice([x for x in ClozeComparator if x != c])
 			else:
 				return c
 
 		old_scoring = self.scoring
 
-		print("!", actual_answers)
 		actual_answers_by_index = dict()
 		for i in range(len(self.scoring.gaps)):
 			answer_key = (self.gaps[i].get_export_name(context.language),)
@@ -896,6 +905,9 @@ class ClozeQuestion(Question):
 		return True, list()
 
 	def compute_score(self, answers, context):
+		# normalize answers: "a " will score the same as "a".
+		answers = dict((k, v.strip()) for k, v in answers.items())
+
 		name_to_index = dict()
 		for gap in self.gaps.values():
 			name_to_index[gap.get_export_name(context.language)] = gap.index
