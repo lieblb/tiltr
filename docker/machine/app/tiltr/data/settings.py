@@ -264,6 +264,11 @@ class Workarounds(ValueBag):
 				# cloze question readjustment ILIAS 5.4
 				"mantis_25329",
 				"W19 mantis_25329"
+			),
+			(
+				# https://mantis.ilias.de/view.php?id=25365
+				"workaround_identical_cloze_answers_in_readjustment",
+				"W20 don't add identical cloze answers in readjusment"
 			)
 		], **kwargs)
 

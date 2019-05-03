@@ -89,8 +89,12 @@ def _readjust_score(random, score, boost):
 	else:
 		return Decimal(random.randint(1, 3 * 4)) / Decimal(4)
 
+def _count_answers(scoring, actual_answers, answer_counts):
+	if scoring.cloze_type != ClozeType.numeric:
+		for x in [s.strip() for s in actual_answers if s.strip()]:
+			answer_counts[x] += 1
 
-def _readjust(context, scoring, gap, actual_answers):
+def _readjust(context, scoring, gap, actual_answers, answer_counts):
 	random = context.random
 
 	if scoring.cloze_type == ClozeType.numeric:
@@ -109,7 +113,10 @@ def _readjust(context, scoring, gap, actual_answers):
 		# if two variants with different border spaces exist, only choose the stripped
 		# variant, since we won't be able to differentiate the two in the readjustment
 		# UI later on. that means "a" and "a " are both "a" for us.
-		actual_answers = set([s.strip() for s in actual_answers])
+		actual_answers = set([s.strip() for s in actual_answers if s.strip()])
+
+		if context.workarounds.workaround_identical_cloze_answers_in_readjustment:
+			actual_answers = set(x for x in actual_answers if answer_counts[x] <= 1)
 
 		unscored_answers = set(actual_answers) - set(gap.get_scored_options().keys())
 
@@ -161,8 +168,13 @@ def _readjust(context, scoring, gap, actual_answers):
 				else:
 					readjusted_options[k] = _readjust_score(random, score, i)
 
-			if any(score > Decimal(0) for score in readjusted_options.values()):
-				break
+			if context.ilias_version >= (5, 4):
+				# no remove support at the moment FIXME
+				if all(score > Decimal(0) for score in readjusted_options.values()):
+					break
+			else:
+				if any(score > Decimal(0) for score in readjusted_options.values()):
+					break
 
 			i += 1
 
@@ -458,6 +470,9 @@ class NumericGapReadjuster(GapReadjuster):
 			self.driver.find_element_by_name("gap_%d_numeric_points" % self.gap_index),
 			str(self.gap.score))
 
+	def update_gap(self, gap):
+		return gap
+
 
 class TextGapReadjuster(GapReadjuster):
 	def initialize(self):  # happens on main tab
@@ -472,7 +487,14 @@ class TextGapReadjuster(GapReadjuster):
 			#if option_answer not in keep_score:
 			points = self.driver.find_element_by_id("gap_%d[points][%d]" % (self.gap_index, option_index))
 			points.clear()
-			points.send_keys(str(self.gap.options[option_answer]))
+			try:
+				points.send_keys(str(self.gap.options[option_answer]))
+			except KeyError as e:
+				raise InteractionException("failed to find %s in %s" % (option_answer, self.gap.options))
+
+	def update_gap(self, gap):
+		return gap
+
 
 class TextGapReadjuster53(TextGapReadjuster):
 	def _get_option_answer_element(self, option_index):
@@ -495,8 +517,8 @@ class TextGapReadjuster53(TextGapReadjuster):
 		element.send_keys(option_key)
 
 		if element.get_attribute("value") != option_key:
-			print("gap option name mismatch: '%s' != '%s'" % (element.get_attribute("value"), option_key))
-			raise InteractionException("failed to set gap option name")
+			raise InteractionException(
+				"gap option name mismatch: '%s' != '%s'" % (element.get_attribute("value"), option_key))
 
 	def _add(self):
 		new_keys = set(self.gap.options.keys())
@@ -536,6 +558,25 @@ class TextGapReadjuster54(TextGapReadjuster):
 				yield td.text
 				break
 
+	def update_gap(self, gap):
+		options = dict()
+
+		for tr in self.driver.find_elements_by_css_selector(
+			"#il_prop_cont_gap_%d .answerwizard tbody tr" % self.gap_index):
+
+			tds = list(tr.find_elements_by_css_selector("td"))
+
+			if self.context.workarounds.mantis_25329:
+				answer_text = tds[0].get_attribute("innerHTML").strip()
+			else:
+				answer_text = tds[0].text.strip()
+
+			score = tds[1].find_element_by_css_selector("input").get_attribute("value").strip()
+
+			options[answer_text] = Decimal(score)
+
+		return gap._replace(options=options)
+
 	def extend_scores(self):
 		driver = self.driver
 		gap_index = self.gap_index
@@ -554,30 +595,26 @@ class TextGapReadjuster54(TextGapReadjuster):
 			still_to_add = set(list(added_keys))
 
 			def find_table():
-				s_tables = list()
-				for table in driver.find_elements_by_css_selector("table"):
-					if table.get_attribute("id") == "tstAnswerStatistic":
-						s_tables.append(table)
-						if len(s_tables) > gap_index:  # exit early
-							break
+				tables = list()
+				for table in driver.find_elements_by_css_selector("#ilContentContainer table#tstAnswerStatistic"):
+					tables.append(table)
+					if len(tables) > gap_index:  # exit early
+						break
 
 				# pick the one table for our gap.
-				return s_tables[gap_index]
+				return tables[gap_index]
 
 			while still_to_add:
-				print("starting iteration", still_to_add)
+				# pick the one table for our gap (and guard against adding the correct answer text
+				# to the wrong gap).
 
-				print("finding table")
-				# pick the one table for our gap.
-				s_table = find_table()
-
-				print("clicking add")
+				corrections_table = find_table()
 
 				# click next appropriate "add" button.
 				answer_text = None
 				found_add_button = False
 
-				for tr in s_table.find_elements_by_css_selector("tbody tr"):
+				for tr in corrections_table.find_elements_by_css_selector("tbody tr"):
 					tds = list(tr.find_elements_by_css_selector("td"))
 
 					if self.context.workarounds.mantis_25329:
@@ -595,7 +632,6 @@ class TextGapReadjuster54(TextGapReadjuster):
 
 				def wait(cond, desc, num_tries=7):
 					for i in range(num_tries):
-						print("retry %d: state of %s: %d" % (i, desc, int(cond())))
 						if cond():
 							return
 						time.sleep(1)
@@ -611,9 +647,6 @@ class TextGapReadjuster54(TextGapReadjuster):
 
 				assert options[answer_text] > Decimal(0)  # must be positive
 
-				#num_tries = 0
-				#while True:
-				print("filling out popup")
 				# scoring popup will show now. we need to enter a value and save.
 				driver.execute_script('''
 						(function(args) {
@@ -626,19 +659,11 @@ class TextGapReadjuster54(TextGapReadjuster):
 						}(arguments))
 					''', str(options[answer_text]))
 
-				print("entered %s" % str(options[answer_text]))
 
 				wait(lambda: has_modal_error() or not is_modal_visible(), "scoring popup hide")
 
 				if has_modal_error():
 					raise InteractionException("scoring modal gave an unexpected error")
-
-				#if not is_modal_visible():
-				#	break
-
-				#	num_tries += 1
-				#	if num_tries > 3:
-				#		raise InteractionException("failed to enter readjusted score in modal popup")
 
 				still_to_add.remove(answer_text)
 				keep_score.add(answer_text)
@@ -702,7 +727,7 @@ class ClozeQuestion(Question):
 			gaps=gaps)
 
 	@staticmethod
-	def _set_ui(driver, scoring, context):
+	def _create_readjusters(driver, scoring, context):
 		readjusters = dict()
 		for gap_index, gap in enumerate(scoring.gaps):
 			if gap.cloze_type in (ClozeType.text, ClozeType.select):
@@ -717,6 +742,30 @@ class ClozeQuestion(Question):
 				driver, gap_index, gap, context)
 
 			readjusters[gap_index].initialize()
+		return readjusters
+
+	@staticmethod
+	def _update_from_readjustment_ui(driver, scoring, context):
+		if context.ilias_version < (5, 4):
+			return ClozeQuestion._get_ui(driver)
+		else:
+			with wait_for_page_load(driver):
+				# go to readjustment scoring tab
+				driver.find_element_by_id("tab_question").click()
+
+			readjusters = ClozeQuestion._create_readjusters(
+				driver, scoring, context)
+
+			# update option texts we might have missed so far.
+			gaps = []
+			for gap_index, gap in enumerate(scoring.gaps):
+				gaps.append(readjusters[gap_index].update_gap(gap))
+
+			return scoring._replace(gaps=gaps)
+
+	@staticmethod
+	def _set_ui(driver, scoring, context):
+		readjusters = ClozeQuestion._create_readjusters(driver, scoring, context)
 
 		if context.ilias_version >= (5, 4):
 			with wait_for_page_load(driver):
@@ -745,7 +794,6 @@ class ClozeQuestion(Question):
 				scoring.comparator.value)
 
 		# update scores.
-
 		for gap_index, gap in enumerate(scoring.gaps):
 			readjusters[gap_index].update_scores()
 
@@ -846,7 +894,7 @@ class ClozeQuestion(Question):
 			else:
 				return c
 
-		old_scoring = self.scoring
+		old_scoring = self._update_from_readjustment_ui(driver, self.scoring, context)
 
 		actual_answers_by_index = dict()
 		for i in range(len(self.scoring.gaps)):
@@ -854,10 +902,14 @@ class ClozeQuestion(Question):
 			assert answer_key in actual_answers
 			actual_answers_by_index[i] = actual_answers[answer_key]
 
+		answer_counts = defaultdict(int)
+		for i, s in enumerate(self.scoring.gaps):
+			_count_answers(s, actual_answers_by_index[i], answer_counts)
+
 		self.scoring = ClozeScoring(
 			identical_scoring=random_flip_scoring(self.scoring.identical_scoring),
 			comparator=random_flip_comparator(self.scoring.comparator),
-			gaps=[_readjust(context, s, self.gaps[i], actual_answers_by_index[i])
+			gaps=[_readjust(context, s, self.gaps[i], actual_answers_by_index[i], answer_counts)
 				  for i, s in enumerate(self.scoring.gaps)])
 		self._create_gaps()
 		self._set_ui(driver, self.scoring, context)
