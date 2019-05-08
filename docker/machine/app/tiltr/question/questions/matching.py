@@ -163,23 +163,43 @@ class MatchingQuestion(Question):
 			index_to_remove = pairs[key]
 			driver.find_element_by_id("remove_pairs[%d]" % index_to_remove).click()
 
-	@staticmethod
-	def _ui_update_scores(driver, scores):
-		current_keys = set(MatchingQuestion._ui_get_pair_keys(driver))
+	def _ui_update_scores(self, driver, scores, context):
+		if context.ilias_version >= (5, 4):
+			definition_ids = dict((label, i) for i, label in self.definitions.items())
+			term_ids = dict((label, i) for i, label in self.terms.items())
 
-		added = set(scores.keys()) - current_keys
-		MatchingQuestion._ui_add_pairs(driver, added)
+			seen_keys = set()
 
-		removed = current_keys - set(scores.keys())
-		MatchingQuestion._ui_remove_pairs(driver, removed)
+			for tr in driver.find_elements_by_css_selector(".matchingpairwizard tbody tr"):
+				tds = list(tr.find_elements_by_css_selector("td"))
 
-		current_pairs = MatchingQuestion._ui_get_pair_indices(driver)
-		assert set(current_pairs.keys()) == set(scores.keys())
+				definition_id = definition_ids[tds[0].text.strip()]
+				term_id = term_ids[tds[1].text.strip()]
 
-		for key, score in scores.items():
-			points_element = driver.find_element_by_css_selector(
-				'input[name="pairs[points][%d]"]' % current_pairs[key])
-			set_element_value(driver, points_element, str(score))
+				key = (definition_id, term_id)
+				score = scores[key]
+				set_element_value(driver, tds[2].find_element_by_css_selector("input"), str(score))
+
+				seen_keys.add(key)
+
+			assert seen_keys == set(scores.keys())
+
+		else:
+			current_keys = set(MatchingQuestion._ui_get_pair_keys(driver))
+
+			added = set(scores.keys()) - current_keys
+			MatchingQuestion._ui_add_pairs(driver, added)
+
+			removed = current_keys - set(scores.keys())
+			MatchingQuestion._ui_remove_pairs(driver, removed)
+
+			current_pairs = MatchingQuestion._ui_get_pair_indices(driver)
+			assert set(current_pairs.keys()) == set(scores.keys())
+
+			for key, score in scores.items():
+				points_element = driver.find_element_by_css_selector(
+					'input[name="pairs[points][%d]"]' % current_pairs[key])
+				set_element_value(driver, points_element, str(score))
 
 	@staticmethod
 	def _ui_get_items(driver, what):
@@ -263,9 +283,6 @@ class MatchingQuestion(Question):
 		return answers, self.compute_score(answers, context)
 
 	def readjust_scores(self, driver, actual_answers, context, report):
-		if context.ilias_version >= (5, 4):  # FIXME implement
-			return False, list()
-
 		if context.workarounds.dont_readjust_matching:
 			return False, list()
 
@@ -282,9 +299,13 @@ class MatchingQuestion(Question):
 		changes = dict()
 		removed = set()
 
-		actions = ['keep', 'adjust']
-		if not context.workarounds.no_remove_on_readjust_matching:
-			actions.append('remove')
+		if context.ilias_version >= (5, 4):
+			# ILIAS 5.4 only supports 'keep' and 'adjust'.
+			actions = ['keep', 'adjust']
+		else:
+			actions = ['keep', 'adjust']
+			if not context.workarounds.no_remove_on_readjust_matching:
+				actions.append('remove')
 
 		for (definition, term), score in old_scores:
 			action = context.random.choice(actions)
@@ -294,8 +315,9 @@ class MatchingQuestion(Question):
 				new_scores[(definition, term)] = score
 				changes[(definition, term)] = (score, score)
 			elif action == 'adjust':
-				# adjust score of existing pair
-				enforce_positive = _compute_maximum_score(new_scores, self.multiplicity, context) <= Decimal(0)
+				# adjust score of existing pair (might get adjusted to 0)
+				enforce_positive = _compute_maximum_score(
+					new_scores, self.multiplicity, context) <= Decimal(0)
 				new_scores[(definition, term)] = _readjust_score(
 					context.random, score, enforce_positive)
 				changes[(definition, term)] = (
@@ -308,29 +330,31 @@ class MatchingQuestion(Question):
 			else:
 				raise RuntimeError("illegal readjust action %s" % action)
 
-		n_to_add = context.random.randint(
-			0, min(len(unused_pairs), max(2, len(self.scores))))
-		if len(new_scores) < 1:
-			n_to_add = max(n_to_add, 1)
-		if n_to_add > len(unused_pairs):
-			unused_pairs = all_pairs - set(new_scores.keys())
+		# starting with ILIAS 5.4, we cannot add new combinations here.
+		if context.ilias_version < (5, 4):
+			n_to_add = context.random.randint(
+				0, min(len(unused_pairs), max(2, len(self.scores))))
+			if len(new_scores) < 1:
+				n_to_add = max(n_to_add, 1)
+			if n_to_add > len(unused_pairs):
+				unused_pairs = all_pairs - set(new_scores.keys())
 
-		for _ in range(n_to_add):
-			new_definition, new_term = context.random.choice(list(unused_pairs))
-			unused_pairs.remove((new_definition, new_term))
-			enforce_positive = _compute_maximum_score(new_scores, self.multiplicity, context) <= Decimal(0)
-			new_scores[(new_definition, new_term)] = _readjust_score(
-				context.random, Decimal(0), enforce_positive)
+			for _ in range(n_to_add):
+				new_definition, new_term = context.random.choice(list(unused_pairs))
+				unused_pairs.remove((new_definition, new_term))
+				enforce_positive = _compute_maximum_score(new_scores, self.multiplicity, context) <= Decimal(0)
+				new_scores[(new_definition, new_term)] = _readjust_score(
+					context.random, Decimal(0), enforce_positive)
 
-			if (new_definition, new_term) in changes:
-				removed.remove((definition, term))
-				changes[(new_definition, new_term)] = (
-					changes[(new_definition, new_term)][0],
-					new_scores[(new_definition, new_term)])
-			else:
-				changes[(new_definition, new_term)] = (
-					"n/a",
-					new_scores[(new_definition, new_term)])
+				if (new_definition, new_term) in changes:
+					removed.remove((definition, term))
+					changes[(new_definition, new_term)] = (
+						changes[(new_definition, new_term)][0],
+						new_scores[(new_definition, new_term)])
+				else:
+					changes[(new_definition, new_term)] = (
+						"n/a",
+						new_scores[(new_definition, new_term)])
 
 		table = Texttable()
 		table.set_deco(Texttable.HEADER)
@@ -342,7 +366,7 @@ class MatchingQuestion(Question):
 			table.add_row([key_as_str, old_score, new_score])
 		report(table)
 
-		MatchingQuestion._ui_update_scores(driver, new_scores)
+		self._ui_update_scores(driver, new_scores, context)
 		self.scores = new_scores
 
 		removed_keys = [(self.definitions[d], self.terms[t]) for d, t in removed]
