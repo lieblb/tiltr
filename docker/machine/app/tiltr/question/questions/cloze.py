@@ -134,6 +134,7 @@ def _readjust(context, scoring, gap, actual_answers, answer_counts):
 					new_answer = context.random.choice(list(unscored_answers))
 					unscored_answers.remove(new_answer)
 					assert new_answer not in new_options
+					# note: ILIAS 5.4 does not support negative scores in readjustment.
 					new_options[new_answer] = Decimal(random.randint(1, 8)) / Decimal(4)
 					just_added.add(new_answer)
 			else:
@@ -159,22 +160,21 @@ def _readjust(context, scoring, gap, actual_answers, answer_counts):
 						break
 
 		i = 0
+		delete_prob = 0.1  # probability to remove an answer option altogether
+
 		while True:
 			readjusted_options = dict()
 
 			for k, score in new_options.items():
 				if k in just_added:
 					readjusted_options[k] = score
+				elif context.random.random() < delete_prob:
+					readjusted_options[k] = Decimal(0)
 				else:
 					readjusted_options[k] = _readjust_score(random, score, i)
 
-			if context.ilias_version >= (5, 4):
-				# no remove support at the moment FIXME
-				if all(score > Decimal(0) for score in readjusted_options.values()):
-					break
-			else:
-				if any(score > Decimal(0) for score in readjusted_options.values()):
-					break
+			if any(score > Decimal(0) for score in readjusted_options.values()):
+				break
 
 			i += 1
 
@@ -645,7 +645,11 @@ class TextGapReadjuster54(TextGapReadjuster):
 
 				wait(lambda: is_modal_visible(), "scoring popup show")
 
-				assert options[answer_text] > Decimal(0)  # must be positive
+				new_score = options[answer_text]
+				if new_score <= Decimal(0):
+					# note: zero or negative scores will be inserted as score 1 as the modal dialog
+					# only allows scores > 0. these scores will be changed afterwards in update_scores()).
+					new_score = Decimal(1)
 
 				# scoring popup will show now. we need to enter a value and save.
 				driver.execute_script('''
@@ -657,7 +661,7 @@ class TextGapReadjuster54(TextGapReadjuster):
 
 							modal_content.find('input[name="cmd[addAnswerAsynch]"]').click();
 						}(arguments))
-					''', str(options[answer_text]))
+					''', str(new_score))
 
 
 				wait(lambda: has_modal_error() or not is_modal_visible(), "scoring popup hide")
