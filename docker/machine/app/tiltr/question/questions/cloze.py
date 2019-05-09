@@ -8,6 +8,7 @@
 import time
 import traceback
 import html
+import json
 from enum import Enum
 from decimal import *
 from collections import defaultdict, namedtuple
@@ -490,7 +491,8 @@ class TextGapReadjuster(GapReadjuster):
 			try:
 				points.send_keys(str(self.gap.options[option_answer]))
 			except KeyError as e:
-				raise InteractionException("failed to find %s in %s" % (option_answer, self.gap.options))
+				raise InteractionException("failed to find %s in %s" % (
+					json.dumps(option_answer), self.gap.options))
 
 	def update_gap(self, gap):
 		return gap
