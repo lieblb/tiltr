@@ -297,7 +297,7 @@ class StartBatchHandler(tornado.web.RequestHandler):
 
 		workarounds_dict = data["workarounds"]
 		Workarounds.disable_solved(
-			workarounds_dict, self.state.get_ilias_version().tuple)
+			workarounds_dict, self.state.get_ilias_version().as_tuple())
 
 		settings = Settings(from_dict=data["settings"])
 		workarounds = Workarounds(from_dict=workarounds_dict)
@@ -369,7 +369,7 @@ class PreferencesHandler(tornado.web.RequestHandler):
 			workarounds = Workarounds()
 
 		fixed_workarounds = Workarounds.get_solved(
-			self.state.get_ilias_version().tuple)
+			self.state.get_ilias_version().as_tuple())
 
 		self.write(json.dumps(dict(
 			settings=settings.get_catalog(),

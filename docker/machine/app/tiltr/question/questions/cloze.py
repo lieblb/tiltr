@@ -241,7 +241,7 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 
 	def _modify_answer(self, text, context):
 		text = _modify_answer(text, context, self.size)
-		return text, self.get_score(text)
+		return text, self.get_score(text, context)
 
 	def get_random_choice(self, context):
 		if context.random.random() < float(context.settings.cloze_text_enter_scored_p) and not context.prefer_text():
@@ -261,9 +261,9 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 				entry_size = self._get_maximum_entry_size(context)
 				text = context.produce_text(
 					entry_size, context.cloze_random_chars)
-			return text, self.get_score(text)
+			return text, self.get_score(text, context)
 
-	def get_score(self, text):
+	def get_score(self, text, context):
 		if self.comparator == ClozeComparator.case_sensitive:
 			return self.options.get(text, Decimal(0))
 
@@ -308,7 +308,7 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 	def get_random_choice(self, context):
 		return context.random.choice(list(self.options.items()))
 
-	def get_score(self, text):
+	def get_score(self, text, context):
 		return self.options.get(text, Decimal(0))
 
 	def get_scored_options(self):
@@ -332,9 +332,16 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		self.numeric_upper = gap_scoring.upper
 		self.score = gap_scoring.score
 
-		# ILIAS will limit exports to XLS to 16 significant decimals, which makes sense.
-		# e.g. 25.433019319138662 -> 25.43301931913866, 0.17493771424585164 -> 0.1749377142458516
-		self.format = '%.16g'
+	def _format_number(self, n, context):
+		if context.ilias_version >= (5, 4, 2):
+			# starting with ILIAS 5.4.2, ILIAS switched to 14 digits accuracy
+			format = '%.14g'
+		else:
+			# ILIAS will limit exports to XLS to 16 significant decimals, which makes sense.
+			# e.g. 25.433019319138662 -> 25.43301931913866, 0.17493771424585164 -> 0.1749377142458516
+			format = '%.16g'
+
+		return format % n
 
 	def get_maximum_score(self):
 		return self.score
@@ -378,15 +385,14 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 				self._get_random_outside
 			))
 
-			n = g(context)
-			s = self.format % n
+			s = self._format_number(g(context), context)
 
-		return s, self.get_score(s)
+		return s, self.get_score(s, context)
 
-	def get_score(self, text):
+	def get_score(self, text, context):
 		try:
 			n = float(text)
-			n = float(self.format % n)  # limit to number of representable digits
+			n = float(self._format_number(n, context))  # limit to number of representable digits
 
 			if float(self.numeric_lower) <= n <= float(self.numeric_upper):
 				return self.score
@@ -477,6 +483,18 @@ class NumericGapReadjuster(GapReadjuster):
 
 
 class TextGapReadjuster(GapReadjuster):
+	def _normalize_answer(self, x):
+		if self.context.ilias_version < (5, 4):
+			return x  # no op
+
+		if self.context.workarounds.implicit_text_number_conversions:
+			x = self.context.implicit_text_to_number_xls(x)
+
+		# tab gets converted to simple space in HTML display of answers.
+		x = x.replace('\t', ' ')
+
+		return x
+
 	def initialize(self):  # happens on main tab
 		self._old_keys = set(self._option_answers())
 
@@ -484,13 +502,15 @@ class TextGapReadjuster(GapReadjuster):
 		# for some obscure reason, setting answers and scores via set_element_value() won't
 		# work here. send_keys() works though.
 
+		normalized_options = dict((self._normalize_answer(k), v) for k, v in self.gap.options.items())
+
 		# set all scores (not yet set, i.e. not in keep_score).
 		for option_index, option_answer in enumerate(self._option_answers()):
 			#if option_answer not in keep_score:
 			points = self.driver.find_element_by_id("gap_%d[points][%d]" % (self.gap_index, option_index))
 			points.clear()
 			try:
-				points.send_keys(str(self.gap.options[option_answer]))
+				points.send_keys(str(normalized_options[self._normalize_answer(option_answer)]))
 			except KeyError as e:
 				raise InteractionException("failed to find %s in %s" % (
 					json.dumps(option_answer), self.gap.options))
@@ -607,16 +627,7 @@ class TextGapReadjuster54(TextGapReadjuster):
 				# pick the one table for our gap.
 				return tables[gap_index]
 
-			def normalize_answer(x):
-				if self.context.workarounds.implicit_text_number_conversions:
-					x = self.context.implicit_text_to_number_xls(x)
-
-				# tab gets converted to simple space in HTML display of answers.
-				x = x.replace('\t', ' ')
-
-				return x
-
-			denormalized_answers = dict((normalize_answer(x), x) for x in still_to_add)
+			denormalized_answers = dict((self._normalize_answer(x), x) for x in still_to_add)
 
 			while still_to_add:
 				# pick the one table for our gap (and guard against adding the correct answer text
@@ -634,12 +645,12 @@ class TextGapReadjuster54(TextGapReadjuster):
 					if self.context.workarounds.mantis_25329:
 						t = tds[0].get_attribute("innerHTML").strip()
 						for x in (t, html.unescape(t)):
-							y = denormalized_answers.get(normalize_answer(x))
+							y = denormalized_answers.get(self._normalize_answer(x))
 							if y is not None:
 								answer_text = y
 								break
 					else:
-						answer_text = denormalized_answers.get(normalize_answer(tds[0].text.strip()))
+						answer_text = denormalized_answers.get(self._normalize_answer(tds[0].text.strip()))
 
 					if answer_text in still_to_add:
 						for tries in range(3):
@@ -1028,7 +1039,7 @@ class ClozeQuestion(Question):
 
 		if self.scoring.identical_scoring:
 			for index, text in answers.items():
-				score += self.gaps[index].get_score(text)
+				score += self.gaps[index].get_score(text, context)
 		else:
 			# make sure answers are sorted as self.identical_scoring won't be
 			# computed correctly otherwise.
@@ -1045,6 +1056,6 @@ class ClozeQuestion(Question):
 					continue
 				given_answers.add(comparable_text)
 
-				score += self.gaps[index].get_score(text)
+				score += self.gaps[index].get_score(text, context)
 
 		return score

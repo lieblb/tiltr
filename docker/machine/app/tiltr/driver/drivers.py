@@ -138,21 +138,24 @@ class Login:
 
 
 class ILIASVersion:
-	def __init__(self, text, tuple):
+	def __init__(self, text, as_tuple):
 		self.text = text
-		self.tuple = tuple
+		self._tuple = as_tuple
+
+	def as_tuple(self):
+		return self._tuple
 
 	def __lt__(self, v):
-		return self.tuple < v
+		return self._tuple < v
 
 	def __gt__(self, v):
-		return self.tuple > v
+		return self._tuple > v
 
 	def __le__(self, v):
-		return self.tuple <= v
+		return self._tuple <= v
 
 	def __ge__(self, v):
-		return self.tuple >= v
+		return self._tuple >= v
 
 
 class ILIASDriver:

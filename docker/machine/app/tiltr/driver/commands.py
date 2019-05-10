@@ -106,7 +106,7 @@ class TakeExamCommand:
 			self.workarounds = kwargs["workarounds"]
 
 		self.ilias_url = data["ilias_url"]
-		self.ilias_version = data["ilias_version"]
+		self.ilias_version = tuple(data["ilias_version"])
 		self.machine = data["machine"]
 		self.machine_index = data["machine_index"]
 		self.username = data["username"]

@@ -352,7 +352,7 @@ class Run:
 
 	def _apply_manual_scoring(self, master, test_driver, all_recorded_results):
 		context = RandomContext(
-			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.tuple)
+			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.as_tuple())
 
 		for question_title, question in self.questions.items():
 			if question.can_score_manually():
@@ -381,7 +381,7 @@ class Run:
 		# this test and this should only run on a temporary copy.
 
 		context = RandomContext(
-			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.tuple)
+			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.as_tuple())
 
 		protocol = self.protocols["readjustments"]
 
@@ -658,7 +658,7 @@ class Run:
 					report=self.report,
 					command=TakeExamCommand(
 						ilias_url=self.batch.ilias_url,
-						ilias_version=self.batch.ilias_version.tuple,
+						ilias_version=self.batch.ilias_version.as_tuple(),
 						machine=machine,
 						machine_index=i + 1,
 						username=user.get_username(),
