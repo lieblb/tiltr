@@ -170,9 +170,9 @@ class Workarounds(ValueBag):
 				"W01 Ignore whitespace inaccuracies in answers."
 			),
 			(
-				# e.g. allow ".17" to become "0.17"
+				# e.g. allow ".17" to become "0.17" or "10000.0" to become "1e4"
 				"implicit_text_number_conversions",
-				"W02 Allow cloze texts to be reformatted as numbers in the XLS export."
+				"W02 Allow cloze texts to be reformatted as numbers."
 			),
 			(
 				# e.g. "3<Q>2<i" becomes "32"
@@ -269,6 +269,10 @@ class Workarounds(ValueBag):
 				# https://mantis.ilias.de/view.php?id=25365
 				"workaround_identical_cloze_answers_in_readjustment",
 				"W20 don't add identical cloze answers in readjusment"
+			),
+			(
+				"dont_click_twice",
+				"W20 never use multiple clicks to click buttons"
 			)
 		], **kwargs)
 

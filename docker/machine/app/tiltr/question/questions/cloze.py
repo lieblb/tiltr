@@ -13,6 +13,7 @@ from enum import Enum
 from decimal import *
 from collections import defaultdict, namedtuple
 
+import selenium
 from selenium.common.exceptions import NoSuchElementException, ElementNotVisibleException
 from selenium.webdriver.support.select import Select
 from texttable import Texttable
@@ -606,6 +607,17 @@ class TextGapReadjuster54(TextGapReadjuster):
 				# pick the one table for our gap.
 				return tables[gap_index]
 
+			def normalize_answer(x):
+				if self.context.workarounds.implicit_text_number_conversions:
+					x = self.context.implicit_text_to_number_xls(x)
+
+				# tab gets converted to simple space in HTML display of answers.
+				x = x.replace('\t', ' ')
+
+				return x
+
+			denormalized_answers = dict((normalize_answer(x), x) for x in still_to_add)
+
 			while still_to_add:
 				# pick the one table for our gap (and guard against adding the correct answer text
 				# to the wrong gap).
@@ -620,13 +632,25 @@ class TextGapReadjuster54(TextGapReadjuster):
 					tds = list(tr.find_elements_by_css_selector("td"))
 
 					if self.context.workarounds.mantis_25329:
-						answer_text = tds[0].get_attribute("innerHTML").strip()
+						t = tds[0].get_attribute("innerHTML").strip()
+						for x in (t, html.unescape(t)):
+							y = denormalized_answers.get(normalize_answer(x))
+							if y is not None:
+								answer_text = y
+								break
 					else:
-						answer_text = tds[0].text.strip()
+						answer_text = denormalized_answers.get(normalize_answer(tds[0].text.strip()))
 
 					if answer_text in still_to_add:
-						tds[2].find_element_by_css_selector("a").click()  # clicks to add
-						found_add_button = True
+						for tries in range(3):
+							try:
+								tds[2].find_element_by_css_selector("a").click()  # clicks to add
+								found_add_button = True
+								break
+							except selenium.common.exceptions.WebDriverException:
+								time.sleep(1)
+
+					if found_add_button:
 						break
 
 				if not found_add_button:
@@ -653,18 +677,36 @@ class TextGapReadjuster54(TextGapReadjuster):
 					# only allows scores > 0. these scores will be changed afterwards in update_scores()).
 					new_score = Decimal(1)
 
+				if self.context.workarounds.dont_click_twice:
+					num_clicks = 1
+				else:
+					# see Mantis 25365
+					num_clicks = self.context.random.randint(1, 5)
+
 				# scoring popup will show now. we need to enter a value and save.
 				driver.execute_script('''
 						(function(args) {
 							var points = args[0];
+							var num_clicks = args[1];
 
 							var modal_content = $(".modal.fade.in .modal-content");
 							modal_content.find("input#points").val(points);
-
-							modal_content.find('input[name="cmd[addAnswerAsynch]"]').click();
+							
+							function clickSave(n) {
+								var button = modal_content.find('input[name="cmd[addAnswerAsynch]"]');
+								if ($(button).is(":visible")) {
+									button.click();
+									if (n > 1) {
+										setTimeout(function() {
+											clickSave(n - 1);
+										}, 100);
+									}
+								}
+							}
+							
+							clickSave(num_clicks);
 						}(arguments))
-					''', str(new_score))
-
+					''', str(new_score), num_clicks)
 
 				wait(lambda: has_modal_error() or not is_modal_visible(), "scoring popup hide")
 
@@ -783,9 +825,14 @@ class ClozeQuestion(Question):
 			readjusters[gap_index].extend_scores()
 
 		if context.ilias_version >= (5, 4):
-			with wait_for_page_load(driver):
-				# go to readjustment scoring tab
-				driver.find_element_by_id("tab_question").click()
+			for t in range(3):
+				try:
+					with wait_for_page_load(driver):
+						# go to readjustment scoring tab
+						driver.find_element_by_id("tab_question").click()
+					break
+				except:
+					driver.refresh()
 
 		# we're now on the main tab (scoring tab) and stay there. this is important as
 		# the save only happens in our caller and we would lose all data if we switched

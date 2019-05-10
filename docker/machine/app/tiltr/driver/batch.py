@@ -849,7 +849,11 @@ class Run:
 		for part in itertools.chain(["master"], (user.get_username() for user in self.users)):
 			files['machines/%s.txt' % part] = ("\n".join(self.protocols[part])).encode('utf8')
 
-		files_data = dict((k, base64.b64encode(v).decode('utf8')) for k, v in files.items())
+		try:
+			files_data = dict((k, base64.b64encode(v).decode('utf8')) for k, v in files.items())
+		except:
+			files['error.txt'] = ("failed to write files data: %s" % traceback.format_exc()).encode('utf8')
+			files_data = dict()
 
 		with open_results() as db:
 			db.put(
@@ -869,14 +873,15 @@ class Run:
 		try:
 			i = 1
 			while True:
-				name = 'error/master.%d.png' % i
-				if name not in self.files:
+				name = 'error/master.%d' % i
+				if ('%s.png' % name) not in self.files:
 					break
 				i += 1
-			self.files[name] = base64.b64decode(
+			self.files['%s.png' % name] = base64.b64decode(
 				master.driver.get_screenshot_as_base64())
+			self.files['%s.html' % name] = master.driver.page_source.encode("utf8")
 		except:
-			pass  # ignore
+			traceback.print_exc()
 
 	def run(self):
 		t0 = time.time()
