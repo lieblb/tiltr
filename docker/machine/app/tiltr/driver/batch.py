@@ -298,6 +298,7 @@ class Run:
 
 			# check score via statistics gui as well.
 			ilias_result.add(("gui", "score_reached"), gui_stats[user.get_username()].score)
+			ilias_result.add(("gui", "percentage_reached"), Result.format_percentage(gui_stats[user.get_username()].percentage))
 			ilias_result.add(("gui", "short_mark"), gui_stats[user.get_username()].short_mark)
 
 			# add scores from pdf.
@@ -343,11 +344,14 @@ class Run:
 			for value in result.scores():
 				reached_score += self.exam_configuration.clip_answer_score(Decimal(value))
 
+			reached_percentage = (100 * reached_score) / maximum_score
+
 			for channel in ("xls", "gui"):
 				result.update((channel, "score_reached"), remove_trailing_zeros(str(reached_score)))
 
-			mark = Marks(self.exam_configuration.marks).lookup(
-				(100 * reached_score) / maximum_score)
+			result.update(("gui", "percentage_reached"), Result.format_percentage(reached_percentage))
+
+			mark = Marks(self.exam_configuration.marks).lookup(reached_percentage)
 			for channel in ("xls", "gui"):
 				result.update((channel, "short_mark"), str(mark.short).strip())
 

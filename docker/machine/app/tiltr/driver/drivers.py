@@ -36,7 +36,7 @@ from tiltr.question.protocol import AnswerProtocol
 from tiltr.data.pdf import PDF
 
 
-UserStat = namedtuple('UserStat', ['score', 'short_mark'])
+UserStat = namedtuple('UserStat', ['score', 'percentage', 'short_mark'])
 
 Mark = namedtuple('Mark', ['level', 'short', 'official'])
 
@@ -898,14 +898,17 @@ class ExamDriver:
 		# always clip final score on 0.
 		expected_reached_score = max(expected_reached_score, Decimal(0))
 
-		mark = Marks(self.exam_configuration.marks).lookup(
-			(100 * expected_reached_score) / maximum_score)
+		expected_reached_percentage = (100 * expected_reached_score) / maximum_score
+
+		mark = Marks(self.exam_configuration.marks).lookup(expected_reached_percentage)
 
 		result.add_as_formatted_score(("xls", "score_maximum"), maximum_score)
 
 		for channel in ("xls", "gui"):
 			result.add_as_formatted_score((channel, "score_reached"), expected_reached_score)
 			result.add((channel, "short_mark"), str(mark.short).strip())
+
+		result.add(("gui", "percentage_reached"), Result.format_percentage(expected_reached_percentage))
 
 		self.add_protocol_to_result(result)
 		result.attach_performance_measurements(self.dts)
@@ -1325,8 +1328,14 @@ class TestDriver:
 
 		return answers
 
+	def get_statistics2(self, user_ids):
+		# same as get_statistics_from_web_gui, but this time use "results" tab,
+		# which displays similar information.
+		pass
+
 	def get_statistics_from_web_gui(self, user_ids):
-		def fetch_scores():
+
+		def fetch_column_index():
 			with wait_for_page_load(self.driver):
 				self.goto_statistics()
 
@@ -1340,7 +1349,7 @@ class TestDriver:
 			else:
 				raise InteractionException("unable to get gui scores")
 
-		columns_index = interact(self.driver, fetch_scores, refresh=True)
+		columns_index = interact(self.driver, fetch_column_index, refresh=True)
 
 		# configure table to show up to 800 entries.
 		form = self.driver.find_element_by_css_selector("#evaluation_all")
@@ -1366,10 +1375,17 @@ class TestDriver:
 			if user_id:
 				del unassigned[key]
 
-				score_data = re.split(r"\s+", columns["reached"].text)
+				score_text = columns["reached"].text  # e.g. "13.75 von 38.2 (35.99 %)"
+
+				m = re.search(r'\(([^%]+)%\s*\)', score_text)
+				if not m:
+					raise InteractionException("unexpected score text format")
+
+				score_parts = re.split(r"\s+", score_text)
 
 				stats[user_id] = UserStat(
-					score=Decimal(score_data[0]),
+					score=Decimal(score_parts[0]),
+					percentage=Decimal(m.group(1).strip()),
 					short_mark=columns["mark"].text.strip())
 
 		if len(unassigned) > 0:

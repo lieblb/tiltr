@@ -71,6 +71,10 @@ class Result:
 		for channel in ("xls", "pdf"):
 			yield (channel, "question", normed_title, "score")
 
+	@staticmethod
+	def format_percentage(p):
+		return str(round(p, 2))
+
 	def scores(self, channel="xls"):
 		for k, v in self.properties.items():
 			if len(k) == 4 and k[0] == channel and k[1] == "question" and k[3] == "score":
