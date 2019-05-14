@@ -1251,10 +1251,12 @@ class TestDriver:
 			Select(self.driver.find_element_by_name("format")).select_by_value(format)
 			self.driver.find_element_by_name("cmd[createExportFile]").click()
 
+		filename = None
 		url = None
 		for a in self.driver.find_elements_by_css_selector("table a"):
 			params = http_get_parameters(a.get_attribute("href"))
 			if params.get('cmd', '') == "download" and params.get('file', '').endswith(".%s" % filetype):
+				filename = params.get('file')
 				url = a.get_attribute("href")
 				break
 
@@ -1265,13 +1267,14 @@ class TestDriver:
 
 		cookies = dict((cookie['name'], cookie['value']) for cookie in self.driver.get_cookies())
 		result = requests.get(url, cookies=cookies)
-		return result.content
+		return result.content, filename
 
 	def export_xmlres(self):
 		return self._export("xmlres", "zip")
 
 	def export_xls(self):
-		return self._export("csv", "xlsx")
+		content, _ = self._export("csv", "xlsx")
+		return content
 
 	def export_pdf(self):
 		self.report("exporting PDFs.")

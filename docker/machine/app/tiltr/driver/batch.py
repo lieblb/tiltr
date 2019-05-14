@@ -235,6 +235,7 @@ class Run:
 		self.users_factory = batch.users_factory
 		self.protocols = defaultdict(list)
 		self.files = dict()
+		self.test_version = 1
 		self.test_url = None
 		self.language = None
 
@@ -686,9 +687,15 @@ class Run:
 			self.report("traceback", traceback.format_exc())
 			raise Exception("aborted due to error in machines %s." % traceback.format_exc())
 
+	def _save_test(self, test_driver, *args):
+		names = ", ".join(a for a in args if a)
+		content, filename = test_driver.export_xmlres()
+		self.files["test/v%d [%s]/%s" % (self.test_version, names, filename)] = content
+		self.test_version += 1
+		return content
+
 	def _verify_reimport(self, master, test_driver, all_recorded_results):
-		xmlres_zip = test_driver.export_xmlres()
-		self.files["original/xmlres.zip"] = xmlres_zip
+		xmlres_zip = self._save_test(test_driver, "initial")  # initial export of original test
 
 		with tempfile.NamedTemporaryFile() as temp:
 			temp.write(xmlres_zip)
@@ -735,24 +742,24 @@ class Run:
 
 		if not is_reimport:
 			# operations we do on the main test (not the reimported version).
-
-			for i in range(max(0, int(self.settings.num_readjustments))):
-				rounds.append("readjust")
-				rounds.append("check")
-
-			rounds.append("manual")
-			rounds.append("check")
+			num_readjustments = max(0, int(self.settings.num_readjustments))
 		else:
 			# operations we do on the reimported test (not the main version).
 
-			# always do one readjustment on the reimported test. this might look superfluous, but
+			# always do >= 1 readjustment on the reimported test. this might look superfluous, but
 			# in fact it's an essential regression test: scores and marks are imported from the xml,
 			# but not recomputed by default, i.e. if there's an error in the underlying data import
 			# of the responses given, score errors will only be visible after one readjustment. this
 			# error has happened before, see Mantis bug 18553.
 
+			num_readjustments = 1
+
+		for _ in range(num_readjustments):
 			rounds.append("readjust")
 			rounds.append("check")
+
+		rounds.append("manual")
+		rounds.append("check")
 
 		prefix = 'reimport/' if is_reimport else 'original/'
 
@@ -787,11 +794,12 @@ class Run:
 				self._apply_readjustment(
 					round_index, master, test_driver, all_recorded_results, is_reimport)
 
-				xmlres_zip = test_driver.export_xmlres()
-				self.files["readjustments/round%d.zip" % (1 + round_index)] = xmlres_zip
+				self._save_test(test_driver, "reimported" if is_reimport else "", "readjustments")
 
 			elif round == "manual":
 				self._apply_manual_scoring(master, test_driver, all_recorded_results)
+
+				self._save_test(test_driver, "reimported" if is_reimport else "", "manual scoring")
 
 			else:
 				raise RuntimeError("illegal round type %s" % round)
