@@ -42,7 +42,7 @@ class LongTextQuestion(Question):
 		return LongTextAnswerTinyMCE(driver, self, *args)
 
 	def initialize_coverage(self, coverage, context):
-		for args in coverage.text_cases(self.length, context):
+		for args in coverage.text_cases(self.length, context.long_text_random_chars, context):
 			coverage.add_case(self, "verify", *args)
 			coverage.add_case(self, "export", *args)
 

@@ -227,7 +227,7 @@ class ClozeQuestionTextGap(ClozeQuestionGap):
 	def initialize_coverage(self, question, coverage, context):
 		size = self._get_maximum_entry_size(context)
 		for mode in ("verify", "export"):
-			for args in coverage.text_cases(size, context):
+			for args in coverage.text_cases(size, context.cloze_random_chars, context):
 				coverage.add_case(question, self.index, mode, *args)
 			for solution in self.options.keys():
 				coverage.add_case(question, self.index, mode, "solution", solution)

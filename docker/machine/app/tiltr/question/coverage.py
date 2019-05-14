@@ -10,6 +10,7 @@ from collections import Counter
 
 class Coverage:
 	def __init__(self, questions=None, context=None, from_dict=None):
+		self._max_char_occ = 2
 		if from_dict:
 			self._cases = set(tuple(x) for x in from_dict["cases"])
 			self._occurred = set(tuple(x) for x in from_dict["occurred"])
@@ -27,19 +28,27 @@ class Coverage:
 		self._cases.add(tuple([question.title] + list(args)))
 
 	def text_cases_occurred(self, text):
+		yield ("len", len(text))
+
+		for a, b in zip(text, text[1:]):
+			yield ("2gram%s%s" % (a, b))
+
 		counts = Counter()
 		for char in text:
 			counts[char] += 1
-			yield ("char1", char)
-			yield ("len", len(text))
-		for char, count in counts.items():
-			if count >= 2:
-				yield ("char2", char)
 
-	def text_cases(self, max_size, context):
-		for char in context.long_text_random_chars:
-			yield ("char1", char)
-			yield ("char2", char)
+		for char, count in counts.items():
+			for i in range(1, 1 + min(count, self._max_char_occ)):
+				yield ("char%d" % i, char)
+
+	def text_cases(self, max_size, alphabet, context):
+		for char in alphabet:
+			for i in range(1, 1 + self._max_char_occ):
+				yield ("char%d" % i, char)
+
+		for a in alphabet:
+			for b in alphabet:
+				yield ("2gram%s%s" % (a, b))
 
 		for i in range(max_size):
 			if i > 0 or not context.workarounds.disallow_empty_answers:
