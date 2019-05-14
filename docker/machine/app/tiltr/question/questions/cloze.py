@@ -321,6 +321,12 @@ class ClozeQuestionSelectGap(ClozeQuestionGap):
 		return ClozeType.select
 
 
+def num_fract_digits(x):
+	s = str(x)
+	if '.' not in s:
+		return 0
+	return len(s) - s.index('.') - 1
+
 class ClozeQuestionNumericGap(ClozeQuestionGap):
 	def __init__(self, scoring, index):
 		ClozeQuestionGap.__init__(self, index)
@@ -332,30 +338,87 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 		self.numeric_upper = gap_scoring.upper
 		self.score = gap_scoring.score
 
-	def _format_number(self, n, context):
+	def _num_digits(self, context):
 		if context.ilias_version >= (5, 4, 2):
 			# starting with ILIAS 5.4.2, ILIAS switched to 14 digits accuracy
-			format = '%.14g'
+			return 14
 		else:
 			# ILIAS will limit exports to XLS to 16 significant decimals, which makes sense.
 			# e.g. 25.433019319138662 -> 25.43301931913866, 0.17493771424585164 -> 0.1749377142458516
-			format = '%.16g'
+			return 16
 
+	def _format_number(self, n, context):
+		format = '%.' + str(self._num_digits(context)) + 'g'  # e.g. %.14
 		return format % n
 
 	def get_maximum_score(self):
 		return self.score
 
 	def initialize_coverage(self, question, coverage, context):
+		def add_at(x):
+			x = float(x)
+			for i in range(1 + num_fract_digits(x)):
+				coverage.add_case(question, self.index, mode, "@" + str(round(x, i)))
+
 		for mode in ("verify", "export"):
-			coverage.add_case(question, self.index, mode, str(self.numeric_value))
-			coverage.add_case(question, self.index, mode, str(self.numeric_lower))
-			coverage.add_case(question, self.index, mode, str(self.numeric_upper))
+			coverage.add_case(question, self.index, mode, "empty")
+			coverage.add_case(question, self.index, mode, "not_a_number")
+
+			add_at(self.numeric_value)
+			add_at(self.numeric_lower)
+			add_at(self.numeric_upper)
+
+			coverage.add_case(question, self.index, mode, "below")
+			coverage.add_case(question, self.index, mode, "above")
+
+			if float(self.numeric_lower) < float(self.numeric_value):
+				coverage.add_case(question, self.index, mode, "inside_lower_range")
+			if float(self.numeric_upper) > float(self.numeric_value):
+				coverage.add_case(question, self.index, mode, "inside_upper_range")
+
+			coverage.add_case(question, self.index, mode, "positive")
+			coverage.add_case(question, self.index, mode, "negative")
 
 	def add_coverage(self, question, channel, coverage, value):
-		x = str(value)
-		if x in [str(self.numeric_value), str(self.numeric_lower), str(self.numeric_upper)]:
-			coverage.case_occurred(question, self.index, channel, x)
+		occured = None
+
+		if len(str(value)) == 0:
+			occured == "empty"
+		else:
+			try:
+				float(value)
+			except ValueError:
+				occured = "not_a_number"
+
+		if occured is None:
+			if float(value) < 0.:
+				coverage.case_occurred(question, self.index, channel, "negative")
+			elif float(value) > 0.:
+				coverage.case_occurred(question, self.index, channel, "positive")
+
+			if float(value) < float(self.numeric_lower):
+				occured = "below"
+			elif float(value) > float(self.numeric_upper):
+				occured = "above"
+			elif float(value) > float(self.numeric_value) and float(value) < float(self.numeric_upper):
+				occured = "inside_upper_range"
+			elif float(value) < float(self.numeric_value) and float(value) > float(self.numeric_lower):
+				occured = "inside_lower_range"
+			else:
+				def is_coverage_item(candidate, x):
+					x = float(x)
+					for i in range(1 + num_fract_digits(x)):
+						if candidate == str(round(x, i)):
+							return True
+
+				candidate = str(float(value))
+				for x in (self.numeric_value, self.numeric_lower, self.numeric_upper):
+					if is_coverage_item(candidate, x):
+						occured = "@" + candidate
+						break
+
+		if occured:
+			coverage.case_occurred(question, self.index, channel, occured)
 
 	def _get_random_inside(self, context):
 		return context.random.uniform(float(self.numeric_lower), float(self.numeric_upper))
@@ -385,7 +448,9 @@ class ClozeQuestionNumericGap(ClozeQuestionGap):
 				self._get_random_outside
 			))
 
-			s = self._format_number(g(context), context)
+			value = g(context)
+			value = round(value, context.random.randint(0, self._num_digits(context)))
+			s = self._format_number(value, context)
 
 		return s, self.get_score(s, context)
 
