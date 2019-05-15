@@ -138,12 +138,10 @@ class KPrimQuestion(Question):
 
 	def compute_score_by_indices(self, answers):
 		if not self.scoring.halfpoints:
-			s = self.scoring.score / Decimal(4)
-			score = Decimal(0)
+			correct = []
 			for i in range(4):
-				if answers[i] == self.scoring.choices[i].is_correct:
-					score += s
-			return score
+				correct.append(answers[i] == self.scoring.choices[i].is_correct)
+			return self.scoring.score if all(correct) else Decimal(0)
 		else:
 			n_correct = 0
 			for i in range(4):
@@ -161,9 +159,6 @@ class KPrimQuestion(Question):
 		return answers, self.compute_score_by_indices(answers)
 
 	def readjust_scores(self, driver, actual_answers, context, report):
-		if context.workarounds.dont_readjust_kprim:
-			return False, list()
-
 		random = context.random
 
 		def random_flip(f):

@@ -37,20 +37,19 @@ The following question types are supported:
 | ---------------------|:----------------------:| -------------------:| --------------------:|
 | Single Choice        |  &#x2713;              |  &#x2713;           | &#x2713;             |
 | Multiple Choice      |  &#x2713;              |  &#x2713;           | &#x2713;             |
-| KPrim                |  &#x2713;              |  &#x2713;           | &#x2713; (2)         |
+| KPrim                |  &#x2713;              |  &#x2713;           | &#x2713;             |
 | Cloze Select Gaps    |  &#x2713;              |  &#x2713;           | &#x2713;             |
 | Cloze Text Gaps      |  &#x2713;              |  &#x2713;           | &#x2713;             |
 | Cloze Numeric Gaps   |  &#x2713;              |  &#x2713;           | &#x2713;             |
 | Long Text            |  &#x2713;              |  &#x2713;           | &#x2713; (1)         |
-| Matching             |  &#x2713;              |  &#x2713;           | &#x2713; (3)         |
+| Matching             |  &#x2713;              |  &#x2713;           | &#x2713; (2)         |
 | [Paint Question](https://github.com/kyro46/assPaintQuestion)          |  &#x2713;              |  &#x2713;           | -                    |
 | [Code Question](https://github.com/frankbauer/ilias-asscodequestion)  | &#x2713;              |  &#x2713;           | -                    |
 
 Notes:
 
 1. only basic support (only simple score, no keyword scores)
-2. fully supported, but currently disabled by default due to https://mantis.ilias.de/view.php?id=25105
-3. fully supported, but currently disabled by default due to https://mantis.ilias.de/view.php?id=25136
+2. fully supported, but currently disabled by default due to https://mantis.ilias.de/view.php?id=25136
 
 Explanation of Terms:
 

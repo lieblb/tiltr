@@ -228,12 +228,6 @@ class Workarounds(ValueBag):
 				"W12 Read empty fields in XLS export as a numeric 0."
 			),
 			(
-				# https://mantis.ilias.de/view.php?id=25105 and other problems
-				# kprim readjustment errors
-				"dont_readjust_kprim",
-				"W13 Do not perform readjustments on KPrim questions. MANTIS 25105"
-			),
-			(
 				# https://mantis.ilias.de/view.php?id=25136
 				# maximum score of matching questions is wrong after readjustment
 				"dont_readjust_matching",
