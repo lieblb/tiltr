@@ -279,9 +279,10 @@ class Run:
 	def _check_results(self, index, master, test_driver, workbook, all_recorded_results, is_reimport):
 		all_assertions_ok = True
 
-		gui_stats = test_driver.get_statistics_from_web_gui(
-			[user.get_username() for user in self.users])
+		usernames = [user.get_username() for user in self.users]
 
+		statistics_tab_stats = test_driver.get_results_from_statistics_tab(usernames)
+		results_tab_stats = test_driver.get_results_from_results_tab(usernames)
 		web_answers = test_driver.get_answers_from_details_view(self.questions)
 
 		pdfs = test_driver.export_pdf()
@@ -297,9 +298,15 @@ class Run:
 				workbook, user.get_username(), self.questions, self.workarounds, self.ilias_version, master.report)
 
 			# check score via statistics gui as well.
-			ilias_result.add(("gui", "score_reached"), gui_stats[user.get_username()].score)
-			ilias_result.add(("gui", "percentage_reached"), Result.format_percentage(gui_stats[user.get_username()].percentage))
-			ilias_result.add(("gui", "short_mark"), gui_stats[user.get_username()].short_mark)
+			ilias_result.add(
+				("statistics_tab", "score_reached"),
+				statistics_tab_stats[user.get_username()].score)
+			ilias_result.add(
+				("statistics_tab", "percentage_reached"),
+				Result.format_percentage(statistics_tab_stats[user.get_username()].percentage))
+			ilias_result.add(
+				("statistics_tab", "short_mark"),
+				statistics_tab_stats[user.get_username()].short_mark)
 
 			# add scores from pdf.
 			for question_title, score in pdfs[user.get_username()].scores.items():
@@ -346,13 +353,13 @@ class Run:
 
 			reached_percentage = (100 * reached_score) / maximum_score
 
-			for channel in ("xls", "gui"):
+			for channel in ("xls", "statistics_tab"):
 				result.update((channel, "score_reached"), remove_trailing_zeros(str(reached_score)))
 
-			result.update(("gui", "percentage_reached"), Result.format_percentage(reached_percentage))
+			result.update(("statistics_tab", "percentage_reached"), Result.format_percentage(reached_percentage))
 
 			mark = Marks(self.exam_configuration.marks).lookup(reached_percentage)
-			for channel in ("xls", "gui"):
+			for channel in ("xls", "statistics_tab"):
 				result.update((channel, "short_mark"), str(mark.short).strip())
 
 	def _apply_manual_scoring(self, master, test_driver, all_recorded_results):

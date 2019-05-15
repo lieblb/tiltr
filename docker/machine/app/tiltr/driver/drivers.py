@@ -904,11 +904,11 @@ class ExamDriver:
 
 		result.add_as_formatted_score(("xls", "score_maximum"), maximum_score)
 
-		for channel in ("xls", "gui"):
+		for channel in ("xls", "statistics_tab"):
 			result.add_as_formatted_score((channel, "score_reached"), expected_reached_score)
 			result.add((channel, "short_mark"), str(mark.short).strip())
 
-		result.add(("gui", "percentage_reached"), Result.format_percentage(expected_reached_percentage))
+		result.add(("statistics_tab", "percentage_reached"), Result.format_percentage(expected_reached_percentage))
 
 		self.add_protocol_to_result(result)
 		result.attach_performance_measurements(self.dts)
@@ -991,6 +991,14 @@ class ImportedTest(AbstractTest):
 
 	def get_title(self):
 		return self.title
+
+
+def extract_first_number(s):
+	m = re.search(r'\d+(\.\d+)?', s)
+	if m:
+		return m.group(0)
+	else:
+		raise InteractionException("could not extract number from '%s'" % s)
 
 
 class TestDriver:
@@ -1328,12 +1336,59 @@ class TestDriver:
 
 		return answers
 
-	def get_statistics2(self, user_ids):
-		# same as get_statistics_from_web_gui, but this time use "results" tab,
+	def get_results_from_results_tab(self, user_ids):
+		# same as get_results_from_statistics_tab, but this time use "results" tab,
 		# which displays similar information.
-		pass
 
-	def get_statistics_from_web_gui(self, user_ids):
+		driver = self.driver
+		ref_id = self._get_ref_id()
+
+		with wait_for_page_load(driver):
+			self.goto_participants()
+
+		# set filter to display up to 800 participants.
+		dropdown = driver.find_element_by_id("ilAdvSelListAnchorText_sellst_rows_tst_participants_%d" % ref_id)
+		dropdown.click()
+		driver.find_element_by_id("sellst_rows_tst_participants_%d_800" % ref_id).click()
+
+		# build column index.
+		columns_index = dict()
+		ths = list(driver.find_elements_by_css_selector("#tst_participants_%d thead tr th" % ref_id))
+		for i, th in enumerate(ths):
+			links = th.find_elements_by_css_selector("a")
+			if links:
+				p = http_get_parameters(links[0].get_attribute("href"))
+				nav = p["tst_participants_%d_table_nav" % ref_id].split(":")
+				columns_index[nav[0]] = i
+
+		# gather information from table.
+		stats = dict()
+
+		for tr in driver.find_elements_by_css_selector("#tst_participants_%d tbody tr" % ref_id):
+			columns_list = list(tr.find_elements_by_css_selector("td"))
+			columns = dict((k, columns_list[i]) for k, i in columns_index.items())
+
+			# we assume that the long mark form contains the numeric short mark form, e.g. "Note 1.5"
+			short_mark = extract_first_number(columns['final_mark'].text)
+
+			stats[columns['login'].text.strip()] = UserStat(
+				score=Decimal(extract_first_number(columns['reached_points'].text)),
+				percentage=Decimal(extract_first_number(columns['percent_result'].text)),
+				short_mark=short_mark)
+
+			# contents of the columns:
+			# columns['login']  # username
+			# columns['reached_points']  # e.g. "1 von 22"
+			# columns['percent_result']  # e.g. "4.55 %"
+			# columns['final_mark']  # e.g. "Note 3.2"
+
+		missing = set(user_ids) - set(stats.keys())
+		if missing:
+			raise InteractionException("did not find entries in results tab for users %s" % missing)
+
+		return stats
+
+	def get_results_from_statistics_tab(self, user_ids):
 
 		def fetch_column_index():
 			with wait_for_page_load(self.driver):
@@ -1381,10 +1436,8 @@ class TestDriver:
 				if not m:
 					raise InteractionException("unexpected score text format")
 
-				score_parts = re.split(r"\s+", score_text)
-
 				stats[user_id] = UserStat(
-					score=Decimal(score_parts[0]),
+					score=Decimal(extract_first_number(score_text)),
 					percentage=Decimal(m.group(1).strip()),
 					short_mark=columns["mark"].text.strip())
 
