@@ -280,9 +280,10 @@ class Run:
 		all_assertions_ok = True
 
 		usernames = [user.get_username() for user in self.users]
+		tab_stats = dict()
 
-		statistics_tab_stats = test_driver.get_results_from_statistics_tab(usernames)
-		results_tab_stats = test_driver.get_results_from_results_tab(usernames)
+		tab_stats["statistics_tab"] = test_driver.get_results_from_statistics_tab(usernames)
+		tab_stats["results_tab"] = test_driver.get_results_from_results_tab(usernames)
 		web_answers = test_driver.get_answers_from_details_view(self.questions)
 
 		pdfs = test_driver.export_pdf()
@@ -298,15 +299,16 @@ class Run:
 				workbook, user.get_username(), self.questions, self.workarounds, self.ilias_version, master.report)
 
 			# check score via statistics gui as well.
-			ilias_result.add(
-				("statistics_tab", "score_reached"),
-				statistics_tab_stats[user.get_username()].score)
-			ilias_result.add(
-				("statistics_tab", "percentage_reached"),
-				Result.format_percentage(statistics_tab_stats[user.get_username()].percentage))
-			ilias_result.add(
-				("statistics_tab", "short_mark"),
-				statistics_tab_stats[user.get_username()].short_mark)
+			for channel, stats in tab_stats.items():
+				ilias_result.add(
+					(channel, "score_reached"),
+					stats[user.get_username()].score)
+				ilias_result.add(
+					(channel, "percentage_reached"),
+					Result.format_percentage(stats[user.get_username()].percentage))
+				ilias_result.add(
+					(channel, "short_mark"),
+					stats[user.get_username()].short_mark)
 
 			# add scores from pdf.
 			for question_title, score in pdfs[user.get_username()].scores.items():
@@ -343,7 +345,7 @@ class Run:
 		for question in self.questions.values():
 			maximum_score += question.get_maximum_score(context)
 
-		# recompute reached scores and marks.
+		# recompute (expected) reached scores and marks, i.e. values we will check against.
 		for result in all_recorded_results:
 			result.update(("xls", "score_maximum"), maximum_score)
 
@@ -353,13 +355,17 @@ class Run:
 
 			reached_percentage = (100 * reached_score) / maximum_score
 
-			for channel in ("xls", "statistics_tab"):
-				result.update((channel, "score_reached"), remove_trailing_zeros(str(reached_score)))
-
-			result.update(("statistics_tab", "percentage_reached"), Result.format_percentage(reached_percentage))
+			for channel in ("xls", "statistics_tab", "results_tab"):
+				result.update(
+					(channel, "score_reached"),
+					remove_trailing_zeros(str(reached_score)))
+				if channel != "xls":
+					result.update(
+						(channel, "percentage_reached"),
+						Result.format_percentage(reached_percentage))
 
 			mark = Marks(self.exam_configuration.marks).lookup(reached_percentage)
-			for channel in ("xls", "statistics_tab"):
+			for channel in ("xls", "statistics_tab", "results_tab"):
 				result.update((channel, "short_mark"), str(mark.short).strip())
 
 	def _apply_manual_scoring(self, master, test_driver, all_recorded_results):

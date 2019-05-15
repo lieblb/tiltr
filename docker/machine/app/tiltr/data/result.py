@@ -202,6 +202,9 @@ class Result:
 		table.set_cols_width([10, 60, 20, 20])
 		table.set_header_align(['l', 'l', 'l', 'l'])
 
+		def ignore_key(k):
+			return k[0] == "results_tab" and workarounds.ignore_wrong_results_in_results_tab
+
 		for k in keys:
 			value_self = "%s" % self_properties.get(k, None)
 			value_other = "%s" % other_properties.get(k, None)
@@ -219,7 +222,9 @@ class Result:
 			elif len(types) > 0:
 				raise RuntimeError("incompatible property data types")
 
-			if value_self == value_other:
+			if ignore_key(k):
+				status = "IGNORED"
+			elif value_self == value_other:
 				status = "OK"
 			else:
 				status = "FAIL"

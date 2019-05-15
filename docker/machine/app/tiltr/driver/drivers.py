@@ -904,11 +904,11 @@ class ExamDriver:
 
 		result.add_as_formatted_score(("xls", "score_maximum"), maximum_score)
 
-		for channel in ("xls", "statistics_tab"):
+		for channel in ("xls", "statistics_tab", "results_tab"):
 			result.add_as_formatted_score((channel, "score_reached"), expected_reached_score)
 			result.add((channel, "short_mark"), str(mark.short).strip())
-
-		result.add(("statistics_tab", "percentage_reached"), Result.format_percentage(expected_reached_percentage))
+			if channel != "xls":
+				result.add((channel, "percentage_reached"), Result.format_percentage(expected_reached_percentage))
 
 		self.add_protocol_to_result(result)
 		result.attach_performance_measurements(self.dts)

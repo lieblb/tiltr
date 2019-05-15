@@ -273,6 +273,11 @@ class Workarounds(ValueBag):
 			(
 				"dont_click_twice",
 				"W20 never use multiple clicks to click buttons"
+			),
+			(
+				# https://mantis.ilias.de/view.php?id=25418
+				"ignore_wrong_results_in_results_tab",
+				"W21 ignore wrong results in results tab"
 			)
 		], **kwargs)
 
