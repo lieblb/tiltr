@@ -14,18 +14,21 @@ assert that some of the most essential functionality they fundamentally rely on 
 
 TiltR verifications operate on the following areas:
 
-|                      | Responses         | Response Scores | Total Scores         | Marks        |
+|                      | Responses         | Answer Scores   | Test Scores          | Marks        |
 | ---------------------|:-----------------:| ---------------:| --------------------:| ------------:|
 | **During Test**      |                   |                 |                      |
 |                      | &#x2713;          | -               | -                    | -
 | **After Test**       |                   |                 |                      |
-| via Web UI           | -                 | -               | &#x2713;             | &#x2713;
+| via Results Tab      | -                 | -               | &#x2713; (1)         | &#x2713; (1)
+| via Statistics Tab   | -                 | -               | &#x2713;             | &#x2713;
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | &#x2713;
 | via PDF Export       | -                 | &#x2713;        | -                    | -
 | **Readjusted Test**  |                   |                 |                      |
 | via XLS Export       | -                 | &#x2713;        | &#x2713;             | &#x2713;
 | **Re-Import**        |                   |                 |                      |
 | via XLS Export       | &#x2713;          | &#x2713;        | &#x2713;             | &#x2713;
+
+(1) tests are currently ignored due to https://mantis.ilias.de/view.php?id=25418
 
 Note that TiltR can not achieve anything like full coverage (even in areas that are marked above).
 
