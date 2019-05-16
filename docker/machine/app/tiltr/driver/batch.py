@@ -302,10 +302,10 @@ class Run:
 			for channel, stats in tab_stats.items():
 				ilias_result.add(
 					(channel, "score_reached"),
-					stats[user.get_username()].score)
+					Result.format_score(stats[user.get_username()].score))
 				ilias_result.add(
 					(channel, "percentage_reached"),
-					Result.format_percentage(stats[user.get_username()].percentage))
+					Result.format_percentage(stats[user.get_username()].percentage, self.workarounds))
 				ilias_result.add(
 					(channel, "short_mark"),
 					stats[user.get_username()].short_mark)
@@ -329,6 +329,7 @@ class Run:
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				message = "verification failed for user %s." % user.get_username()
 				master.report(message)
+				self._save_test(test_driver, "verification")
 				self.protocols["log"].append("[fail] " + message)
 				all_assertions_ok = False
 
@@ -353,16 +354,16 @@ class Run:
 			for value in result.scores():
 				reached_score += self.exam_configuration.clip_answer_score(Decimal(value))
 
-			reached_percentage = (100 * reached_score) / maximum_score
+			reached_percentage = Result.score_percentage(reached_score, maximum_score)
 
 			for channel in ("xls", "statistics_tab", "results_tab"):
 				result.update(
 					(channel, "score_reached"),
-					remove_trailing_zeros(str(reached_score)))
+					Result.format_score(reached_score))
 				if channel != "xls":
 					result.update(
 						(channel, "percentage_reached"),
-						Result.format_percentage(reached_percentage))
+						Result.format_percentage(reached_percentage, context.workarounds))
 
 			mark = Marks(self.exam_configuration.marks).lookup(reached_percentage)
 			for channel in ("xls", "statistics_tab", "results_tab"):
@@ -385,7 +386,7 @@ class Run:
 					score = min(Decimal(context.random.randint(
 						0, (1 + int(max_score)) * accuracy)) / Decimal(accuracy), max_score)
 					for key in Result.score_keys(question.title):
-						result.update(key, score)
+						result.update(key, Result.format_score(score))
 
 					username = user.get_username()
 					manual_scores[username] = score
@@ -569,7 +570,7 @@ class Run:
 				score = remove_trailing_zeros(str(score))
 
 				for key in Result.score_keys(question_title):
-					result.update(key, score)
+					result.update(key, Result.format_score(score))
 
 				new_scores_table.add_row([question_title, score])
 

@@ -898,17 +898,21 @@ class ExamDriver:
 		# always clip final score on 0.
 		expected_reached_score = max(expected_reached_score, Decimal(0))
 
-		expected_reached_percentage = (100 * expected_reached_score) / maximum_score
+		expected_reached_percentage = Result.score_percentage(expected_reached_score, maximum_score)
 
 		mark = Marks(self.exam_configuration.marks).lookup(expected_reached_percentage)
 
-		result.add_as_formatted_score(("xls", "score_maximum"), maximum_score)
+		result.add(("xls", "score_maximum"), Result.format_score(maximum_score))
 
 		for channel in ("xls", "statistics_tab", "results_tab"):
-			result.add_as_formatted_score((channel, "score_reached"), expected_reached_score)
+			result.add((
+				channel, "score_reached"),
+				Result.format_score(expected_reached_score))
 			result.add((channel, "short_mark"), str(mark.short).strip())
 			if channel != "xls":
-				result.add((channel, "percentage_reached"), Result.format_percentage(expected_reached_percentage))
+				result.add(
+					(channel, "percentage_reached"),
+					Result.format_percentage(expected_reached_percentage, self.context.workarounds))
 
 		self.add_protocol_to_result(result)
 		result.attach_performance_measurements(self.dts)

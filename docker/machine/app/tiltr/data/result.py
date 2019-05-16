@@ -8,6 +8,8 @@
 import json
 import base64
 import re
+import math
+import decimal
 
 from enum import Enum
 from decimal import *
@@ -72,8 +74,32 @@ class Result:
 			yield (channel, "question", normed_title, "score")
 
 	@staticmethod
-	def format_percentage(p):
-		return str(round(p, 2))
+	def round_up_to_2_digits(x):
+		with decimal.localcontext() as ctx:
+			ctx.rounding = decimal.ROUND_CEILING
+			return round(Decimal(x), 2)
+
+	@staticmethod
+	def score_percentage(score, maximum):
+		return (Decimal(100) * score) / maximum
+
+	@staticmethod
+	def format_percentage(p, workarounds):
+		if workarounds.floating_point_percentage_display:
+			return str("%.2f" % float(p))
+		else:
+			with decimal.localcontext() as ctx:
+				ctx.rounding = decimal.ROUND_HALF_UP
+				return round(Decimal(p), 2)
+
+	@staticmethod
+	def format_score(score):
+		s = str(Result.round_up_to_2_digits(score))
+		if '.' in s:
+			s = s.rstrip('0')
+			if s.endswith('.'):
+				s = s.rstrip('.')
+		return s
 
 	def scores(self, channel="xls"):
 		for k, v in self.properties.items():
@@ -141,14 +167,6 @@ class Result:
 			if k[:len(key)] == key:
 				answers[k[len(key):]] = v
 		return answers
-
-	def add_as_formatted_score(self, key, score):
-		s = str(score)
-		if '.' in s:
-			s = s.rstrip('0')
-			if s.endswith('.'):
-				s = s.rstrip('.')
-		self.add(key, s)
 
 	@staticmethod
 	def from_error(origin, domain, err, files=None):

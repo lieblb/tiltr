@@ -52,7 +52,7 @@ class Answer:
 		score = clip_answer_score(self.current_score)
 
 		for key in Result.score_keys(self.question.title):
-			result.add_as_formatted_score(key, score)
+			result.add(key, Result.format_score(score))
 
 		return score
 
