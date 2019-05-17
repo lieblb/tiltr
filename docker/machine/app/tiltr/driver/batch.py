@@ -314,8 +314,10 @@ class Run:
 					stats[user.get_username()].short_mark)
 
 			# add scores from pdf.
-			for question_title, score in pdfs[user.get_username()].scores.items():
-				ilias_result.add(("pdf", "question", Result.normalize_question_title(question_title), "score"), score)
+			for question_title, question_data in pdfs[user.get_username()].scores.items():
+				title = Result.normalize_question_title(question_title)
+				for k, v in question_data.items():
+					ilias_result.add(("pdf", "question", title, k), v)
 
 			# save pdf in tiltr database.
 			self.files[prefix + "%s.pdf" % user.get_username()] = pdfs[user.get_username()].bytes
@@ -389,8 +391,10 @@ class Run:
 					accuracy = 4
 					score = min(Decimal(context.random.randint(
 						0, (1 + int(max_score)) * accuracy)) / Decimal(accuracy), max_score)
-					for key in Result.score_keys(question.title):
+					for key in Result.reached_score_keys(question.title):
 						result.update(key, Result.format_score(score))
+					for key in Result.maximum_score_keys(question.title):
+						result.update(key, Result.format_score(max_score))
 
 					username = user.get_username()
 					manual_scores[username] = score
@@ -573,8 +577,10 @@ class Run:
 				score = self.exam_configuration.clip_answer_score(score)
 				score = remove_trailing_zeros(str(score))
 
-				for key in Result.score_keys(question_title):
+				for key in Result.reached_score_keys(question_title):
 					result.update(key, Result.format_score(score))
+				for key in Result.maximum_score_keys(question_title):
+					result.update(key, Result.format_score(question.get_maximum_score(context)))
 
 				new_scores_table.add_row([question_title, score])
 

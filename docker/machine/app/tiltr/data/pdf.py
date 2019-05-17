@@ -7,6 +7,7 @@
 
 import io
 import re
+from decimal import *
 
 from pdfminer3.layout import LAParams, LTTextBoxHorizontal
 from pdfminer3.converter import PDFPageAggregator
@@ -72,7 +73,11 @@ def _extract_pdf_scores(stream):
 	for line in table.split("\n")[1:]:
 		cols += re.split(r'\s+', line)
 		if len(cols) >= 6:
-			scores[cols[2]] = cols[4]
+			data = dict(
+				score_maximum=Decimal(cols[3]),
+				score_reached=Decimal(cols[4]))
+
+			scores[cols[2]] = data
 			cols = cols[6:]
 
 	return scores

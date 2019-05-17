@@ -170,7 +170,8 @@ def workbook_to_result(wb, username, questions, workarounds, ilias_version, repo
 			result.add(Result.key("question", question_title, "answer", dimension_title), dimension_value)
 
 	for title, score in result_row.get_question_scores(workarounds).items():
-		result.add(("xls", "question", Result.normalize_question_title(title), "score"), score)
+		k = Result.normalize_question_title(title)
+		result.add(("xls", "question", k, "score_reached"), score)
 
 	result.add(("xls", "score_reached"), result_row.get_reached_score())
 	result.add(("xls", "score_maximum"), result_row.get_maximum_score())

@@ -68,10 +68,16 @@ class Result:
 		return re.sub(r'\s+', '', title)
 
 	@staticmethod
-	def score_keys(question_title):
+	def reached_score_keys(question_title):
 		normed_title = Result.normalize_question_title(question_title)
 		for channel in ("xls", "pdf"):
-			yield (channel, "question", normed_title, "score")
+			yield (channel, "question", normed_title, "score_reached")
+
+	@staticmethod
+	def maximum_score_keys(question_title):
+		normed_title = Result.normalize_question_title(question_title)
+		for channel in ("pdf", ):
+			yield (channel, "question", normed_title, "score_maximum")
 
 	@staticmethod
 	def round_up_to_2_digits(x):
@@ -103,7 +109,7 @@ class Result:
 
 	def scores(self, channel="xls"):
 		for k, v in self.properties.items():
-			if len(k) == 4 and k[0] == channel and k[1] == "question" and k[3] == "score":
+			if len(k) == 4 and k[0] == channel and k[1] == "question" and k[3] == "score_reached":
 				yield v
 
 	def __init__(self, from_json=None, **kwargs):

@@ -51,8 +51,11 @@ class Answer:
 
 		score = clip_answer_score(self.current_score)
 
-		for key in Result.score_keys(self.question.title):
+		for key in Result.reached_score_keys(self.question.title):
 			result.add(key, Result.format_score(score))
+
+		for key in Result.maximum_score_keys(self.question.title):
+			result.add(key, Result.format_score(self.question.get_maximum_score(context)))
 
 		return score
 
