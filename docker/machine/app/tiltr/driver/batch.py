@@ -304,6 +304,9 @@ class Run:
 					(channel, "score_reached"),
 					Result.format_score(stats[user.get_username()].score))
 				ilias_result.add(
+					(channel, "score_maximum"),
+					Result.format_score(stats[user.get_username()].maximum_score))
+				ilias_result.add(
 					(channel, "percentage_reached"),
 					Result.format_percentage(stats[user.get_username()].percentage, self.workarounds))
 				ilias_result.add(
@@ -348,8 +351,6 @@ class Run:
 
 		# recompute (expected) reached scores and marks, i.e. values we will check against.
 		for result in all_recorded_results:
-			result.update(("xls", "score_maximum"), maximum_score)
-
 			reached_score = Decimal(0)
 			for value in result.scores():
 				reached_score += self.exam_configuration.clip_answer_score(Decimal(value))
@@ -357,6 +358,9 @@ class Run:
 			reached_percentage = Result.score_percentage(reached_score, maximum_score)
 
 			for channel in ("xls", "statistics_tab", "results_tab"):
+				result.update(
+					(channel, "score_maximum"),
+					Result.format_score(maximum_score))
 				result.update(
 					(channel, "score_reached"),
 					Result.format_score(reached_score))

@@ -36,7 +36,7 @@ from tiltr.question.protocol import AnswerProtocol
 from tiltr.data.pdf import PDF
 
 
-UserStat = namedtuple('UserStat', ['score', 'percentage', 'short_mark'])
+UserStat = namedtuple('UserStat', ['score', 'maximum_score', 'percentage', 'short_mark'])
 
 Mark = namedtuple('Mark', ['level', 'short', 'official'])
 
@@ -902,13 +902,16 @@ class ExamDriver:
 
 		mark = Marks(self.exam_configuration.marks).lookup(expected_reached_percentage)
 
-		result.add(("xls", "score_maximum"), Result.format_score(maximum_score))
-
 		for channel in ("xls", "statistics_tab", "results_tab"):
-			result.add((
-				channel, "score_reached"),
+			result.add(
+				(channel, "score_reached"),
 				Result.format_score(expected_reached_score))
-			result.add((channel, "short_mark"), str(mark.short).strip())
+			result.add(
+				(channel, "score_maximum"),
+				Result.format_score(maximum_score))
+			result.add(
+				(channel, "short_mark"),
+				str(mark.short).strip())
 			if channel != "xls":
 				result.add(
 					(channel, "percentage_reached"),
@@ -997,12 +1000,14 @@ class ImportedTest(AbstractTest):
 		return self.title
 
 
-def extract_first_number(s):
-	m = re.search(r'\d+(\.\d+)?', s)
-	if m:
-		return m.group(0)
+def extract_number(s, n=1):
+	assert n > 0
+	x = re.findall(r'(\d+(\.\d+)?)', s)
+	x = list(map(lambda y: y[0], x))
+	if len(x) > n - 1:
+		return Decimal(x[n - 1])
 	else:
-		raise InteractionException("could not extract number from '%s'" % s)
+		raise InteractionException("could not extract number #%d from '%s'" % (n, s))
 
 
 class TestDriver:
@@ -1373,11 +1378,12 @@ class TestDriver:
 			columns = dict((k, columns_list[i]) for k, i in columns_index.items())
 
 			# we assume that the long mark form contains the numeric short mark form, e.g. "Note 1.5"
-			short_mark = extract_first_number(columns['final_mark'].text)
+			short_mark = extract_number(columns['final_mark'].text)
 
 			stats[columns['login'].text.strip()] = UserStat(
-				score=Decimal(extract_first_number(columns['reached_points'].text)),
-				percentage=Decimal(extract_first_number(columns['percent_result'].text)),
+				score=extract_number(columns['reached_points'].text, 1),
+				maximum_score=extract_number(columns['reached_points'].text, 2),
+				percentage=extract_number(columns['percent_result'].text),
 				short_mark=short_mark)
 
 			# contents of the columns:
@@ -1436,13 +1442,10 @@ class TestDriver:
 
 				score_text = columns["reached"].text  # e.g. "13.75 von 38.2 (35.99 %)"
 
-				m = re.search(r'\(([^%]+)%\s*\)', score_text)
-				if not m:
-					raise InteractionException("unexpected score text format")
-
 				stats[user_id] = UserStat(
-					score=Decimal(extract_first_number(score_text)),
-					percentage=Decimal(m.group(1).strip()),
+					score=extract_number(score_text, 1),
+					maximum_score=extract_number(score_text, 2),
+					percentage=extract_number(score_text, 3),
 					short_mark=columns["mark"].text.strip())
 
 		if len(unassigned) > 0:
