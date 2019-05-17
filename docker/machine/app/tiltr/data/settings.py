@@ -251,6 +251,7 @@ class Workarounds(ValueBag):
 			),
 			(
 				# https://mantis.ilias.de/view.php?id=25272
+				# also see W10, which was an earlier version and more general form of this bug
 				"dont_test_invalid_save",
 				"W18 Do not test save behaviour on invalid input."
 			),
