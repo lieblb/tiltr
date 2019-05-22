@@ -91,12 +91,9 @@ class Result:
 
 	@staticmethod
 	def format_percentage(p, workarounds):
-		if workarounds.floating_point_percentage_display:
-			return str("%.2f" % float(p))
-		else:
-			with decimal.localcontext() as ctx:
-				ctx.rounding = decimal.ROUND_HALF_UP
-				return round(Decimal(p), 2)
+		with decimal.localcontext() as ctx:
+			ctx.rounding = decimal.ROUND_HALF_UP
+			return round(Decimal(p), 2)
 
 	@staticmethod
 	def format_score(score):
@@ -229,6 +226,20 @@ class Result:
 		def ignore_key(k):
 			return k[0] == "results_tab" and workarounds.ignore_wrong_results_in_results_tab
 
+		def make_is_close(eps=Decimal("0.01")):
+			def is_close(a, b):
+				return abs(Decimal(a) - Decimal(b)) <= eps
+			return is_close
+
+		def is_exactly_equal(a, b):
+			return a == b
+
+		comparators = dict()
+
+		if workarounds.inaccurate_percentage_rounding:
+			comparators[("statistics_tab", "percentage_reached")] = make_is_close()
+			comparators[("results_tab", "percentage_reached")] = make_is_close()
+
 		for k in keys:
 			value_self = "%s" % self_properties.get(k, None)
 			value_other = "%s" % other_properties.get(k, None)
@@ -246,9 +257,11 @@ class Result:
 			elif len(types) > 0:
 				raise RuntimeError("incompatible property data types")
 
+			is_equal = comparators.get(k, is_exactly_equal)
+
 			if ignore_key(k):
 				status = "IGNORED"
-			elif value_self == value_other:
+			elif is_equal(value_self, value_other):
 				status = "OK"
 			else:
 				status = "FAIL"

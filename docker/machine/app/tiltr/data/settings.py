@@ -275,8 +275,8 @@ class Workarounds(ValueBag):
 				"W21 ignore wrong results in results tab"
 			),
 			(
-				"floating_point_percentage_display",
-				"W22 allow small inaccuracies in percentage display"
+				"inaccurate_percentage_rounding",
+				"W22 allow small inaccuracies up to 0.01 in percentage display"
 			)
 		], **kwargs)
 
