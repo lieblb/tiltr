@@ -58,6 +58,17 @@ class Origin(Enum):
 	exported = 1
 
 
+def _round_to_2_digits(x, r):
+	s = str(((x * Decimal(100)).to_integral_value(r) / Decimal(100)))
+
+	if '.' not in s:
+		s += '.00'
+	elif len(s.split('.')[1]) < 2:
+		s += '0'
+
+	return s
+
+
 class Result:
 	@staticmethod
 	def key(*args):
@@ -81,9 +92,7 @@ class Result:
 
 	@staticmethod
 	def round_up_to_2_digits(x):
-		with decimal.localcontext() as ctx:
-			ctx.rounding = decimal.ROUND_CEILING
-			return round(Decimal(x), 2)
+		return _round_to_2_digits(Decimal(x), ROUND_CEILING)
 
 	@staticmethod
 	def score_percentage(score, maximum):
@@ -91,9 +100,7 @@ class Result:
 
 	@staticmethod
 	def format_percentage(p, workarounds):
-		with decimal.localcontext() as ctx:
-			ctx.rounding = decimal.ROUND_HALF_UP
-			return round(Decimal(p), 2)
+		return _round_to_2_digits(Decimal(p), ROUND_HALF_UP)
 
 	@staticmethod
 	def format_score(score):
