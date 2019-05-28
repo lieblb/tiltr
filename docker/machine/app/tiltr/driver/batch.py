@@ -722,8 +722,8 @@ class Run:
 		self.test_version += 1
 		return content
 
-	def _verify_reimport(self, master, test_driver, all_recorded_results):
-		xmlres_zip = self._save_test(test_driver, "initial")  # initial export of original test
+	def _verify_reimport(self, master, test_driver, all_recorded_results, exported_test_data):
+		xmlres_zip = exported_test_data
 
 		with tempfile.NamedTemporaryFile() as temp:
 			temp.write(xmlres_zip)
@@ -766,6 +766,9 @@ class Run:
 
 		rounds.append("check")
 		if not is_reimport:
+			# ensure test export here, since we might always fail while doing round 0 (we still
+			# want to have one test export then).
+			exported_test_data = self._save_test(test_driver, "initial")
 			rounds.append("reimport")
 
 		if not is_reimport:
@@ -814,7 +817,7 @@ class Run:
 
 			elif round == "reimport":
 				all_assertions_ok = all_assertions_ok and self._verify_reimport(
-					master, test_driver, all_recorded_results) == "OK"
+					master, test_driver, all_recorded_results, exported_test_data) == "OK"
 				if not all_assertions_ok:
 					break
 

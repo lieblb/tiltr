@@ -1000,14 +1000,15 @@ class ImportedTest(AbstractTest):
 		return self.title
 
 
-def extract_number(s, n=1):
+def extract_number(s, n=1, name='unknown'):
 	assert n > 0
 	x = re.findall(r'(\d+(\.\d+)?)', s)
 	x = list(map(lambda y: y[0], x))
 	if len(x) > n - 1:
 		return Decimal(x[n - 1])
 	else:
-		raise InteractionException("could not extract number #%d from '%s'" % (n, s))
+		return Result.NOT_A_NUMBER
+		# raise InteractionException("could not extract number #%d from '%s' at location %s" % (n, s, name))
 
 
 class TestDriver:
@@ -1378,12 +1379,12 @@ class TestDriver:
 			columns = dict((k, columns_list[i]) for k, i in columns_index.items())
 
 			# we assume that the long mark form contains the numeric short mark form, e.g. "Note 1.5"
-			short_mark = extract_number(columns['final_mark'].text)
+			short_mark = extract_number(columns['final_mark'].text, name="results/short_mark")
 
 			stats[columns['login'].text.strip()] = UserStat(
-				score=extract_number(columns['reached_points'].text, 1),
-				maximum_score=extract_number(columns['reached_points'].text, 2),
-				percentage=extract_number(columns['percent_result'].text),
+				score=extract_number(columns['reached_points'].text, 1, name="results/score"),
+				maximum_score=extract_number(columns['reached_points'].text, 2, name="results/maximum_score"),
+				percentage=extract_number(columns['percent_result'].text, name="results/percentage"),
 				short_mark=short_mark)
 
 			# contents of the columns:
@@ -1443,9 +1444,9 @@ class TestDriver:
 				score_text = columns["reached"].text  # e.g. "13.75 von 38.2 (35.99 %)"
 
 				stats[user_id] = UserStat(
-					score=extract_number(score_text, 1),
-					maximum_score=extract_number(score_text, 2),
-					percentage=extract_number(score_text, 3),
+					score=extract_number(score_text, 1, name="statistics/score"),
+					maximum_score=extract_number(score_text, 2, name="statistics/maximum_score"),
+					percentage=extract_number(score_text, 3, name="statistics/percentage"),
 					short_mark=columns["mark"].text.strip())
 
 		if len(unassigned) > 0:

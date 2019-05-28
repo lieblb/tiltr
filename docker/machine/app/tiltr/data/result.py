@@ -70,6 +70,8 @@ def _round_to_2_digits(x, r):
 
 
 class Result:
+	NOT_A_NUMBER = "not-a-number"
+
 	@staticmethod
 	def key(*args):
 		return tuple(_flat(args))
@@ -92,14 +94,20 @@ class Result:
 
 	@staticmethod
 	def round_up_to_2_digits(x):
+		if x == Result.NOT_A_NUMBER:
+			return x
 		return _round_to_2_digits(Decimal(x), ROUND_CEILING)
 
 	@staticmethod
 	def score_percentage(score, maximum):
+		if score == Result.NOT_A_NUMBER:
+			return score
 		return (Decimal(100) * score) / maximum
 
 	@staticmethod
 	def format_percentage(p, workarounds):
+		if p == Result.NOT_A_NUMBER:
+			return p
 		return _round_to_2_digits(Decimal(p), ROUND_HALF_UP)
 
 	@staticmethod
