@@ -243,6 +243,8 @@ class Result:
 
 		def make_is_close(eps=Decimal("0.01")):
 			def is_close(a, b):
+				if a == Result.NOT_A_NUMBER or b == Result.NOT_A_NUMBER:
+					return False
 				return abs(Decimal(a) - Decimal(b)) <= eps
 			return is_close
 
