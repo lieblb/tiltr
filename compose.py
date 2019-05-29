@@ -180,6 +180,11 @@ def instrument_ilias():
 	client_zip.extractall(ilias_path)
 	client_zip.close()
 
+	# make sure that mobs directory is writable by web process (it needs to be able to create
+	# sub directories)
+
+	os.system('docker-compose exec -T web sh -c "chmod 777 /var/www/html/ILIAS/data/ilias/mobs"')
+
 	return ilias_path
 
 
