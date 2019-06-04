@@ -15,6 +15,8 @@ import datetime
 import uuid
 import base64
 import io
+import os
+import glob
 import tempfile
 import itertools
 from decimal import *
@@ -1111,6 +1113,15 @@ class Batch(threading.Thread):
 		self.ilias_admin_password = args.ilias_admin_password
 
 	def run(self):
+		# clear ILIAS temp data (exported pdf and html files). if we don't do this
+		# regularly, GB and GB of data will fill up our disk until it's full.
+		for f in glob.glob('/tiltr/tmp/iliastemp/*'):
+			if os.path.isdir(f):
+				if len(os.listdir(f)) == 0:
+					os.rmdir(f)
+			else:
+				os.remove(f)
+
 		if self._profiling:
 			import cProfile
 			profiler = cProfile.Profile()

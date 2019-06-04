@@ -9,6 +9,7 @@ services:
       - "80"
     volumes:
       - ./data/ILIAS:/var/www/html/ILIAS
+      - ./data/tmp/iliastemp:/var/ilias/data/ilias/temp
     networks:
       - net
 

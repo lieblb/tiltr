@@ -260,6 +260,10 @@ tmp_path = os.path.join(base, "data", "tmp")
 if not os.path.exists(tmp_path):
 	os.makedirs(tmp_path)
 
+iliastemp_path = os.path.join(tmp_path, "iliastemp")
+if not os.path.exists(iliastemp_path):
+	os.makedirs(iliastemp_path)
+
 class SpinningCursor:
 	def __init__(self):
 		self._spinner = SpinningCursor.spinning_cursor()
