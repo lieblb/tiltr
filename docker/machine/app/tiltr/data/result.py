@@ -9,10 +9,11 @@ import json
 import base64
 import re
 import math
+
 import decimal
+from decimal import *
 
 from enum import Enum
-from decimal import *
 from collections import defaultdict
 
 from .database import DB
@@ -245,7 +246,10 @@ class Result:
 			def is_close(a, b):
 				if a == Result.NOT_A_NUMBER or b == Result.NOT_A_NUMBER:
 					return False
-				return abs(Decimal(a) - Decimal(b)) <= eps
+				try:
+					return abs(Decimal(a) - Decimal(b)) <= eps
+				except decimal.InvalidOperation:
+					raise RuntimeError("could not compute is_close for (%s, %s)" % (a, b))
 			return is_close
 
 		def is_exactly_equal(a, b):
