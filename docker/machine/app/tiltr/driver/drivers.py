@@ -1665,10 +1665,18 @@ class UserDriver:
 			driver.find_element_by_id("xmldoc").send_keys(path)
 			import_button.click()
 
-		self.report("importing.")
+		with wait_for_page_load(driver, timeout=90):
+			# for larger tests, the following like causes a timeout on Chromium. we use
+			# javascript to click the import button to avoid that.
+			#driver.find_element_by_name("cmd[importVerifiedFile]").click()
 
-		with wait_for_page_load(driver):
-			driver.find_element_by_name("cmd[importVerifiedFile]").click()
+			self.report("clicking import.")
+			driver.execute_script('''
+				setTimeout(function() {
+					$("input[name=\\"cmd[importVerifiedFile]\\"]").click();
+				}, 500);
+			''')
+			self.report("done.")
 
 		self.report("done importing test.")
 
