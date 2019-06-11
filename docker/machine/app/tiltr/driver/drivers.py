@@ -1553,10 +1553,10 @@ class TestDriver:
 				self.driver.get(self.test.cache.cached_link)
 			return True
 
-		self.user_driver.search_test(self.test.get_title())
-
 		driver = self.driver
 		for i in range(10):
+			self.user_driver.search_test(self.test.get_title())
+
 			for link in driver.find_elements_by_partial_link_text(self.test.get_title()):
 				if link.is_displayed():
 					if link.text.strip() == self.test.get_title():
@@ -1564,7 +1564,8 @@ class TestDriver:
 							link.click()
 						self.test.cache.cached_link = driver.current_url
 						return True
-			time.sleep(1)
+
+			time.sleep(2)
 
 		return False
 
