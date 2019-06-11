@@ -249,7 +249,8 @@ class Result:
 				try:
 					return abs(Decimal(a) - Decimal(b)) <= eps
 				except decimal.InvalidOperation:
-					raise RuntimeError("could not compute is_close for (%s, %s)" % (a, b))
+					print("could not compute is_close for (%s, %s)" % (a, b))
+					return False
 			return is_close
 
 		def is_exactly_equal(a, b):
