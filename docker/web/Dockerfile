@@ -1,4 +1,4 @@
-FROM php:7.1-apache
+FROM php:7.2-apache
 MAINTAINER Bernhard.Liebl@rz.uni-regensburg.de
 
 RUN apt-get update && apt-get install -y  vim less && \
@@ -27,3 +27,8 @@ COPY custom/index.php /var/www/html/index.php
 
 ENV PHANTOM_JS phantomjs-2.1.1-linux-x86_64
 RUN apt-get update -y && apt-get install -y wget && cd ~ && wget https://bitbucket.org/ariya/phantomjs/downloads/$PHANTOM_JS.tar.bz2 && tar xvjf $PHANTOM_JS.tar.bz2 && mv $PHANTOM_JS /usr/local/share && ln -sf /usr/local/share/$PHANTOM_JS/bin/phantomjs /usr/bin/phantomjs
+
+RUN apt-get update && apt-get install -y --no-install-recommends git zip
+RUN curl --silent --show-error https://getcomposer.org/installer | php
+
+RUN adduser --disabled-password --shell /bin/bash --gecos "User" restricted_user

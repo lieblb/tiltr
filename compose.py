@@ -183,7 +183,15 @@ def instrument_ilias():
 	# make sure that mobs directory is writable by web process (it needs to be able to create
 	# sub directories)
 
-	os.system('docker-compose exec -T web sh -c "chmod 777 /var/www/html/ILIAS/data/ilias/mobs"')
+	os.chdir(base)
+	os.system('docker-compose run --rm -T web sh -c "chmod 777 /var/www/html/ILIAS/data/ilias/mobs"')
+
+	# make sure compose libs under ILIAS/libs/composer are initialized.
+
+	if not os.path.exists(os.path.join(ilias_path, "libs", "composer", "vendor", "autoload.php")):
+		print("runnning php composer to install php libraries...")
+		os.chdir(base)
+		os.system('docker-compose run --rm -u restricted_user -T web sh -c "cd /var/www/html/ILIAS/libs/composer && php /var/www/html/composer.phar --no-plugins --no-scripts install"')
 
 	return ilias_path
 
