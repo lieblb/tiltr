@@ -60,14 +60,7 @@ class Origin(Enum):
 
 
 def _round_to_2_digits(x, r):
-	s = str(((x * Decimal(100)).to_integral_value(r) / Decimal(100)))
-
-	if '.' not in s:
-		s += '.00'
-	elif len(s.split('.')[1]) < 2:
-		s += '0'
-
-	return s
+	return Decimal(x).quantize(Decimal("0.01"), rounding=r)
 
 
 class Result:
