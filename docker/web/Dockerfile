@@ -1,4 +1,5 @@
-FROM php:7.2-apache
+ARG TILTR_PHP_IMAGE=php:7.2-apache
+FROM $TILTR_PHP_IMAGE
 MAINTAINER Bernhard.Liebl@rz.uni-regensburg.de
 
 RUN apt-get update && apt-get install -y  vim less && \

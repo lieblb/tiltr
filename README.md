@@ -227,6 +227,7 @@ url: https://some.ilias.uni-regensburg.de
 admin:
   user: my_root_user
   password: my_sikrit_root_user_password
+version: 5.4.2
 
 ```
 

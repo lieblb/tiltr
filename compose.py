@@ -66,6 +66,18 @@ args = parser.parse_args()
 os.environ['TILTR_PORT'] = str(args.port)
 os.environ['TILTR_EMBEDDED_ILIAS_PORT'] = str(args.embedded_ilias_port)
 
+
+def configure_php_version(php_version="7.1"):  # i.e. which PHP version ILIAS will run on
+	os.environ['TILTR_PHP_IMAGE'] = f"php:{php_version}-apache"
+
+
+def configure_for_ilias_version(ilias_version):
+	if ilias_version[0] >= 6:
+		configure_php_version("7.2")
+	else:
+		configure_php_version("7.1")
+
+
 def determine_ilias_db_version():
 	# determine embedded version of ILIAS to determine which DB we need to install if we do a fresh install.
 
@@ -86,14 +98,18 @@ def determine_ilias_db_version():
 		print("failed to determine ILIAS version.")
 		sys.exit(1)
 
-	ilias_version_tuple = tuple(x for x in m[1].split("."))
-	os.environ['TILTR_ILIAS_DB_VERSION'] = '.'.join(ilias_version_tuple[:2])
+	ilias_version_tuple = tuple(int(x) for x in m[1].split("."))
+	os.environ['TILTR_ILIAS_DB_VERSION'] = '.'.join(str(x) for x in ilias_version_tuple[:2])
+
+	configure_for_ilias_version(ilias_version_tuple)
+
 
 if hasattr(args, 'fork') and args.fork:
 	pid = os.fork()
 	if pid != 0:
 		print("started up.py on pid %d." % pid)
 		sys.exit(0)
+
 
 def monitor_docker_stats(tmp_path, docker_compose_name):
 	stream = subprocess.Popen(["docker", "stats"], stdout=subprocess.PIPE)
@@ -223,6 +239,8 @@ def set_argument_environ(args):
 		entrypoint_args.extend(['--embedded-ilias-port', '0'])
 
 		print("Testing against external ILIAS at %s." % ilias_config['url'])
+
+		configure_for_ilias_version([int(x) for x in ilias_config['version'].split('.')])
 	else:
 		# use our default embedded ILIAS.
 		ilias_path = instrument_ilias()
