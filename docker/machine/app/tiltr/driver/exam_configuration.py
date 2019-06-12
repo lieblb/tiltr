@@ -23,6 +23,11 @@ class PassScoring(Enum):
 
 
 class ExamConfiguration:
+	count_system: CountSystem
+	mc_scoring: MCScoring
+	score_cutting: ScoreCutting
+	pass_scoring: PassScoring
+
 	def __init__(self):
 		self.count_system = None
 		self.mc_scoring = None
@@ -42,7 +47,7 @@ class ExamConfiguration:
 	def set_pass_scoring(self, value):
 		self.pass_scoring = PassScoring(value)
 
-	def clip_answer_score(self, score):
+	def clip_answer_score(self, score: Decimal) -> Decimal:
 		if self.score_cutting == ScoreCutting.QUESTION:
 			return max(score, Decimal(0))
 		else:

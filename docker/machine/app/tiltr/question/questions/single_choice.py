@@ -5,6 +5,7 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 from decimal import *
 
 from selenium.common.exceptions import NoSuchElementException
@@ -12,16 +13,18 @@ from texttable import Texttable
 
 from .question import Question
 from tiltr.data.exceptions import *
+from tiltr.data.settings import Settings
 from tiltr.driver.utils import set_element_value
 
 
-def _readjust_score(random, score):
+def _readjust_score(random, score: Decimal):
 	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
 	score += delta
 	score = max(score, Decimal(0))
 	return score
 
-def _readjust_ui(context, *args):
+
+def _readjust_ui(context: 'TestContext', *args):
 	def ilias_5_4(driver, choices):
 		for tr in driver.find_elements_by_css_selector("#form_tst_question_correction table tbody tr"):
 			answer_text_element, points_element = list(tr.find_elements_by_css_selector("td"))
@@ -63,33 +66,33 @@ class SingleChoiceQuestion(Question):
 
 		return choices
 
-	def __init__(self, driver, title, settings):
+	def __init__(self, driver, title: str, settings: Settings):
 		super().__init__(title)
 		self.choices = self._get_ui(driver)
 
-	def get_maximum_score(self, context):
+	def get_maximum_score(self, context: 'TestContext'):
 		return max(self.choices.values())
 
 	def create_answer(self, driver, *args):
 		from ..answers.single_choice import SingleChoiceAnswer
 		return SingleChoiceAnswer(driver, self, *args)
 
-	def initialize_coverage(self, coverage, context):
+	def initialize_coverage(self, coverage, context: 'TestContext'):
 		for choice in self.choices.keys():
 			coverage.add_case(self, "verify", choice)
 			coverage.add_case(self, "export", choice)
 
-	def add_export_coverage(self, coverage, answers, language):
+	def add_export_coverage(self, coverage, answers, language: str):
 		for choice, checked in answers.items():
 			if checked != 0:
 				coverage.case_occurred(self, "export", str(choice))
 				break
 
-	def get_random_answer(self, context):
+	def get_random_answer(self, context: 'TestContext'):
 		choice = context.random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
 
-	def readjust_scores(self, driver, actual_answers, context, report):
+	def readjust_scores(self, driver, actual_answers, context: 'TestContext', report):
 		choices = self.choices
 
 		if False:
@@ -115,7 +118,7 @@ class SingleChoiceQuestion(Question):
 
 		return True, list()
 
-	def compute_score(self, answers, context):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
 		score = Decimal(0)
 		for label, checked in answers.items():
 			if checked:

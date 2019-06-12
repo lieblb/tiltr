@@ -18,6 +18,7 @@ from collections import defaultdict
 
 from .database import DB
 from .exceptions import ErrorDomain, most_severe
+from .settings import Workarounds
 
 from texttable import Texttable
 
@@ -47,7 +48,7 @@ def _flat(x):
 		yield x
 
 
-def _normalize_json(s):
+def _normalize_json(s: str):
 	try:
 		return json.dumps(json.loads(s))
 	except ValueError:
@@ -71,17 +72,17 @@ class Result:
 		return tuple(_flat(args))
 
 	@staticmethod
-	def normalize_question_title(title):
+	def normalize_question_title(title: str):
 		return re.sub(r'\s+', '', title)
 
 	@staticmethod
-	def reached_score_keys(question_title):
+	def reached_score_keys(question_title: str):
 		normed_title = Result.normalize_question_title(question_title)
 		for channel in ("xls", "pdf"):
 			yield (channel, "question", normed_title, "score_reached")
 
 	@staticmethod
-	def maximum_score_keys(question_title):
+	def maximum_score_keys(question_title: str):
 		normed_title = Result.normalize_question_title(question_title)
 		for channel in ("pdf", ):
 			yield (channel, "question", normed_title, "score_maximum")
@@ -99,7 +100,7 @@ class Result:
 		return (Decimal(100) * score) / maximum
 
 	@staticmethod
-	def format_percentage(p, workarounds):
+	def format_percentage(p, workarounds: Workarounds):
 		if p == Result.NOT_A_NUMBER:
 			return p
 		return _round_to_2_digits(Decimal(p), ROUND_HALF_UP)

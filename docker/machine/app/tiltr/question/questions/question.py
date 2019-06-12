@@ -9,34 +9,34 @@ from decimal import *
 
 
 class Question:
-	def __init__(self, title):
+	def __init__(self, title: str):
 		self.title = title
 
 	def create_answer(self, driver, *args):
 		raise NotImplementedError()
 
-	def initialize_coverage(self, coverage, context):
+	def initialize_coverage(self, coverage, context: 'TestContext'):
 		raise NotImplementedError()
 
 	def add_export_coverage(self, coverage, answers, language):
 		raise NotImplementedError()
 
-	def get_random_answer(self, context):
+	def get_random_answer(self, context: 'TestContext'):
 		raise NotImplementedError()
 
-	def readjust_scores(self, driver, actual_answers, context, report):
+	def readjust_scores(self, driver, actual_answers, context: 'TestContext', report):
 		raise NotImplementedError()
 
 	def compute_score(self, answers, context):
 		raise NotImplementedError()
 
-	def get_maximum_score(self, context):
+	def get_maximum_score(self, context: 'TestContext'):
 		return Decimal(0)
 
-	def explain_maximum_score(self, context, report):
+	def explain_maximum_score(self, context: 'TestContext', report):
 		pass
 
-	def compute_score_from_result(self, result, context):
+	def compute_score_from_result(self, result, context: 'TestContext'):
 		answers = dict()
 		for key, value in result.properties.items():
 			if key[0] == "question" and key[1] == self.title and key[2] == "answer":
@@ -47,7 +47,7 @@ class Question:
 	def has_xls_score(self):
 		return True
 
-	def parse_xls_row(self, sheet, row):
+	def parse_xls_row(self, sheet, row: int):
 		key = sheet.cell(row=row, column=1).value
 		if key is None:
 			return None

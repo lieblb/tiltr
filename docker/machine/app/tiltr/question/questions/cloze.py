@@ -5,6 +5,7 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 import time
 import traceback
 import html
@@ -45,7 +46,7 @@ def _create_gaps(scoring):
 	return gaps
 
 
-def _max_entry_size(size, context):
+def _max_entry_size(size: int, context: 'TestContext') -> int:
 	# get the maximum number of characters we write into this gap. note that
 	# this might be != the real maximum size, which might be unlimited, so we
 	# choose some configured maximum number for entry purposes.
@@ -55,7 +56,7 @@ def _max_entry_size(size, context):
 		return int(context.settings.max_cloze_text_length)
 
 
-def _modify_answer(text, context, max_len=None):
+def _modify_answer(text: str, context: 'TestContext', max_len:int = None):
 	max_len = _max_entry_size(max_len, context)
 
 	mode = context.random.choices(
@@ -85,7 +86,7 @@ def _modify_answer(text, context, max_len=None):
 		return text
 
 
-def _readjust_score(random, score, boost):
+def _readjust_score(random, score:Decimal):
 	if random.randint(1, 10) == 5:
 		return Decimal(0)
 	else:
@@ -104,7 +105,7 @@ def _readjust(context, scoring, gap, actual_answers, answer_counts):
 		i = 0
 
 		while new_score <= Decimal(0):
-			new_score = _readjust_score(random, scoring.score, i)
+			new_score = _readjust_score(random, scoring.score)
 			i += 1
 
 		return scoring._replace(
@@ -173,7 +174,7 @@ def _readjust(context, scoring, gap, actual_answers, answer_counts):
 				elif context.random.random() < delete_prob:
 					readjusted_options[k] = Decimal(0)
 				else:
-					readjusted_options[k] = _readjust_score(random, score, i)
+					readjusted_options[k] = _readjust_score(random, score)
 
 			if any(score > Decimal(0) for score in readjusted_options.values()):
 				break
@@ -1085,7 +1086,7 @@ class ClozeQuestion(Question):
 
 		return True, list()
 
-	def compute_score(self, answers, context):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
 		# normalize answers: "a " will score the same as "a".
 		answers = dict((k, v.strip()) for k, v in answers.items())
 

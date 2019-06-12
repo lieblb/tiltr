@@ -5,7 +5,9 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 from decimal import *
+
 from selenium.common.exceptions import NoSuchElementException
 
 from .question import Question
@@ -39,7 +41,7 @@ class PaintQuestion(Question):
 	def readjust_scores(self, driver, actual_answers, context, report):
 		return False, list()
 
-	def compute_score(self, answers, context):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
 		return Decimal(0)
 
 	def has_xls_score(self):

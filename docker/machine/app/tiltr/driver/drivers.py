@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+from typing import List
+
 import os
 import datetime
 import io
@@ -20,6 +22,7 @@ from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element, SubElement, tostring
 
+import selenium
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
@@ -170,7 +173,7 @@ class ILIASDriver:
 
 		self.report = report
 
-	def _goto_administration_page(self, panel_id):
+	def _goto_administration_page(self, panel_id: str):
 		driver = self.driver
 
 		for i in range(2):
@@ -225,8 +228,9 @@ class ILIASDriver:
 
 		# test admin settings.
 
-		self.goto_test_administration()
 		self.report("verifying test admin settings.")
+
+		self.goto_test_administration()
 
 		self._verify_admin_setting(
 			"locking for tests",
@@ -945,7 +949,7 @@ class AbstractTest:
 
 
 class PackagedTest(AbstractTest):
-	def __init__(self, test_id):
+	def __init__(self, test_id: str):
 		super().__init__()
 
 		self.test_id = test_id
@@ -966,17 +970,17 @@ class PackagedTest(AbstractTest):
 
 		self.title = root.findall(".//Title")[0].text
 
-	def get_id(self):
+	def get_id(self) -> str:
 		return self.test_id
 
-	def get_path(self):
+	def get_path(self) -> str:
 		return self.path
 
-	def get_title(self):
+	def get_title(self) -> str:
 		return self.title
 
 	@staticmethod
-	def list():
+	def list() -> List[AbstractTest]:
 		tests = list()
 
 		for filename in os.listdir("/tiltr/tests"):
@@ -992,15 +996,15 @@ class PackagedTest(AbstractTest):
 
 
 class ImportedTest(AbstractTest):
-	def __init__(self, title):
+	def __init__(self, title: str):
 		super().__init__()
 		self.title = title
 
-	def get_title(self):
+	def get_title(self) -> str:
 		return self.title
 
 
-def extract_number(s, n=1, name='unknown'):
+def extract_number(s: str, n: int=1, name: str='unknown'):
 	assert n > 0
 	x = re.findall(r'(\d+(\.\d+)?)', s)
 	x = list(map(lambda y: y[0], x))
@@ -1011,8 +1015,157 @@ def extract_number(s, n=1, name='unknown'):
 		# raise InteractionException("could not extract number #%d from '%s' at location %s" % (n, s, name))
 
 
+class UserDriver:
+	def __init__(self, driver: selenium.webdriver.Remote, ilias_url: str, ilias_version, report):
+		self.driver = driver
+
+		self.ilias_url = ilias_url
+		parsed_url = urlparse(self.ilias_url)
+		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
+		self.client_id = parse_qs(parsed_url.query)['client_id'][0]
+
+		self.ilias_version = ilias_version
+		self.report = report
+
+	def login(self, username: str, password: str):
+		return Login(self, username, password)
+
+	def import_test(self, path: str):
+		driver = self.driver
+
+		self.report('importing test from file "%s".' % os.path.basename(path))
+
+		# goto root ("Magazin")
+		root_url = self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id)
+		with wait_for_page_load(driver):
+			driver.get(root_url)
+
+		# add new item: Test.
+		wait_for_css(driver, '.ilNewObjectSelector button')
+		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
+		wait_for_css(driver, '.ilNewObjectSelector #tst')
+		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
+		wait_for_css(driver, 'input[name="cmd[importFile]"]')
+
+		self.report("looking for import button.")
+
+		def roll(l):  # we know it's the second accordion, usually.
+			return l[1:] + l[:1]
+
+		# click on import to get dedicated import mask.
+		import_button = None
+		for _ in range(5):
+			for accordion in roll(list(driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"))):
+				accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
+				try:
+					wait_for_css_visible(driver, 'input[name="cmd[importFile]"]', timeout=1)
+					import_button = accordion.find_element_by_name("cmd[importFile]")
+					break
+				except (NoSuchElementException, TimeoutException):
+					pass
+			if import_button:
+				break
+
+		if not import_button:
+			raise InteractionException("test import button not found.")
+		with wait_for_page_load(driver):
+			#driver.execute_script("document.getElementById('xmldoc').value = arguments[0]", self.test.get_path())
+			driver.find_element_by_id("xmldoc").send_keys(path)
+			import_button.click()
+
+		with wait_for_page_load(driver, timeout=90):
+			# for larger tests, the following like causes a timeout on Chromium. we use
+			# javascript to click the import button to avoid that.
+			#driver.find_element_by_name("cmd[importVerifiedFile]").click()
+
+			self.report("clicking import.")
+			driver.execute_script('''
+				setTimeout(function() {
+					$("input[name=\\"cmd[importVerifiedFile]\\"]").click();
+				}, 500);
+			''')
+			self.report("done.")
+
+		self.report("done importing test.")
+
+	def delete_test(self, test_name: str):
+		self.search_test(test_name)
+
+		self.report('deleting test "%s".' % test_name)
+
+		rows = list(self.driver.find_elements_by_css_selector(".ilObjListRow"))
+		if len(rows) != 1:
+			raise InteractionException("expected exactly 1 test to delete, got %d named '%s'" % (len(rows), test_name))
+
+		row = rows[0]
+		link_text = row.find_element_by_css_selector("a.il_ContainerItemTitle").text.strip()
+		if link_text != test_name:
+			raise InteractionException("link text mismatch")
+
+		button = row.find_element_by_css_selector(".dropdown-toggle")
+		button.click()
+
+		#wait_for_css_visible(self.driver, "ul.dropdown-menu")  # let's hope there's only one
+
+		found_link = False
+		for _ in range(5):
+			menu = row.find_element_by_css_selector("ul.dropdown-menu")
+			for link in menu.find_elements_by_css_selector("a"):
+				if "cmd=delete" in link.get_attribute("href"):
+					with wait_for_page_load(self.driver):
+						link.click()
+						found_link = True
+					break
+			if found_link:
+				break
+			time.sleep(1)
+
+		delete_button = self.driver.find_element_by_css_selector('input[name="cmd[performDelete]"]')
+		with wait_for_page_load(self.driver):
+			delete_button.click()
+
+	def search_test(self, test_name: str):
+		driver = self.driver
+
+		self.report("preparing to search.")
+		for i in range(5):
+			with wait_for_page_load(driver):
+				driver.get(self.ilias_url)
+
+			driver.find_element_by_css_selector(".glyphicon-search").click()
+			with wait_for_page_load(driver):
+				driver.find_element_by_css_selector('#mm_search_form input[type="submit"]').click()
+
+			#self.browser.visit(self.ilias_url + "/ilias.php?baseClass=ilSearchController")
+			self.report('searching for test "%s".' % test_name)
+
+			search_input = None
+
+			try:
+				wait_for_css(driver, ".ilTabsContentOuter div form input[name='term']")
+
+				search_input = driver.find_element_by_css_selector(
+					".ilTabsContentOuter div form input[name='term']")
+			except TimeoutException:
+				# sporadically, a "there is no data set with id" comes along; just retry
+				pass
+
+			if search_input:
+				set_element_value(driver, search_input, test_name)
+				break
+
+		# note: one reason this might fail is that the test we search for is still "offline."
+
+		self.report("performing search.")
+		with wait_for_page_load(driver):
+			driver.find_element_by_css_selector("input[name='cmd[performSearch]']").click()
+
+	def create_test_driver(self, test: AbstractTest):
+		return TestDriver(self, test)
+
+
 class TestDriver:
-	def __init__(self, user_driver, test):
+	def __init__(self, user_driver: UserDriver, test):
 		self.driver = user_driver.driver
 		self.user_driver = user_driver
 		self.test = test
@@ -1544,7 +1697,7 @@ class TestDriver:
 			self.goto()
 		return self.test.cache.cached_link
 
-	def goto_or_fail(self, url=None):
+	def goto_or_fail(self, url: str = None):
 		if self.test.cache.cached_link is None and url:
 			self.test.cache.cached_link = url
 
@@ -1569,7 +1722,7 @@ class TestDriver:
 
 		return False
 
-	def goto(self, url=None):
+	def goto(self, url: str = None):
 		if not self.goto_or_fail(url):
 			raise InteractionException("test '%s' was not found in ILIAS" % self.test.get_title())
 		return True
@@ -1598,7 +1751,6 @@ class TestDriver:
 		if self.driver.find_elements_by_css_selector('#listofquestions'):
 			pass  # 'table tbody tr td a'
 
-
 	def start(self, username, context, questions, exam_configuration, allow_resume=False):
 		self.report("starting test.")
 		self.allow_resume = allow_resume
@@ -1606,152 +1758,3 @@ class TestDriver:
 			raise InteractionException("user does not have rights to start this test. aborting.")
 		self.skip_list_of_questions()
 		return ExamDriver(self.driver, self.ilias_url, username, self.report, context, questions, exam_configuration)
-
-
-class UserDriver:
-	def __init__(self, driver, ilias_url, ilias_version, report):
-		self.driver = driver
-
-		self.ilias_url = ilias_url
-		parsed_url = urlparse(self.ilias_url)
-		self.ilias_base_url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
-		self.client_id = parse_qs(parsed_url.query)['client_id'][0]
-
-		self.ilias_version = ilias_version
-		self.report = report
-
-	def login(self, username, password):
-		return Login(self, username, password)
-
-	def import_test(self, path):
-		driver = self.driver
-
-		self.report('importing test from file "%s".' % os.path.basename(path))
-
-		# goto root ("Magazin")
-		root_url = self.ilias_base_url + ("/goto.php?target=root_1&client_id=%s" % self.client_id)
-		with wait_for_page_load(driver):
-			driver.get(root_url)
-
-		# add new item: Test.
-		wait_for_css(driver, '.ilNewObjectSelector button')
-		driver.find_element_by_css_selector(".ilNewObjectSelector button").click()
-		wait_for_css(driver, '.ilNewObjectSelector #tst')
-		driver.find_element_by_css_selector(".ilNewObjectSelector #tst").click()
-		wait_for_css(driver, 'input[name="cmd[importFile]"]')
-
-		self.report("looking for import button.")
-
-		def roll(l):  # we know it's the second accordion, usually.
-			return l[1:] + l[:1]
-
-		# click on import to get dedicated import mask.
-		import_button = None
-		for _ in range(5):
-			for accordion in roll(list(driver.find_elements_by_css_selector(".il_VAccordionInnerContainer"))):
-				accordion.find_element_by_css_selector(".il_VAccordionToggleDef").click()
-				try:
-					wait_for_css_visible(driver, 'input[name="cmd[importFile]"]', timeout=1)
-					import_button = accordion.find_element_by_name("cmd[importFile]")
-					break
-				except (NoSuchElementException, TimeoutException):
-					pass
-			if import_button:
-				break
-
-		if not import_button:
-			raise InteractionException("test import button not found.")
-		with wait_for_page_load(driver):
-			#driver.execute_script("document.getElementById('xmldoc').value = arguments[0]", self.test.get_path())
-			driver.find_element_by_id("xmldoc").send_keys(path)
-			import_button.click()
-
-		with wait_for_page_load(driver, timeout=90):
-			# for larger tests, the following like causes a timeout on Chromium. we use
-			# javascript to click the import button to avoid that.
-			#driver.find_element_by_name("cmd[importVerifiedFile]").click()
-
-			self.report("clicking import.")
-			driver.execute_script('''
-				setTimeout(function() {
-					$("input[name=\\"cmd[importVerifiedFile]\\"]").click();
-				}, 500);
-			''')
-			self.report("done.")
-
-		self.report("done importing test.")
-
-	def delete_test(self, test_name):
-		self.search_test(test_name)
-
-		self.report('deleting test "%s".' % test_name)
-
-		rows = list(self.driver.find_elements_by_css_selector(".ilObjListRow"))
-		if len(rows) != 1:
-			raise InteractionException("expected exactly 1 test to delete, got %d named '%s'" % (len(rows), test_name))
-
-		row = rows[0]
-		link_text = row.find_element_by_css_selector("a.il_ContainerItemTitle").text.strip()
-		if link_text != test_name:
-			raise InteractionException("link text mismatch")
-
-		button = row.find_element_by_css_selector(".dropdown-toggle")
-		button.click()
-
-		#wait_for_css_visible(self.driver, "ul.dropdown-menu")  # let's hope there's only one
-
-		found_link = False
-		for _ in range(5):
-			menu = row.find_element_by_css_selector("ul.dropdown-menu")
-			for link in menu.find_elements_by_css_selector("a"):
-				if "cmd=delete" in link.get_attribute("href"):
-					with wait_for_page_load(self.driver):
-						link.click()
-						found_link = True
-					break
-			if found_link:
-				break
-			time.sleep(1)
-
-		delete_button = self.driver.find_element_by_css_selector('input[name="cmd[performDelete]"]')
-		with wait_for_page_load(self.driver):
-			delete_button.click()
-
-	def search_test(self, test_name):
-		driver = self.driver
-
-		self.report("preparing to search.")
-		for i in range(5):
-			with wait_for_page_load(driver):
-				driver.get(self.ilias_url)
-
-			driver.find_element_by_css_selector(".glyphicon-search").click()
-			with wait_for_page_load(driver):
-				driver.find_element_by_css_selector('#mm_search_form input[type="submit"]').click()
-
-			#self.browser.visit(self.ilias_url + "/ilias.php?baseClass=ilSearchController")
-			self.report('searching for test "%s".' % test_name)
-
-			search_input = None
-
-			try:
-				wait_for_css(driver, ".ilTabsContentOuter div form input[name='term']")
-
-				search_input = driver.find_element_by_css_selector(
-					".ilTabsContentOuter div form input[name='term']")
-			except TimeoutException:
-				# sporadically, a "there is no data set with id" comes along; just retry
-				pass
-
-			if search_input:
-				set_element_value(driver, search_input, test_name)
-				break
-
-		# note: one reason this might fail is that the test we search for is still "offline."
-
-		self.report("performing search.")
-		with wait_for_page_load(driver):
-			driver.find_element_by_css_selector("input[name='cmd[performSearch]']").click()
-
-	def create_test_driver(self, test):
-		return TestDriver(self, test)

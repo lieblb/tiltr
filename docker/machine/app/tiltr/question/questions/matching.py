@@ -5,6 +5,7 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 from decimal import *
 from enum import Enum
 import itertools
@@ -372,7 +373,7 @@ class MatchingQuestion(Question):
 		removed_keys = [(self.definitions[d], self.terms[t]) for d, t in removed]
 		return True, removed_keys
 
-	def compute_score(self, answers, context):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
 		score = Decimal(0)
 		for definition_id, term_ids in answers.items():
 			for term_id in term_ids:

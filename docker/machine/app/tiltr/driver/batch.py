@@ -957,6 +957,7 @@ class Run:
 					if temp_test:
 						self.test.cache.transfer_invariants(temp_test.cache)
 				except Exception as e:
+					traceback.print_exc()
 					self._save_error_screenshot(master)
 					raise e
 

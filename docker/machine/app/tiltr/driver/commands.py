@@ -5,24 +5,30 @@
 # GPLv3, see LICENSE
 #
 
+from typing import List, Callable
+
 import pickle
 import traceback
 import json
 import base64
+import selenium
 
 from selenium.common.exceptions import WebDriverException
 
 from .utils import get_driver_error_details, run_interaction
 from .drivers import UserDriver, PackagedTest
 from tiltr.data.result import Result, Origin
-from tiltr.data.context import RegressionContext, RandomContext
+from tiltr.data.context import TestContext, RegressionContext, RandomContext
 from tiltr.data.exceptions import ErrorDomain, TiltrException, InteractionException
 from tiltr.data.settings import Settings, Workarounds
 from tiltr.question.answers.answer import Validness
 
 
 class ExamRobot:
-	def __init__(self, exam_driver, context, report, questions, settings):
+	def __init__(
+			self, exam_driver: 'ExamDriver', context: TestContext,
+			report, questions: List['Question'], settings: Settings):
+
 		self.exam_driver = exam_driver
 		self.context = context
 		self.report = report
@@ -75,7 +81,7 @@ class ExamRobot:
 				self._give_answer()
 			self.exam_driver.goto_next_or_previous_question(self.context)
 
-	def run(self, passes):
+	def run(self, passes: str):
 		for i, p in enumerate(passes):
 			self.report("entering pass %d." % i)
 
@@ -90,7 +96,7 @@ class ExamRobot:
 
 
 class TakeExamCommand:
-	def __init__(self, from_json=None, **kwargs):
+	def __init__(self, from_json: str = None, **kwargs):
 		if from_json:
 			data = json.loads(from_json)
 			assert data["command"] == "take_exam"
@@ -136,7 +142,9 @@ class TakeExamCommand:
 			wait_time=self.wait_time,
 			admin_lang=self.admin_lang))
 
-	def _create_result_with_details(self, driver, report, e, trace):
+	def _create_result_with_details(
+			self, driver: selenium.webdriver.Remote, report: Callable[[str], None], e: Exception, trace: str):
+
 		files = dict()
 		files['error/trace.txt'] = trace.encode('utf8')
 
@@ -157,7 +165,7 @@ class TakeExamCommand:
 
 		return Result.from_error(Origin.recorded, e.get_error_domain(), error, files)
 
-	def run(self, browser, master_report):
+	def run(self, browser, master_report: Callable[[str], None]):
 		driver = browser.driver
 
 		machine_info = "running test on machine #%s (%s)." % (self.machine_index, self.machine)

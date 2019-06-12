@@ -5,6 +5,7 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 from decimal import *
 import itertools
 import json
@@ -199,7 +200,7 @@ class MultipleChoiceQuestion(Question):
 
 		return True, list()
 
-	def compute_score(self, answers, context):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
 		score = Decimal(0)
 		for label, checked in answers.items():
 			item = self.choices[label]

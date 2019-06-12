@@ -5,6 +5,7 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 from decimal import *
 from collections import namedtuple
 import itertools
@@ -125,7 +126,7 @@ class KPrimQuestion(Question):
 	def add_export_coverage(self, coverage, answers, language):
 		coverage.case_occurred(self, "export", json.dumps(answers))
 
-	def compute_score(self, answers, context):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
 		name_to_index = dict()
 		for i, choice in enumerate(self.scoring.choices):
 			name_to_index[choice.name] = i

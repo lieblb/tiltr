@@ -5,6 +5,7 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 from decimal import *
 
 from .question import Question
@@ -67,7 +68,7 @@ class LongTextQuestion(Question):
 		report('readjusted score to %s.' % maximum_score)
 		return True, list()
 
-	def compute_score(self, text, context):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
 		return Decimal(0)
 
 	def can_score_manually(self):

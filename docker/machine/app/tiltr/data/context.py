@@ -5,14 +5,18 @@
 # GPLv3, see LICENSE
 #
 
+from typing import List
+
 import re
 import random as rnd
+
+from ..data.settings import Settings, Workarounds
 
 from ..question.coverage import Coverage
 from .implicit import implicit_text_to_number_xls, implicit_text_to_number
 
 
-def random_number(random, n):
+def random_number(random, n: int):
 	if n == 0:
 		return ""
 	elif n == 1:
@@ -28,7 +32,7 @@ def random_number(random, n):
 		return s
 
 
-def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
+def get_random_chars(allow_newlines: bool, allow_dollar: bool, allow_clamps: bool) -> list:
 	random_chars =\
 		u" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789éáèêäöüÄÖÜß?!.-_:;#§%&=^|\{\}[]()@+-*/~'\"\t\\"
 	if allow_newlines:
@@ -47,7 +51,13 @@ def get_random_chars(allow_newlines, allow_dollar, allow_clamps):
 
 
 class TestContext:
-	def __init__(self, questions, settings, workarounds, language, ilias_version):
+	settings: Settings
+	workarounds: Workarounds
+
+	def __init__(
+			self, questions: List['Question'], settings: Settings, workarounds: Workarounds,
+			language: str, ilias_version: tuple):
+
 		allow_cloze_clamps = not (
 			workarounds.dont_use_clamps_in_cloze_readjustments or
 			workarounds.disallow_clamps_in_cloze)
@@ -66,7 +76,7 @@ class TestContext:
 		self.language = language
 		self.ilias_version = ilias_version
 
-	def _random_text(self, n, random_chars, allow_numbers=True):
+	def _random_text(self, n: int, random_chars: list, allow_numbers: bool=True):
 		if allow_numbers and self.random.random() < self.settings.numbers_in_text_fields_p:
 			return random_number(self.random, n)
 		else:
@@ -86,34 +96,34 @@ class TestContext:
 
 			return "".join(components)
 
-	def strip_whitespace(self, value):
+	def strip_whitespace(self, value: str) -> str:
 		return self.workarounds.strip_whitespace(value)
 
-	def collapse_whitespace(self, value):
+	def collapse_whitespace(self, value: str) -> str:
 		if self.workarounds.sloppy_whitespace:
 			if isinstance(value, str):
 				value = re.sub(r'\s+', r' ', value)
 		return value
 
-	def implicit_text_to_number(self, value):
+	def implicit_text_to_number(self, value: str) -> str:
 		if not self.workarounds.implicit_text_number_conversions:
 			return value
 		else:
 			return implicit_text_to_number(value)
 
-	def implicit_text_to_number_xls(self, value):
+	def implicit_text_to_number_xls(self, value: str) -> str:
 		if not self.workarounds.implicit_text_number_conversions:
 			return value
 		else:
 			return implicit_text_to_number_xls(value)
 
-	def prefer_text(self):
+	def prefer_text(self) -> bool:
 		raise NotImplementedError()
 
-	def _produce_text(self, size, random_chars, allow_numbers=False):
+	def _produce_text(self, size: int, random_chars: list, allow_numbers: bool = False) -> str:
 		raise NotImplementedError()
 
-	def produce_text(self, size, random_chars, allow_numbers=False):
+	def produce_text(self, size: int, random_chars: list, allow_numbers: bool = False) -> str:
 		while True:
 			text = self._produce_text(size, random_chars, allow_numbers)
 
@@ -133,10 +143,10 @@ class RegressionContext(TestContext):
 		super().__init__(*args)
 		self.random = rnd.Random(seed)
 
-	def prefer_text(self):
+	def prefer_text(self) -> bool:
 		return True  # prefer entering random text to picking correct solution in cloze gaps
 
-	def _produce_text(self, size, random_chars, allow_numbers=False):
+	def _produce_text(self, size: int, random_chars: list, allow_numbers=False) -> str:
 		special = ""
 		for c in "<>\n":
 			if c in random_chars:
@@ -158,10 +168,10 @@ class RandomContext(TestContext):
 		super().__init__(*args)
 		self.random = rnd.SystemRandom()
 
-	def prefer_text(self):
+	def prefer_text(self) -> bool:
 		return False
 
-	def _produce_text(self, size, random_chars, allow_numbers=False):
+	def _produce_text(self, size: int, random_chars: list, allow_numbers: bool = False) -> str:
 		if self.workarounds.disallow_empty_answers:
 			if size < 1:
 				raise Exception("internal error: max allowed produce_text size too small")
@@ -169,5 +179,4 @@ class RandomContext(TestContext):
 		else:
 			min_size = 0
 		return self._random_text(self.random.randint(min_size, size), random_chars, allow_numbers)
-
 
