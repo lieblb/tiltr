@@ -34,7 +34,7 @@ class Answer:
 	def _get_answer_dimensions(self, context, language):
 		raise NotImplementedError()
 
-	def _get_dimension_key_type(self, key):
+	def _get_dimension_key_type(self, key) -> str:
 		return None
 
 	def add_to_result(self, result, context, language, clip_answer_score):

@@ -5,20 +5,26 @@
 # GPLv3, see LICENSE
 #
 
+import openpyxl
+
+from typing import Dict
+from tiltr.question.questions.question import Question
+
 from decimal import *
 
 from .result import Result, Origin
 from .exceptions import *
+from .settings import Workarounds
 
 
 class XlsResultRow:
 	# represents one row in worksheet 0 "Testergebnisse"
 
-	def __init__(self, sheet, row):
+	def __init__(self, sheet, row: int):
 		self.sheet = sheet
 		self.row = row
 
-	def get(self, column):
+	def get(self, column: int):
 		return self.sheet.cell(row=self.row, column=column).value
 
 	def get_username(self):
@@ -33,7 +39,7 @@ class XlsResultRow:
 	def get_short_mark(self):
 		return str(self.get(5)).strip()
 
-	def get_question_scores(self, workarounds):
+	def get_question_scores(self, workarounds: Workarounds):
 		scores = dict()
 		column = 20  # magic column "T" where user scores start
 		while True:
@@ -52,11 +58,11 @@ class XlsResultRow:
 		return scores
 
 
-def _is_question_header_ilias53(sheet, row):
+def _is_question_header_ilias53(sheet, row: int):
 	return sheet.cell(row=row, column=1).fill.patternType == "solid"
 
 
-def get_workbook_user_answers(sheet, questions, ilias_version, report=None):
+def get_workbook_user_answers(sheet, questions: Dict[str, Question], ilias_version, report=None):
 	sections = list()
 
 	if ilias_version < (5, 4):
@@ -135,7 +141,7 @@ def check_workbook_consistency(wb, questions, workarounds, ilias_version, report
 					assert dimensions[j][0] == other_dimensions[j][0]
 
 
-def workbook_to_result(wb, username, questions, workarounds, ilias_version, report):
+def workbook_to_result(wb: openpyxl.Workbook, username, questions, workarounds, ilias_version, report):
 	if report:
 		report("gathering data from XLS.")
 

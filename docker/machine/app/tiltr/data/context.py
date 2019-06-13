@@ -5,18 +5,18 @@
 # GPLv3, see LICENSE
 #
 
-from typing import List
+from typing import List, Tuple
 
 import re
 import random as rnd
 
-from ..data.settings import Settings, Workarounds
+from tiltr.question.coverage import Coverage
 
-from ..question.coverage import Coverage
+from ..data.settings import Settings, Workarounds
 from .implicit import implicit_text_to_number_xls, implicit_text_to_number
 
 
-def random_number(random, n: int):
+def random_number(random, n: int) -> str:
 	if n == 0:
 		return ""
 	elif n == 1:
@@ -32,9 +32,10 @@ def random_number(random, n: int):
 		return s
 
 
-def get_random_chars(allow_newlines: bool, allow_dollar: bool, allow_clamps: bool) -> list:
-	random_chars =\
-		u" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789éáèêäöüÄÖÜß?!.-_:;#§%&=^|\{\}[]()@+-*/~'\"\t\\"
+def get_random_chars(allow_newlines: bool, allow_dollar: bool, allow_clamps: bool) -> List[str]:
+	random_chars = " "  # space
+	random_chars += "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	random_chars += "éáèêäöüÄÖÜß?!.-_:;#§%&=^|{}[]()@+-*/~'\"\t\\"
 	if allow_newlines:
 		random_chars += "\n"
 	if allow_clamps:
@@ -53,10 +54,15 @@ def get_random_chars(allow_newlines: bool, allow_dollar: bool, allow_clamps: boo
 class TestContext:
 	settings: Settings
 	workarounds: Workarounds
+	cloze_random_chars: List[str]
+	long_text_random_chars: List[str]
+	coverage: Coverage
+	language: str
+	ilias_version: Tuple
 
 	def __init__(
 			self, questions: List['Question'], settings: Settings, workarounds: Workarounds,
-			language: str, ilias_version: tuple):
+			language: str, ilias_version: Tuple):
 
 		allow_cloze_clamps = not (
 			workarounds.dont_use_clamps_in_cloze_readjustments or
@@ -76,7 +82,7 @@ class TestContext:
 		self.language = language
 		self.ilias_version = ilias_version
 
-	def _random_text(self, n: int, random_chars: list, allow_numbers: bool=True):
+	def _random_text(self, n: int, random_chars: List[str], allow_numbers: bool=True) -> str:
 		if allow_numbers and self.random.random() < self.settings.numbers_in_text_fields_p:
 			return random_number(self.random, n)
 		else:

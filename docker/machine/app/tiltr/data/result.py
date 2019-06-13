@@ -5,10 +5,11 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict, Any, Callable, Union, Tuple, Iterator
+
 import json
 import base64
 import re
-import math
 
 import decimal
 from decimal import *
@@ -16,14 +17,48 @@ from decimal import *
 from enum import Enum
 from collections import defaultdict
 
-from .database import DB
 from .exceptions import ErrorDomain, most_severe
 from .settings import Workarounds
 
 from texttable import Texttable
 
 
-def _dump_properties(properties, report):
+class MaybeDecimal:
+	def __init__(self, s: Union[str, Decimal, 'MaybeDecimal'] = None):
+		if isinstance(s, MaybeDecimal):
+			self._d = s._d
+		elif s is not None:
+			try:
+				self._d = Decimal(s)
+			except (decimal.ConversionSyntax, decimal.InvalidOperation):
+				self._d = None
+		else:
+			self._d = None
+
+	def valid(self) -> bool:
+		return self._d is not None
+
+	def to_decimal(self) -> Decimal:
+		return self._d
+
+	def __str__(self):
+		if self._d is None:
+			return "not-a-number"
+		else:
+			return str(self._d)
+
+	def encode(self):
+		return (True, str(self._d)) if self._d is not None else (False, )
+
+	@staticmethod
+	def decode(s):
+		if s[0]:
+			return MaybeDecimal(s[1])
+		else:
+			return MaybeDecimal()
+
+
+def _dump_properties(properties: Dict[str, str], report: Callable[[str], None]):
 	table = Texttable()
 	table.set_deco(Texttable.HEADER)
 	table.set_cols_dtype(['t', 't'])
@@ -39,7 +74,7 @@ def _dump_properties(properties, report):
 		report(line)
 
 
-def _flat(x):
+def _flat(x: Any) -> Any:
 	if isinstance(x, tuple):
 		for y in x:
 			for yy in _flat(y):
@@ -48,7 +83,7 @@ def _flat(x):
 		yield x
 
 
-def _normalize_json(s: str):
+def _normalize_json(s: str) -> str:
 	try:
 		return json.dumps(json.loads(s))
 	except ValueError:
@@ -60,53 +95,52 @@ class Origin(Enum):
 	exported = 1
 
 
-def _round_to_2_digits(x, r):
-	return Decimal(x).quantize(Decimal("0.01"), rounding=r)
+def _round_to_2_digits(x: Union[Decimal, MaybeDecimal], r: str) -> MaybeDecimal:
+	x = MaybeDecimal(x)
+	if x.valid():
+		return MaybeDecimal(x.to_decimal().quantize(Decimal("0.01"), rounding=r))
+	else:
+		return x
 
 
 class Result:
-	NOT_A_NUMBER = "not-a-number"
-
 	@staticmethod
-	def key(*args):
+	def key(*args) -> Tuple:
 		return tuple(_flat(args))
 
 	@staticmethod
-	def normalize_question_title(title: str):
+	def normalize_question_title(title: str) -> str:
 		return re.sub(r'\s+', '', title)
 
 	@staticmethod
-	def reached_score_keys(question_title: str):
+	def reached_score_keys(question_title: str) -> Iterator[Tuple]:
 		normed_title = Result.normalize_question_title(question_title)
 		for channel in ("xls", "pdf"):
 			yield (channel, "question", normed_title, "score_reached")
 
 	@staticmethod
-	def maximum_score_keys(question_title: str):
+	def maximum_score_keys(question_title: str) -> Iterator[Tuple]:
 		normed_title = Result.normalize_question_title(question_title)
 		for channel in ("pdf", ):
 			yield (channel, "question", normed_title, "score_maximum")
 
 	@staticmethod
-	def round_up_to_2_digits(x):
-		if x == Result.NOT_A_NUMBER:
-			return x
-		return _round_to_2_digits(Decimal(x), ROUND_CEILING)
+	def round_up_to_2_digits(x: Union[Decimal, MaybeDecimal]) -> MaybeDecimal:
+		return _round_to_2_digits(x, ROUND_CEILING)
 
 	@staticmethod
-	def score_percentage(score, maximum):
-		if score == Result.NOT_A_NUMBER:
+	def score_percentage(score: MaybeDecimal, maximum: Decimal) -> MaybeDecimal:
+		if score.valid():
+			return MaybeDecimal((Decimal(100) * score.to_decimal()) / maximum)
+		else:
 			return score
-		return (Decimal(100) * score) / maximum
 
 	@staticmethod
-	def format_percentage(p, workarounds: Workarounds):
-		if p == Result.NOT_A_NUMBER:
-			return p
-		return _round_to_2_digits(Decimal(p), ROUND_HALF_UP)
+	def format_percentage(p: Union[Decimal, MaybeDecimal], workarounds: Workarounds) -> MaybeDecimal:
+		return _round_to_2_digits(p, ROUND_HALF_UP)
 
 	@staticmethod
-	def format_score(score):
+	def format_score(score: Union[Decimal, MaybeDecimal]) -> str:
 		s = str(Result.round_up_to_2_digits(score))
 		if '.' in s:
 			s = s.rstrip('0')
@@ -114,18 +148,37 @@ class Result:
 				s = s.rstrip('.')
 		return s
 
-	def scores(self, channel="xls"):
+	def scores(self, channel: str = "xls") -> Iterator[MaybeDecimal]:
 		for k, v in self.properties.items():
 			if len(k) == 4 and k[0] == channel and k[1] == "question" and k[3] == "score_reached":
-				yield v
+				yield MaybeDecimal(v)
 
-	def __init__(self, from_json=None, **kwargs):
+	def _serialized_properties(self) -> Iterator[Tuple]:
+		for k, v in self.properties.items():
+			if isinstance(v, MaybeDecimal):
+				yield k, ("MaybeDecimal", v.encode())
+			else:
+				yield k, v
+
+	@staticmethod
+	def _deserialized_properties(items) -> Dict:
+		properties = dict()
+
+		for k, v in items:
+			if isinstance(v, list) and v[0] == "MaybeDecimal":
+				properties[k] = MaybeDecimal.decode(v[1])
+			else:
+				properties[k] = v
+
+		return properties
+
+	def __init__(self, from_json: str = None, **kwargs):
 		from ..question.coverage import Coverage
 
 		if from_json:
 			data = json.loads(from_json)
 			self.origin = Origin[data["origin"]]
-			self.properties = dict((tuple(key), value) for key, value in data["properties"])
+			self.properties = self._deserialized_properties((tuple(key), value) for key, value in data["properties"])
 			self.types = dict((tuple(key), value) for key, value in data["types"])
 			self.protocol = data["protocol"]
 			self.files = dict((k, base64.b64decode(v)) for k, v in data["files"].items())
@@ -145,7 +198,7 @@ class Result:
 	def to_json(self):
 		return json.dumps(dict(
 			origin=self.origin.name,
-			properties=list(self.properties.items()),
+			properties=list(self._serialized_properties()),
 			types=list(self.types.items()),
 			protocol=self.protocol,
 			files=dict((k, base64.b64encode(v).decode('utf8')) for k, v in self.files.items()),
@@ -156,7 +209,7 @@ class Result:
 	def get_origin(self):
 		return self.origin
 
-	def add(self, key, value, value_type=None):
+	def add(self, key: Tuple, value: Union[str, Decimal], value_type: str = None):
 		assert key not in self.properties
 		if isinstance(value, Decimal):
 			value = str(value)  # make it safe for JSON
@@ -164,17 +217,17 @@ class Result:
 		if value_type:
 			self.types[key] = value_type
 
-	def update(self, key, value):
+	def update(self, key: Tuple, value: Union[str, Decimal]):
 		assert key in self.properties
 		if isinstance(value, Decimal):
 			value = str(value)  # make it safe for JSON
 		self.properties[key] = value
 
-	def remove(self, key):
+	def remove(self, key: Tuple):
 		if key in self.properties:
 			del self.properties[key]
 
-	def gather(self, key):
+	def gather(self, key: Tuple):
 		answers = dict()
 		for k, v in self.properties.items():
 			if k[:len(key)] == key:
@@ -190,25 +243,25 @@ class Result:
 	def get_most_severe_error_domain(self):
 		return most_severe(ErrorDomain[d] for d in self.errors.keys())
 
-	def get(self, key):
+	def get(self, key: str):
 		return self.properties.get(key, None)
 
 	def attach_protocol(self, protocol):
 		self.protocol = protocol
 
-	def attach_file(self, filename, bytes):
-		self.files[filename] = bytes
+	def attach_file(self, filename: str, data: bytes):
+		self.files[filename] = data
 
 	def attach_performance_measurements(self, performance):
 		self.performance = performance
 
-	def attach_coverage(self, coverage):
+	def attach_coverage(self, coverage: 'Coverage'):
 		self.coverage = coverage
 
-	def get_normalized_properties(self):
+	def get_normalized_properties(self) -> Dict[Tuple, Any]:
 		return dict((tuple(str(k) for k in key), value) for key, value in self.properties.items())
 
-	def get_answers(self):
+	def get_answers(self) -> Dict[str, Dict]:
 		answers = defaultdict(dict)
 		for p, value in self.properties.items():
 			if p[0] == "question" and p[2] == "answer":
@@ -217,7 +270,7 @@ class Result:
 				answers[question_title][dimension] = value
 		return answers
 
-	def check_against(self, other, report, workarounds):
+	def check_against(self, other: 'Result', report: Callable[[str], None], workarounds: Workarounds) -> bool:
 		all_ok = True
 
 		self_properties = self.get_normalized_properties()
@@ -233,21 +286,25 @@ class Result:
 		table.set_cols_width([10, 60, 20, 20])
 		table.set_header_align(['l', 'l', 'l', 'l'])
 
-		def ignore_key(k):
+		def ignore_key(k: Tuple) -> bool:
 			return k[0] == "results_tab" and workarounds.ignore_wrong_results_in_results_tab
 
-		def make_is_close(eps=Decimal("0.01")):
-			def is_close(a, b):
-				if a == Result.NOT_A_NUMBER or b == Result.NOT_A_NUMBER:
+		def make_is_close(eps: Decimal = Decimal("0.01")):
+			def is_close(a: Union[str, MaybeDecimal], b: Union[str, MaybeDecimal]) -> bool:
+				a = MaybeDecimal(a)
+				b = MaybeDecimal(b)
+
+				if not a.valid() or not b.valid():
 					return False
+
 				try:
-					return abs(Decimal(a) - Decimal(b)) <= eps
+					return abs(a.to_decimal() - b.to_decimal()) <= eps
 				except decimal.InvalidOperation:
 					print("could not compute is_close for (%s, %s)" % (a, b))
 					return False
 			return is_close
 
-		def is_exactly_equal(a, b):
+		def is_exactly_equal(a, b) -> bool:
 			return a == b
 
 		comparators = dict()
@@ -316,4 +373,6 @@ class Result:
 
 
 def open_results():
+	from .database import DB
+
 	return DB()

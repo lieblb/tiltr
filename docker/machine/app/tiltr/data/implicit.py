@@ -8,12 +8,12 @@
 import re
 
 
-def looks_like_a_number(x):
+def looks_like_a_number(x: str) -> bool:
 	m = re.match(r'^((\+|\-)?(([0-9]+)|([0-9]+\.)|(\.[0-9]+)|([0-9]+\.[0-9]+)))$', x)
 	return m is not None
 
 
-def implicit_text_to_number(value):
+def implicit_text_to_number(value: str) -> str:
 	if len(value) >= 2 and value[0] == '+' and looks_like_a_number(value[1:]):
 		# e.g. +9 -> 9
 		value = value[1:]
@@ -37,7 +37,7 @@ def implicit_text_to_number(value):
 	return value
 
 
-def implicit_text_to_number_xls(value):
+def implicit_text_to_number_xls(value: str) -> str:
 	# there are also several implicit conversions taking place when taking the number
 	# from ILIAS into the XLS, but they are different from the ones inside ILIAS itself,
 	# i.e. from implicit_text_to_number.

@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Callable, Any
+
 from urllib.parse import urlparse, parse_qs
 import time
 import itertools
@@ -13,6 +15,7 @@ import urllib3
 import traceback
 from contextlib import contextmanager
 
+import selenium
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
 from selenium.common.exceptions import *
@@ -32,7 +35,7 @@ def run_interaction():
 		raise InteractionException("Failed to run operation in master: " + str(e))
 
 
-def interact(driver, action, refresh=False):
+def interact(driver: selenium.webdriver.Remote, action: Callable[[], Any], refresh: bool = False) -> Any:
 	n_retries = 5
 	while True:
 		try:

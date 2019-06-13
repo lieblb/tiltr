@@ -11,7 +11,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 class Browser:
 	@staticmethod
-	def _configure_driver(driver, resolution):
+	def _configure_driver(driver: selenium.webdriver.Remote, resolution: str):
 		try:
 			# we try to avoid the need to scroll. a large size can cause memory issues.
 			w = 1024
@@ -30,7 +30,7 @@ class Browser:
 			driver.quit()
 			raise
 
-	def __init__(self, browser='firefox', **kwargs):
+	def __init__(self, browser: str = 'firefox', **kwargs):
 		capabilities = dict(
 			chrome=DesiredCapabilities.CHROME,
 			firefox=DesiredCapabilities.FIREFOX)
@@ -48,5 +48,5 @@ class Browser:
 		self._driver.quit()
 
 	@property
-	def driver(self):
+	def driver(self) -> selenium.webdriver.Remote:
 		return self._driver

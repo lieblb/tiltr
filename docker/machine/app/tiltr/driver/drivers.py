@@ -43,11 +43,17 @@ UserStat = namedtuple('UserStat', ['score', 'maximum_score', 'percentage', 'shor
 
 Mark = namedtuple('Mark', ['level', 'short', 'official'])
 
+
 class Marks:
 	def __init__(self, marks):
 		self._marks = marks
 
-	def lookup(self, percentage):
+	def lookup(self, percentage: MaybeDecimal):
+		if not percentage.valid():
+			return None
+
+		percentage = percentage.to_decimal()
+
 		best = None
 
 		for mark in self._marks:
@@ -902,7 +908,8 @@ class ExamDriver:
 		# always clip final score on 0.
 		expected_reached_score = max(expected_reached_score, Decimal(0))
 
-		expected_reached_percentage = Result.score_percentage(expected_reached_score, maximum_score)
+		expected_reached_percentage = Result.score_percentage(
+			MaybeDecimal(expected_reached_score), maximum_score)
 
 		mark = Marks(self.exam_configuration.marks).lookup(expected_reached_percentage)
 
@@ -1004,15 +1011,14 @@ class ImportedTest(AbstractTest):
 		return self.title
 
 
-def extract_number(s: str, n: int=1, name: str='unknown'):
+def extract_number(s: str, n: int = 1, name: str = 'unknown') -> MaybeDecimal:
 	assert n > 0
 	x = re.findall(r'(\d+(\.\d+)?)', s)
 	x = list(map(lambda y: y[0], x))
 	if len(x) > n - 1:
-		return Decimal(x[n - 1])
+		return MaybeDecimal(x[n - 1])
 	else:
-		return Result.NOT_A_NUMBER
-		# raise InteractionException("could not extract number #%d from '%s' at location %s" % (n, s, name))
+		return MaybeDecimal()
 
 
 class UserDriver:

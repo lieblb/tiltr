@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
+
 import io
 import re
 from decimal import *
@@ -18,7 +20,7 @@ from pdfminer3.pdfinterp import PDFResourceManager
 from pdfminer3.pdfinterp import PDFPageInterpreter
 
 
-def _extract_pdf_scores(stream):
+def _extract_pdf_scores(stream: io.BytesIO) -> Dict[str, Dict[str, Decimal]]:
 	# these laparams seem to work ok with the ILIAS default PDF
 	# formatting as well as with UR custom styling.
 
@@ -84,9 +86,9 @@ def _extract_pdf_scores(stream):
 
 
 class PDF:
-	def __init__(self, bytes):
-		self.bytes = bytes
-		self.scores = _extract_pdf_scores(io.BytesIO(bytes))
+	def __init__(self, data: bytes):
+		self.bytes = data
+		self.scores = _extract_pdf_scores(io.BytesIO(data))
 
 
 if __name__ == "__main__":

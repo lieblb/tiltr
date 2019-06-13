@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+from typing import List, Dict, Tuple
+
 import os
 import sqlite3
 import json
@@ -13,6 +15,8 @@ import datetime
 import zipfile
 from collections import defaultdict
 import pytz
+
+from tiltr.question.coverage import Coverage
 
 
 class DB:
@@ -43,14 +47,14 @@ class DB:
 		self.db.close()
 
 	@staticmethod
-	def get_size():
+	def get_size() -> int:
 		path = os.path.join("/tiltr/tmp", "results.db")
 		if os.path.exists(path):
 			return os.path.getsize(path)
 		else:
 			return 0
 
-	def put(self, batch_id, success, files, num_users, elapsed_time):
+	def put(self, batch_id: str, success: str, files: str, num_users: int, elapsed_time: int):
 		c = self.db.cursor()
 		now = datetime.datetime.now()
 		c.execute("INSERT INTO results (created, batch, success, files, nusers, elapsed) VALUES (?, ?, ?, ?, ?, ?)",
@@ -63,13 +67,13 @@ class DB:
 		self.db.commit()
 		c.close()
 
-	def put_performance_data(self, dts):
+	def put_performance_data(self, dts: List[int]):
 		c = self.db.cursor()
 		c.executemany("insert into performance(dt) values (?)", [(1000 * dt,) for dt in dts])
 		self.db.commit()
 		c.close()
 
-	def put_coverage_data(self, coverage):
+	def put_coverage_data(self, coverage: Coverage):
 		c = self.db.cursor()
 		c.executemany("INSERT OR IGNORE INTO coverage_cases(question, name) VALUES (?, ?)",
 			[(x[0].encode("utf-8"), json.dumps(x).encode("utf-8")) for x in coverage.get_cases()])
@@ -78,7 +82,7 @@ class DB:
 		self.db.commit()
 		c.close()
 
-	def get_coverage(self):
+	def get_coverage(self) -> Dict:
 		c = self.db.cursor()
 
 		c.execute("SELECT COUNT(*) FROM coverage_cases")
@@ -113,7 +117,7 @@ class DB:
 			observed=num_occurrences,
 			questions=list(questions.values()))
 
-	def get_counts(self):
+	def get_counts(self) -> Dict:
 		c = self.db.cursor()
 
 		c.execute("SELECT success, COUNT(success), SUM(nusers) FROM results GROUP BY success")
@@ -129,7 +133,7 @@ class DB:
 		c.close()
 		return counts
 
-	def get_details(self):
+	def get_details(self) -> List[Dict]:
 		c = self.db.cursor()
 		c.execute("SELECT created, elapsed, batch, success FROM results ORDER BY created")
 		rows = c.fetchall()
@@ -148,7 +152,7 @@ class DB:
 
 		return entries
 
-	def get_performance_data(self):
+	def get_performance_data(self) -> List[float]:
 		c = self.db.cursor()
 		c.execute("SELECT dt FROM performance")
 		rows = c.fetchall()
@@ -156,7 +160,7 @@ class DB:
 
 		return [row[0] / 1000.0 for row in rows]
 
-	def get_longterm_data(self):
+	def get_longterm_data(self) -> List[Tuple]:
 		c = self.db.cursor()
 		c.execute("SELECT created, success, nusers FROM longterm ORDER BY created")
 		rows = c.fetchall()
@@ -171,7 +175,7 @@ class DB:
 
 		return values
 
-	def get_files(self):
+	def get_files(self) -> Dict[str, str]:
 		c = self.db.cursor()
 		c.execute("SELECT batch, files FROM results")
 		files = dict()
@@ -192,7 +196,7 @@ class DB:
 		self.db.commit()
 		c.close()		
 
-	def get_zipfile(self, batch_id, file):
+	def get_zipfile(self, batch_id: str, file: str):
 		c = self.db.cursor()
 		c.execute("SELECT files FROM results WHERE batch=?", (batch_id.encode("utf-8"),))
 		files_json = c.fetchone()[0]

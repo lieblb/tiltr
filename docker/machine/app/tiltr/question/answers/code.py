@@ -38,7 +38,7 @@ class CodeAnswer(Answer):
 			"return $('textarea[data-blocktype=2]').next()[0].CodeMirror.getValue()")
 		self.protocol.verify('code', self.current_answer, actual_answer, after_crash=after_crash)
 
-	def _get_dimension_key_type(self, key):
+	def _get_dimension_key_type(self, key) -> str:
 		if key == 'Ihr Quelltext:':
 			return 'json'
 		else:

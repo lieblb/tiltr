@@ -15,10 +15,10 @@ class Question:
 	def create_answer(self, driver, *args):
 		raise NotImplementedError()
 
-	def initialize_coverage(self, coverage, context: 'TestContext'):
+	def initialize_coverage(self, coverage: 'Coverage', context: 'TestContext'):
 		raise NotImplementedError()
 
-	def add_export_coverage(self, coverage, answers, language):
+	def add_export_coverage(self, coverage: 'Coverage', answers, language):
 		raise NotImplementedError()
 
 	def get_random_answer(self, context: 'TestContext'):
@@ -27,7 +27,7 @@ class Question:
 	def readjust_scores(self, driver, actual_answers, context: 'TestContext', report):
 		raise NotImplementedError()
 
-	def compute_score(self, answers, context):
+	def compute_score(self, answers, context: 'TestContext'):
 		raise NotImplementedError()
 
 	def get_maximum_score(self, context: 'TestContext'):

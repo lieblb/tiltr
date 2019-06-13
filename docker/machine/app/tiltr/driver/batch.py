@@ -36,7 +36,7 @@ from openpyxl import load_workbook
 from texttable import Texttable
 
 from tiltr.data.exceptions import *
-from tiltr.data.result import Result, Origin
+from tiltr.data.result import Result, Origin, MaybeDecimal
 from tiltr.data.result import open_results
 from tiltr.data.workbook import workbook_to_result, check_workbook_consistency
 from tiltr.data.context import RandomContext
@@ -357,9 +357,10 @@ class Run:
 		for result in all_recorded_results:
 			reached_score = Decimal(0)
 			for value in result.scores():
-				reached_score += self.exam_configuration.clip_answer_score(Decimal(value))
+				if value.valid():
+					reached_score += self.exam_configuration.clip_answer_score(value.to_decimal())
 
-			reached_percentage = Result.score_percentage(reached_score, maximum_score)
+			reached_percentage = Result.score_percentage(MaybeDecimal(reached_score), maximum_score)
 
 			for channel in ("xls", "statistics_tab", "results_tab"):
 				result.update(
@@ -615,6 +616,8 @@ class Run:
 			self.batch.ilias_url, self.ilias_version,
 			self.workarounds, self.settings,
 			master.report)
+
+		master.report("_users_backend called")
 
 		return lambda: UsersBackend(ilias_driver, master.report)
 

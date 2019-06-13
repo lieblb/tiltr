@@ -144,6 +144,29 @@ class Settings(ValueBag):
 
 
 class Workarounds(ValueBag):
+	sloppy_whitespace: bool
+	implicit_text_number_conversions: bool
+	disallow_clamps_in_cloze: bool
+	disallow_dollar_in_cloze: bool
+	disallow_empty_answers: bool
+	random_xls_participant_sheet_orders: bool
+	force_tinymce: bool
+	no_plaintext_longtext: bool
+	identical_scoring_ignores_comparator: bool
+	disallow_invalid_answers: bool
+	enable_autosave: bool
+	allow_empty_scores: bool
+	dont_readjust_matching: bool
+	no_remove_on_readjust_matching: bool
+	allow_unreachable_max_scores: bool
+	dont_use_clamps_in_cloze_readjustments: bool
+	dont_test_invalid_save: bool
+	mantis_25329: bool
+	workaround_identical_cloze_answers_in_readjustment: bool
+	dont_click_twice: bool
+	ignore_wrong_results_in_results_tab: bool
+	inaccurate_percentage_rounding: bool
+
 	_solved = dict(
 		disallow_clamps_in_cloze=(5, 3, 12),  # see https://github.com/ILIAS-eLearning/ILIAS/pull/1082
 		disallow_invalid_answers=(5, 3, 12),  # https://www.ilias.de/mantis/view.php?id=23432
@@ -280,11 +303,10 @@ class Workarounds(ValueBag):
 			)
 		], **kwargs)
 
-
-	def strip_whitespace(self, value):
+	def strip_whitespace(self, value: str) -> str:
 		if isinstance(value, str) and self.sloppy_whitespace:
 			value = value.strip()
 		return value
 
-	def normalize(self, value):
+	def normalize(self, value: str) -> str:
 		return implicit_text_to_number_xls(self.strip_whitespace(value))
