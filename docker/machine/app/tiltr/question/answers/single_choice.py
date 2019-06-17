@@ -5,6 +5,9 @@
 # GPLv3, see LICENSE
 #
 
+from typing import List, Dict
+from decimal import *
+
 from .answer import Answer, Validness, Choice
 
 
@@ -14,11 +17,11 @@ class SingleChoiceAnswer(Answer):
 		assert question.__class__.__name__ == "SingleChoiceQuestion"
 		self.current_answer = None
 
-	def randomize(self, context):
+	def randomize(self, context: 'TestContext') -> Validness:
 		self._set_answer(*self.question.get_random_answer(context))
 		return Validness()
 
-	def _set_answer(self, answer, score):
+	def _set_answer(self, answer: str, score: Decimal):
 		answer_found = False
 		for choice in self._parse_ui():
 			self.protocol.choose(choice.label, choice.label == answer)
@@ -32,7 +35,7 @@ class SingleChoiceAnswer(Answer):
 		if not answer_found:
 			raise Exception("could not find answer '%s'" % answer)
 
-	def _parse_ui(self):
+	def _parse_ui(self) -> List[Choice]:
 		choices = []
 		for answer in self.driver.find_elements_by_css_selector('.ilc_question_SingleChoice .ilc_qanswer_Answer'):
 			radio = answer.find_element_by_css_selector('input[type="radio"]')
@@ -43,14 +46,14 @@ class SingleChoiceAnswer(Answer):
 				checked=radio.is_selected()))
 		return choices
 
-	def verify(self, context, after_crash=False):
+	def verify(self, context: 'TestContext', after_crash: bool = False):
 		self.protocol.add("on verify: current_answer == '%s'" % self.current_answer)
 		for c in self._parse_ui():
 			expected = (c.label == self.current_answer)
 			self.protocol.verify(c.label, expected, c.checked, after_crash=after_crash)
 		context.coverage.case_occurred(self.question, "verify", self.current_answer)
 
-	def _get_answer_dimensions(self, context, language):
+	def _get_answer_dimensions(self, context: 'TestContext', language: str) -> Dict:
 		return dict(
 			(choice, 1 if choice == self.current_answer else 0)
 			for choice in self.question.choices.keys())

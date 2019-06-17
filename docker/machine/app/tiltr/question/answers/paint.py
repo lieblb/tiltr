@@ -13,6 +13,7 @@ import time
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import NoAlertPresentException
 from PIL import Image
+from decimal import *
 from tiltr.data.exceptions import InteractionException
 
 
@@ -173,7 +174,7 @@ class PaintAnswer(Answer):
 		return list(self.driver.find_elements_by_css_selector('canvas'))[-1]
 		# canvas = self.driver.find_element_by_css_selector('#paintCanvas')
 
-	def _set_answer(self, answer, score):
+	def _set_answer(self, answer, score: Decimal):
 		# driver.capabilities['browserName'] == 'chrome'
 
 		n_retries = 5
@@ -207,7 +208,7 @@ class PaintAnswer(Answer):
 		if not is_answer_ok:
 			raise InteractionException(
 				"failed to paint requested answer: %d != %d" % (
-			   self._parse_answer(), answer))
+					self._parse_answer(), answer))
 
 		self.current_answer = answer
 		self.current_score = score
@@ -235,11 +236,11 @@ class PaintAnswer(Answer):
 		w, h = im.size
 		return self._paint_strategy.parse(pixels, w, h)
 
-	def verify(self, context, after_crash=False):
+	def verify(self, context: 'TestContext', after_crash: bool = False):
 		actual_answer = self._parse_answer()
 
 		self.protocol.verify(
 			'canvas', bin(self.current_answer), bin(actual_answer), after_crash=after_crash)
 
-	def _get_answer_dimensions(self, context, language):
+	def _get_answer_dimensions(self, context: 'TestContext', language: str):
 		return dict()

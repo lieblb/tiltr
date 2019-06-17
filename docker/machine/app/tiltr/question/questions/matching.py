@@ -5,7 +5,8 @@
 # GPLv3, see LICENSE
 #
 
-from typing import Dict
+from typing import Dict, List
+
 from decimal import *
 from enum import Enum
 import itertools
@@ -21,7 +22,7 @@ from tiltr.driver.utils import set_element_value
 from .question import Question
 
 
-def _readjust_score(random, score, enforce_positive):
+def _readjust_score(random, score: Decimal, enforce_positive: bool) -> Decimal:
 	if enforce_positive:
 		return Decimal(random.randint(1, 8)) / Decimal(4)
 	else:
@@ -29,14 +30,14 @@ def _readjust_score(random, score, enforce_positive):
 		return score + delta
 
 
-def _one_to_one_simple(scores, explain=None):  # simple, but not correct.
+def _one_to_one_simple(scores: Dict, explain=None) -> Decimal:  # simple, but not correct.
 	definition_scores = defaultdict(int)
 	for (definition, term), score in scores.items():
 		definition_scores[definition] = max(definition_scores[definition], score, 0)
 	return sum(definition_scores.values())
 
 
-def _one_to_one_correct(scores, explain=None):
+def _one_to_one_correct(scores: Dict, explain=None) -> Decimal:
 	# computing the maximum score for 1:1 matchings means computing the weighted bipartite
 	# matching for the underlying graph (also known as linear sum assignment problem).
 
@@ -67,7 +68,14 @@ def _one_to_one_correct(scores, explain=None):
 	return max_score
 
 
-def _compute_maximum_score(scores, multiplicity, context, explain=None):
+class MatchingMultiplicity(Enum):
+	ONE_TO_ONE = 1
+	MANY_TO_MANY = 2
+
+
+def _compute_maximum_score(
+	scores: Dict, multiplicity: MatchingMultiplicity, context: 'TestContext', explain=None) -> Decimal:
+
 	if scores:
 		if multiplicity == MatchingMultiplicity.ONE_TO_ONE:
 			if context.workarounds.allow_unreachable_max_scores:
@@ -82,14 +90,9 @@ def _compute_maximum_score(scores, multiplicity, context, explain=None):
 		return Decimal(0)
 
 
-class MatchingMultiplicity(Enum):
-	ONE_TO_ONE = 1
-	MANY_TO_MANY = 2
-
-
 class MatchingQuestion(Question):
 	@staticmethod
-	def _ui_get_multiplicity(driver):
+	def _ui_get_multiplicity(driver) -> MatchingMultiplicity:
 		for radio in driver.find_elements_by_name('matching_mode'):
 			if radio.is_selected():
 				value = radio.get_attribute('value')
@@ -247,10 +250,10 @@ class MatchingQuestion(Question):
 	def get_definition_label(self, definition_id):
 		return self.definitions[definition_id]
 
-	def get_term_label(self, term_id):
+	def get_term_label(self, term_id) -> str:
 		return self.terms[term_id]
 
-	def get_term_labels(self, term_ids):
+	def get_term_labels(self, term_ids) -> List[str]:
 		return [self.terms[t] for t in term_ids]
 
 	def initialize_coverage(self, coverage, context):
@@ -259,7 +262,7 @@ class MatchingQuestion(Question):
 	def add_export_coverage(self, coverage, answers, language):
 		pass
 
-	def get_random_answer(self, context):
+	def get_random_answer(self, context: 'TestContext'):
 		min_n = 1 if context.workarounds.disallow_empty_answers else 0
 		n = context.random.randint(min_n, len(self.definitions))
 
@@ -283,7 +286,7 @@ class MatchingQuestion(Question):
 
 		return answers, self.compute_score(answers, context)
 
-	def readjust_scores(self, driver, actual_answers, context, report):
+	def readjust_scores(self, driver, actual_answers, context: 'TestContext', report):
 		if context.workarounds.dont_readjust_matching:
 			return False, list()
 
@@ -373,7 +376,7 @@ class MatchingQuestion(Question):
 		removed_keys = [(self.definitions[d], self.terms[t]) for d, t in removed]
 		return True, removed_keys
 
-	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext') -> Decimal:
 		score = Decimal(0)
 		for definition_id, term_ids in answers.items():
 			for term_id in term_ids:
@@ -382,7 +385,7 @@ class MatchingQuestion(Question):
 					score += self.scores.get(k)
 		return score
 
-	def compute_score_from_result(self, result, context):
+	def compute_score_from_result(self, result, context) -> Decimal:
 		definition_ids = dict((label, i) for i, label in self.definitions.items())
 		term_ids = dict((label, i) for i, label in self.terms.items())
 

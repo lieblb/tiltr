@@ -5,7 +5,7 @@
 # GPLv3, see LICENSE
 #
 
-from typing import Dict
+from typing import Dict, Tuple, List
 from decimal import *
 
 from selenium.common.exceptions import NoSuchElementException
@@ -17,7 +17,7 @@ from tiltr.data.settings import Settings
 from tiltr.driver.utils import set_element_value
 
 
-def _readjust_score(random, score: Decimal):
+def _readjust_score(random, score: Decimal) -> Decimal:
 	delta = Decimal(random.randint(-8, 8)) / Decimal(4)
 	score += delta
 	score = max(score, Decimal(0))
@@ -53,7 +53,7 @@ def _readjust_ui(context: 'TestContext', *args):
 
 class SingleChoiceQuestion(Question):
 	@staticmethod
-	def _get_ui(driver):
+	def _get_ui(driver) -> Dict[str, Decimal]:
 		choices = dict()
 
 		while True:
@@ -70,10 +70,10 @@ class SingleChoiceQuestion(Question):
 		super().__init__(title)
 		self.choices = self._get_ui(driver)
 
-	def get_maximum_score(self, context: 'TestContext'):
+	def get_maximum_score(self, context: 'TestContext') -> Decimal:
 		return max(self.choices.values())
 
-	def create_answer(self, driver, *args):
+	def create_answer(self, driver, *args) -> 'Answer':
 		from ..answers.single_choice import SingleChoiceAnswer
 		return SingleChoiceAnswer(driver, self, *args)
 
@@ -88,11 +88,11 @@ class SingleChoiceQuestion(Question):
 				coverage.case_occurred(self, "export", str(choice))
 				break
 
-	def get_random_answer(self, context: 'TestContext'):
+	def get_random_answer(self, context: 'TestContext') -> Tuple[str, Decimal]:
 		choice = context.random.choice(list(self.choices.keys()))
 		return choice, self.choices[choice]
 
-	def readjust_scores(self, driver, actual_answers, context: 'TestContext', report):
+	def readjust_scores(self, driver, actual_answers, context: 'TestContext', report) -> Tuple[bool, List]:
 		choices = self.choices
 
 		if False:
@@ -118,7 +118,7 @@ class SingleChoiceQuestion(Question):
 
 		return True, list()
 
-	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext') -> Decimal:
 		score = Decimal(0)
 		for label, checked in answers.items():
 			if checked:

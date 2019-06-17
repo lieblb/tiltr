@@ -5,9 +5,11 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
 from collections import namedtuple
 import re
 
+from decimal import *
 from .answer import Answer, Validness
 from ..questions.cloze import ClozeType
 from tiltr.driver.utils import set_element_value
@@ -72,12 +74,12 @@ class SelectAnswerGap(ClozeAnswerGap):
 
 
 class ClozeAnswer(Answer):
-	def __init__(self, driver, question, protocol):
+	def __init__(self, driver, question: 'Question', protocol):
 		super().__init__(driver, question, protocol)
 		assert question.__class__.__name__ == "ClozeQuestion"
 		self.current_answer = None
 
-	def randomize(self, context):
+	def randomize(self, context: 'TestContext') -> Validness:
 		answers, valid, score = self.question.get_random_answer(context)
 		self._set_answers(answers, score)
 		if all(valid.values()):
@@ -85,7 +87,7 @@ class ClozeAnswer(Answer):
 		else:
 			return Validness(((i, answers[i]) for i, v in valid.items() if not v))
 
-	def _set_answers(self, answers, score):
+	def _set_answers(self, answers: Dict[int, str], score: Decimal):
 		ui = self._parse_ui()
 		assert len(answers) == len(ui) and len(ui) == len(self.question.gaps)
 
@@ -111,7 +113,7 @@ class ClozeAnswer(Answer):
 
 		return indexed
 
-	def verify(self, context, after_crash=False):
+	def verify(self, context: 'TestContext', after_crash=False):
 		ui = self._parse_ui()
 		assert len(self.current_answers) == len(ui) and len(ui) == len(self.question.gaps)
 
@@ -124,7 +126,7 @@ class ClozeAnswer(Answer):
 				after_crash=after_crash)
 			gap.add_coverage(self.question, "verify", context.coverage, recorded_value)
 
-	def _get_answer_dimensions(self, context, language):
+	def _get_answer_dimensions(self, context: 'TestContext', language):
 		answers = dict()
 		for gap in self.question.gaps.values():
 			value = self.current_answers[gap.index]

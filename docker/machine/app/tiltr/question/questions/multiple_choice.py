@@ -5,7 +5,8 @@
 # GPLv3, see LICENSE
 #
 
-from typing import Dict
+from typing import Dict, List, Tuple
+
 from decimal import *
 import itertools
 import json
@@ -105,11 +106,11 @@ class MultipleChoiceQuestion(Question):
 
 		return choices
 
-	def __init__(self, driver, title, settings):
+	def __init__(self, driver, title: str, settings):
 		super().__init__(title)
 		self.choices = self._get_ui(driver)
 
-	def get_maximum_score(self, context):
+	def get_maximum_score(self, context: 'TestContext') -> Decimal:
 		def max_values():
 			for item in self.choices.values():
 				yield max(item.checked_score, item.unchecked_score)
@@ -157,7 +158,7 @@ class MultipleChoiceQuestion(Question):
 	def add_export_coverage(self, coverage, answers, language):
 		coverage.case_occurred(self, "export", json.dumps(answers))
 
-	def get_random_answer(self, context):
+	def get_random_answer(self, context: 'TestContext') -> Tuple[Dict[str, bool], Decimal]:
 		answers = dict()
 
 		if context.workarounds.disallow_empty_answers:
@@ -174,7 +175,7 @@ class MultipleChoiceQuestion(Question):
 
 		return answers, self.compute_score(answers, context)
 
-	def readjust_scores(self, driver, actual_answers, context, report):
+	def readjust_scores(self, driver, actual_answers, context: 'TestContext', report) -> Tuple[bool, List]:
 		choices = self.choices
 
 		if False:
@@ -200,7 +201,7 @@ class MultipleChoiceQuestion(Question):
 
 		return True, list()
 
-	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext'):
+	def compute_score(self, answers: Dict[str, Decimal], context: 'TestContext') -> Decimal:
 		score = Decimal(0)
 		for label, checked in answers.items():
 			item = self.choices[label]

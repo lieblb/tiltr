@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Dict
+
 import selenium
 from selenium.webdriver.common.action_chains import ActionChains
 
@@ -39,7 +41,7 @@ class MatchingAnswer(Answer):
 		self.current_answer = None
 		self.debug = False
 
-	def randomize(self, context):
+	def randomize(self, context: 'TestContext') -> Validness:
 		self._set_answer(*self.question.get_random_answer(context))
 		return Validness()
 
@@ -170,8 +172,7 @@ class MatchingAnswer(Answer):
 				chain.perform()
 		'''
 
-
-	def _parse_ui(self):
+	def _parse_ui(self) -> Dict[str, str]:
 		answers = dict()
 
 		root = self.driver.find_element_by_css_selector('.ilc_question_MatchingQuestion')

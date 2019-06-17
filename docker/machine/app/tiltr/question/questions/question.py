@@ -5,14 +5,17 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Tuple
 from decimal import *
+
+import selenium
 
 
 class Question:
 	def __init__(self, title: str):
 		self.title = title
 
-	def create_answer(self, driver, *args):
+	def create_answer(self, driver: selenium.webdriver.Remote, *args) -> 'Answer':
 		raise NotImplementedError()
 
 	def initialize_coverage(self, coverage: 'Coverage', context: 'TestContext'):
@@ -47,7 +50,7 @@ class Question:
 	def has_xls_score(self):
 		return True
 
-	def parse_xls_row(self, sheet, row: int):
+	def parse_xls_row(self, sheet, row: int) -> Tuple[str, str]:
 		key = sheet.cell(row=row, column=1).value
 		if key is None:
 			return None
@@ -61,5 +64,5 @@ class Question:
 	def get_answer_from_details_view(self, view):
 		return None
 
-	def can_score_manually(self):
+	def can_score_manually(self) -> bool:
 		return False
