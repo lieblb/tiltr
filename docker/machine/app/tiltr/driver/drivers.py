@@ -1022,7 +1022,20 @@ def extract_number(s: str, n: int = 1, name: str = 'unknown') -> MaybeDecimal:
 
 
 class UserDriver:
-	def __init__(self, driver: selenium.webdriver.Remote, ilias_url: str, ilias_version, report):
+	driver: selenium.webdriver.Remote
+
+	ilias_url: str
+	ilias_base_url: str
+	client_id: str
+
+	ilias_version: Tuple
+	report: Callable[[str], None]
+	verify_ssl: bool
+
+	def __init__(
+			self, driver: selenium.webdriver.Remote, ilias_url: str,
+			ilias_version: Tuple, report: Callable[[str], None], verify_ssl: bool = False):
+
 		self.driver = driver
 
 		self.ilias_url = ilias_url
@@ -1032,6 +1045,7 @@ class UserDriver:
 
 		self.ilias_version = ilias_version
 		self.report = report
+		self.verify_ssl = verify_ssl
 
 	def login(self, username: str, password: str):
 		return Login(self, username, password)
@@ -1171,7 +1185,21 @@ class UserDriver:
 
 
 class TestDriver:
-	def __init__(self, user_driver: UserDriver, test):
+	driver: selenium.webdriver.Remote
+	user_driver: UserDriver
+	test: AbstractTest
+
+	ilias_url: str
+	ilias_base_url: str
+	client_id: str
+	ilias_version: Tuple
+
+	report: Callable[[str], None]
+	autosave_time: int
+	allow_resume: bool
+	verify_ssl: bool
+
+	def __init__(self, user_driver: UserDriver, test: AbstractTest):
 		self.driver = user_driver.driver
 		self.user_driver = user_driver
 		self.test = test
@@ -1184,8 +1212,9 @@ class TestDriver:
 		self.report = user_driver.report
 		self.autosave_time = 5
 		self.allow_resume = False
+		self.verify_ssl = user_driver.verify_ssl
 
-	def _get_ref_id(self):
+	def _get_ref_id(self) -> int:
 		url = self.driver.current_url
 		return int(http_get_parameters(url)["ref_id"])
 
@@ -1446,7 +1475,7 @@ class TestDriver:
 		self.report("downloading exported %s." % format)
 
 		cookies = dict((cookie['name'], cookie['value']) for cookie in self.driver.get_cookies())
-		result = requests.get(url, cookies=cookies)
+		result = requests.get(url, cookies=cookies, verify=self.verify_ssl)
 		return result.content, filename
 
 	def export_xmlres(self):
@@ -1473,7 +1502,7 @@ class TestDriver:
 
 				url = navbar.find_element_by_css_selector("a").get_attribute("href")
 				cookies = dict((cookie['name'], cookie['value']) for cookie in self.driver.get_cookies())
-				result = requests.get(url, cookies=cookies)
+				result = requests.get(url, cookies=cookies, verify=self.verify_ssl)
 
 				pdfs[user_id] = PDF(result.content)
 

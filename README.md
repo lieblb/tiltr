@@ -224,6 +224,7 @@ To run TiltR against an external instance, use:
 
 ```
 url: https://some.ilias.uni-regensburg.de
+verify-ssl: true
 admin:
   user: my_root_user
   password: my_sikrit_root_user_password

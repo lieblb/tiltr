@@ -235,7 +235,8 @@ def set_argument_environ(args):
 		entrypoint_args.extend([
 			'--ilias-url', ilias_config['url'],
 			'--ilias-admin-user', ilias_config['admin']['user'],
-			'--ilias-admin-password', ilias_config['admin']['password']])
+			'--ilias-admin-password', ilias_config['admin']['password'],
+			'--verify-ssl', 'true' if ilias_config.get('verify-ssl', True) else 'false'])
 		entrypoint_args.extend(['--embedded-ilias-port', '0'])
 
 		print("Testing against external ILIAS at %s." % ilias_config['url'])
@@ -249,7 +250,8 @@ def set_argument_environ(args):
 		entrypoint_args.extend([
 			'--ilias-url', 'http://web:80/ILIAS?client_id=ilias',
 			'--ilias-admin-user', 'root',
-			'--ilias-admin-password', 'odysseus'])
+			'--ilias-admin-password', 'odysseus',
+			'--verify-ssl', 'true'])
 		entrypoint_args.extend(['--embedded-ilias-port', str(args.embedded_ilias_port)])
 
 	os.environ['TILTR_ARGUMENTS'] = ' '.join(entrypoint_args)

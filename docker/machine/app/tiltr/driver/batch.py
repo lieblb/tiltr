@@ -692,6 +692,7 @@ class Run:
 					report=self.report,
 					command=TakeExamCommand(
 						ilias_url=self.batch.ilias_url,
+						verify_ssl=self.batch.verify_ssl,
 						ilias_version=self.batch.ilias_version.as_tuple(),
 						machine=machine,
 						machine_index=i + 1,
@@ -1078,6 +1079,7 @@ class Batch(threading.Thread):
 		self.ilias_url = None
 		self.ilias_admin_user = None
 		self.ilias_admin_password = None
+		self.verify_ssl = True
 
 	@contextmanager
 	def in_master(self, protocol):
@@ -1096,7 +1098,8 @@ class Batch(threading.Thread):
 					'master', 'running on user agent %s' % browser.driver.execute_script('return navigator.userAgent'))
 
 				context.driver = browser.driver
-				context.user_driver = UserDriver(browser.driver, self.ilias_url, self.ilias_version, context.report)
+				context.user_driver = UserDriver(
+					browser.driver, self.ilias_url, self.ilias_version, context.report, verify_ssl=self.verify_ssl)
 
 				with context.user_driver.login(self.ilias_admin_user, self.ilias_admin_password) as login:
 					context.language = login.language
@@ -1115,6 +1118,7 @@ class Batch(threading.Thread):
 		self.ilias_url = args.ilias_url
 		self.ilias_admin_user = args.ilias_admin_user
 		self.ilias_admin_password = args.ilias_admin_password
+		self.verify_ssl = True if args.verify_ssl is None else json.loads(args.verify_ssl.lower())
 
 	def run(self):
 		# clear ILIAS temp data (exported pdf and html files). if we don't do this

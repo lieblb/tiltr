@@ -112,6 +112,7 @@ class TakeExamCommand:
 			self.workarounds = kwargs["workarounds"]
 
 		self.ilias_url = data["ilias_url"]
+		self.verify_ssl = data["verify_ssl"]
 		self.ilias_version = tuple(data["ilias_version"])
 		self.machine = data["machine"]
 		self.machine_index = data["machine_index"]
@@ -128,6 +129,7 @@ class TakeExamCommand:
 		return json.dumps(dict(
 			command="take_exam",
 			ilias_url=self.ilias_url,
+			verify_ssl=self.verify_ssl,
 			ilias_version=self.ilias_version,
 			machine=self.machine,
 			machine_index=self.machine_index,
@@ -174,7 +176,8 @@ class TakeExamCommand:
 		try:
 			with run_interaction():
 
-				user_driver = UserDriver(driver, self.ilias_url, self.ilias_version, master_report)
+				user_driver = UserDriver(
+					driver, self.ilias_url, self.ilias_version, master_report, verify_ssl=self.verify_ssl)
 
 				with user_driver.login(self.username, self.password):
 
