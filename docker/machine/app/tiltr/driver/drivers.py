@@ -1184,6 +1184,11 @@ class UserDriver:
 				driver.get(self.ilias_url)
 
 			driver.find_element_by_css_selector(".glyphicon-search").click()
+
+			if self.ilias_version >= (6, 0):
+				# empty search will crash in ILIAS 6.0.0a
+				set_element_value(driver, driver.find_element_by_css_selector("#main_menu_search"), "###")
+
 			with wait_for_page_load(driver):
 				driver.find_element_by_css_selector('#mm_search_form input[type="submit"]').click()
 
