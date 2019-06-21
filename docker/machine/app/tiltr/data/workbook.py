@@ -17,7 +17,7 @@ from .exceptions import *
 from .settings import Workarounds
 
 
-class XlsResultRow:
+class XlsResultRow5:
 	# represents one row in worksheet 0 "Testergebnisse"
 
 	def __init__(self, sheet, row: int):
@@ -27,8 +27,8 @@ class XlsResultRow:
 	def get(self, column: int):
 		return self.sheet.cell(row=self.row, column=column).value
 
-	def get_username(self):
-		return self.get(2)
+	def is_username(self, username):
+		return self.self.get(2) == username
 
 	def get_reached_score(self):
 		return Decimal(self.get(3))
@@ -56,6 +56,20 @@ class XlsResultRow:
 				scores[title] = Decimal(score)
 			column += 1
 		return scores
+
+
+class XlsResultRow6(XlsResultRow5):
+	def is_username(self, username):
+		return str(self.get(1)).split(",")[-1].strip() == username
+
+	def get_reached_score(self):
+		return Decimal(self.get(2))
+
+	def get_maximum_score(self):
+		return Decimal(self.get(3))
+
+	def get_short_mark(self):
+		return str(self.get(4)).strip()
 
 
 def _is_question_header_ilias53(sheet, row: int):
@@ -151,14 +165,20 @@ def workbook_to_result(wb: openpyxl.Workbook, username, questions, workarounds, 
 	# indicate that a wrong additional pass has been created, we will detect
 	# this in the detailed result check if so).
 
+	if ilias_version >= (6, 0, 0):
+		result_row_class = XlsResultRow6
+	else:
+		result_row_class = XlsResultRow5
+
 	main_sheet = wb.worksheets[0]
 	result_row = None
 	row_index = 2
 	while True:
-		result_row = XlsResultRow(main_sheet, row_index)
-		row_username = result_row.get_username()
-		if row_username == username:
+		result_row = result_row_class(main_sheet, row_index)
+
+		if result_row.is_username(username):
 			break
+
 		row_index += 1
 		if row_index > 1000:
 			raise IntegrityException("user %s not found in XLS" % username)
