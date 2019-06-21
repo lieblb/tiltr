@@ -24,6 +24,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 import selenium
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -179,49 +180,75 @@ class ILIASDriver:
 
 		self.report = report
 
-	def _goto_administration_page(self, panel_id: str):
+	def _goto_administration_page(self, section_name: str, sub_section_id: str):
 		driver = self.driver
 
-		for i in range(2):
-			try:
-				if self.version >= (5, 4):
-					for a in driver.find_elements_by_css_selector("#ilTopNav li.dropdown > a"):
-						if a.text.strip().lower() == "administration":
-							a.click()
-							break
-				else:
-					wait_for_css(driver, "#mm_adm_tr", 1)
-					driver.find_element_by_css_selector("#mm_adm_tr").click()
+		if self.version >= (6, 0):
+			for button in driver.find_elements_by_css_selector("nav.il-maincontrols button"):
+				if button.text.strip().lower() == "administration":
+					button.click()
+					break
 
-				wait_for_css(driver, "#%s" % panel_id)
+			for button in driver.find_elements_by_css_selector("div.il-maincontrols-slate-content button.disengaged"):
+				if button.text.strip().lower() == section_name.lower():
+					button.click()
+					break
 
-				with wait_for_page_load(driver):
-					href = driver.find_element_by_css_selector("#%s" % panel_id).get_attribute("href")
-					driver.get(href)
+			with wait_for_page_load(driver):
+				while True:
+					try:
+						for engaged in driver.find_elements_by_css_selector("div.il-maincontrols-slate.engaged"):
+							for div in engaged.find_elements_by_css_selector('div[aria-label="%s"]' % sub_section_id):
+								button = div.find_element_by_xpath("./..")
+								button.click()
+								return
+						break
+					except StaleElementReferenceException:
+						pass
+
+		else:
+			panel_id = "mm_adm_" + sub_section_id
+
+			for i in range(2):
+				try:
+					if self.version >= (5, 4):
+						for a in driver.find_elements_by_css_selector("#ilTopNav li.dropdown > a"):
+							if a.text.strip().lower() == "administration":
+								a.click()
+								break
+					else:
+						wait_for_css(driver, "#mm_adm_tr", 1)
+						driver.find_element_by_css_selector("#mm_adm_tr").click()
+
+					wait_for_css(driver, "#%s" % panel_id)
+
+					with wait_for_page_load(driver):
+						href = driver.find_element_by_css_selector("#%s" % panel_id).get_attribute("href")
+						driver.get(href)
+						return
+
+						# work around "element not clickable" exception in Selenium
+						#element = driver.find_element_by_css_selector("#%s" % panel_id)
+						#driver.execute_script("$(arguments[0]).click();", element)
+						#driver.find_element_by_css_selector("#%s" % panel_id).click()
+
 					return
+				except:
+					traceback.print_exc()
 
-					# work around "element not clickable" exception in Selenium
-					#element = driver.find_element_by_css_selector("#%s" % panel_id)
-					#driver.execute_script("$(arguments[0]).click();", element)
-					#driver.find_element_by_css_selector("#%s" % panel_id).click()
+					with wait_for_page_load(driver):
+						driver.get(self.url)
 
-				return
-			except:
-				traceback.print_exc()
-
-				with wait_for_page_load(driver):
-					driver.get(self.url)
-
-		raise InteractionException("going to admin page %s failed." % panel_id)
+		raise InteractionException("going to admin page %s failed." % sub_section_id)
 
 	def goto_test_administration(self):
-		self._goto_administration_page("mm_adm_assf")
+		self._goto_administration_page("Inhaltsobjekte", "assf")
 
 	def goto_user_administration(self):
-		self._goto_administration_page("mm_adm_usrf")
+		self._goto_administration_page("Benutzerverwaltung", "usrf")
 
 	def goto_editor_administration(self):
-		self._goto_administration_page("mm_adm_adve")
+		self._goto_administration_page("Allgemein", "adve")
 
 	def _verify_admin_setting(self, name, value, expected, log):
 		if value != expected:
