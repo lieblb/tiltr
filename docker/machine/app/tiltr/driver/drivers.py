@@ -634,14 +634,18 @@ class ExamDriver:
 			try_submit(self.driver, css, click_to_save, allow_reload=False, n_tries=n_tries)
 
 	def _has_element(self, get_element):
+		n_tries = 0
 		while True:
 			try:
 				get_element()
 				return True
 			except NoSuchElementException:
 				return False
-			except TimeoutException:
-				pass
+			except TimeoutException as e:
+				n_tries += 1
+				if n_tries > 7:
+					traceback.print_exc()
+					raise e
 
 	def goto_first_question(self):
 		def find_button():
