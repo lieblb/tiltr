@@ -111,6 +111,7 @@ if hasattr(args, 'fork') and args.fork:
 		sys.exit(0)
 
 
+'''
 def monitor_docker_stats(tmp_path, docker_compose_name):
 	stream = subprocess.Popen(["docker", "stats"], stdout=subprocess.PIPE)
 
@@ -170,6 +171,7 @@ def monitor_docker_stats(tmp_path, docker_compose_name):
 				if bin:
 					stats[bin]['cpu'] += parse_percentage(row[cpu_index])
 					stats[bin]['mem'] += parse_percentage(row[mem_index])
+'''
 
 
 def instrument_ilias():
@@ -263,7 +265,6 @@ embedded_ilias = set_argument_environ(args)
 
 base = os.path.dirname(os.path.realpath(__file__))
 os.chdir(base)  # important for docker-compose later
-_, docker_compose_name = os.path.split(base)
 
 docker_compose_args = []
 
@@ -448,9 +449,14 @@ try:
 	except:
 		pass  # ignore
 
+	def get_container_id(container_name):
+		return subprocess.check_output(["docker-compose", "ps", "-q", container_name]).decode('utf8').strip()
+
+	master_container_id = get_container_id("master")
+
 	def check_alive():
 		status = subprocess.check_output([
-			"docker", "inspect", "-f", "{{.State.Status}}", "%s_master_1" % docker_compose_name]).strip()
+			"docker", "inspect", "-f", "{{.State.Status}}", master_container_id]).strip()
 		if py3:
 			status = status.decode("utf-8")
 		return status != "exited"
@@ -459,7 +465,7 @@ try:
 		while True:
 			if not check_alive():
 				if not request_quit:
-					print("master has shut down unexpectedly. try to run: docker logs %s_master_1" % docker_compose_name)
+					print("master has shut down unexpectedly. try to run: docker logs %s" % master_container_id)
 				terminate()
 				break
 			line = compose.stdout.readline()
@@ -470,8 +476,10 @@ try:
 					log.write(line)
 
 	def get_docker_container_log_path(container_name):
+		container_id = get_container_id(container_name)
+
 		path = subprocess.check_output([
-			"docker", "inspect", "-f", "{{.LogPath}}", '%s_%s' % (docker_compose_name, container_name)]).strip()
+			"docker", "inspect", "-f", "{{.LogPath}}", container_id]).strip()
 		if py3:
 			path = path.decode("utf-8")
 		return path
@@ -488,9 +496,6 @@ try:
 		size += get_docker_container_log_size('web_1')
 		size += get_docker_container_log_size('db_1')
 	'''
-
-	#monitor_thread = Thread(target=monitor_docker_stats, args=(tmp_path, docker_compose_name,))
-	#monitor_thread.start()
 
 	print_docker_logs()
 
