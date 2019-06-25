@@ -28,7 +28,7 @@ class XlsResultRow5:
 		return self.sheet.cell(row=self.row, column=column).value
 
 	def is_username(self, username):
-		return self.self.get(2) == username
+		return self.get(2) == username
 
 	def get_reached_score(self):
 		return Decimal(self.get(3))
