@@ -1391,7 +1391,7 @@ class TestDriver:
 		assert self.goto()
 		self.driver.find_element_by_css_selector("#tab_manscoring").click()
 
-	def apply_manual_scoring(self, question_title, scores):
+	def apply_manual_scoring(self, question_title: str, scores: Dict[str, Decimal]):
 		found = False
 
 		select = self.driver.find_element_by_css_selector(".ilTableFilterInput #question")
@@ -1419,20 +1419,29 @@ class TestDriver:
 		if not scoring_table:
 			raise InteractionException("did not find scoring table")
 
+		remaining_scores = scores.copy()
+
 		for tr in scoring_table.find_elements_by_css_selector("tr"):
 			cols = list(tr.find_elements_by_css_selector("td"))
-			if cols:
-				name = cols[0].text
-				for username, score in scores.items():
-					if username in name:
-						points_input = cols[1].find_element_by_css_selector("input")
-						set_element_value(self.driver, points_input, str(score))
-						break
+			if not cols:
+				continue
+
+			fullname = cols[0].text
+			username = fullname.split(",")[-1].strip()
+
+			score = remaining_scores.get(username)
+			if score is not None:
+				del remaining_scores[username]
+				points_input = cols[1].find_element_by_css_selector("input")
+				set_element_value(self.driver, points_input, str(score))
+
+		if remaining_scores:
+			raise InteractionException(
+				"could not set manual scores for users %s" % (", ".join(list(remaining_scores.keys()))))
 
 		with wait_for_page_load(self.driver):
 			self.driver.find_element_by_css_selector(
 				'input[name="cmd[saveManScoringByQuestion]"]').click()
-
 
 	def _clean_exports(self):
 		self.report("cleaning current exports.")
