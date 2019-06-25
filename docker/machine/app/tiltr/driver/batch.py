@@ -344,7 +344,9 @@ class Run:
 				if message:
 					protocol.append(message)
 
-			protocol.append("# " + user.get_username())
+			protocol.append("")
+			protocol_title = "## " + user.get_username() + " "
+			protocol.append(protocol_title + ("#" * (80 - len(protocol_title))))
 			protocol.append("")
 
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
