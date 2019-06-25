@@ -189,10 +189,10 @@ class DB:
 
 	def clear(self):
 		c = self.db.cursor()
-		c.execute("DELETE FROM results")
-		c.execute("DELETE FROM performance")
-		c.execute("DELETE FROM coverage_cases")
-		c.execute("DELETE FROM coverage_occurrences")
+		c.execute("DROP TABLE results")
+		c.execute("DROP TABLE performance")
+		c.execute("DROP TABLE coverage_cases")
+		c.execute("DROP TABLE coverage_occurrences")
 		self.db.commit()
 		c.close()		
 
