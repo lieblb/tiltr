@@ -5,6 +5,8 @@
 # GPLv3, see LICENSE
 #
 
+from typing import Any, DefaultDict, Union
+
 import asyncio
 import requests
 import json
@@ -50,6 +52,12 @@ import pandora
 from .commands import TakeExamCommand
 from .drivers import UsersBackend, UsersFactory, UserDriver, ImportedTest, Marks, ILIASDriver
 from .utils import wait_for_page_load, run_interaction
+
+
+class PostProcessingRound:
+	def __init__(self, index: int, is_reimport: bool):
+		self.index = index
+		self.is_reimport = is_reimport
 
 
 monitor_mutex = Lock()
@@ -228,6 +236,8 @@ def create_temp_test_name():
 
 
 class Run:
+	protocols: DefaultDict[str, Union[list, DefaultDict[str, list]]]
+
 	def __init__(self, batch):
 		self.success = ("FAIL", "unknown")
 
@@ -236,6 +246,7 @@ class Run:
 		self.users = []
 		self.users_factory = batch.users_factory
 		self.protocols = defaultdict(list)
+		self.protocols["postprocessing"] = defaultdict(list)
 		self.files = dict()
 		self.test_version = 1
 		self.test_url = None
@@ -278,7 +289,9 @@ class Run:
 
 		return "\n".join(parts)
 
-	def _check_results(self, index, master, test_driver, workbook, all_recorded_results, is_reimport):
+	def _check_results(
+		self, processing_round: PostProcessingRound, master, test_driver, workbook, all_recorded_results):
+
 		all_assertions_ok = True
 
 		usernames = [user.get_username() for user in self.users]
@@ -289,7 +302,9 @@ class Run:
 		web_answers = test_driver.get_answers_from_details_view(self.questions)
 
 		pdfs = test_driver.export_pdf()
-		prefix = 'reimport/' if is_reimport else 'original/'
+		prefix = 'reimport/' if processing_round.is_reimport else 'original/'
+
+		protocol = self._get_postprocessing_protocol(processing_round, "verification")
 
 		for user, recorded_result in zip(self.users, all_recorded_results):
 			master.report("checking results for user %s." % user.get_username())
@@ -327,11 +342,10 @@ class Run:
 			# perform response checks.
 			def report(message):
 				if message:
-					self.protocols[user.get_username()].append(message)
+					protocol.append(message)
 
-			self.protocols[user.get_username()].extend(["", "# VERIFICATION%s%s" % (
-				(" FOR READJUSTMENT ROUND %d" % index) if index > 0 else "",
-				" (FOR REIMPORTED VERSION)" if is_reimport else ""), ""])
+			protocol.append("# " + user.get_username())
+			protocol.append("")
 
 			if not recorded_result.check_against(ilias_result, report, self.workarounds):
 				message = "verification failed for user %s." % user.get_username()
@@ -340,7 +354,7 @@ class Run:
 				self.protocols["log"].append("[fail] " + message)
 				all_assertions_ok = False
 
-			if not is_reimport:
+			if not processing_round.is_reimport:
 				# add coverage info.
 				for question_title, answers in ilias_result.get_answers().items():
 					question = self.questions[question_title]
@@ -378,12 +392,24 @@ class Run:
 			for channel in ("xls", "statistics_tab", "results_tab"):
 				result.update((channel, "short_mark"), str(mark.short).strip())
 
-	def _apply_manual_scoring(self, master, test_driver, all_recorded_results):
+	def _get_postprocessing_protocol(self, processing_round: PostProcessingRound, readjustment_type):
+		protocol_name = "%02d_%s%s" % (
+			processing_round.index + 1,
+			readjustment_type,
+			"_after_reimport" if processing_round.is_reimport else "")
+		return self.protocols["postprocessing"][protocol_name + ".txt"]
+
+	def _apply_manual_scoring(self, processing_round, master, test_driver, all_recorded_results):
 		context = RandomContext(
 			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.as_tuple())
 
+		protocol = self._get_postprocessing_protocol(processing_round, "manual_scoring")
+
 		for question_title, question in self.questions.items():
 			if question.can_score_manually():
+				protocol.append("manual scores for question " + question_title)
+				protocol.append("")
+
 				with wait_for_page_load(master.driver):
 					test_driver.goto_manual_scoring()
 
@@ -402,18 +428,21 @@ class Run:
 					username = user.get_username()
 					manual_scores[username] = score
 
+					protocol.append("%s: %s" % (username, score))
+
+				protocol.append("")
 				test_driver.apply_manual_scoring(question.title, manual_scores)
 
 		self._propagate_score_changes(all_recorded_results, context)
 
-	def _apply_readjustment(self, index, master, test_driver, all_recorded_results, is_reimport):
+	def _apply_readjustment(self, processing_round, master, test_driver, all_recorded_results):
 		# note that this will destroy the original test's scores. usually we should have copied
 		# this test and this should only run on a temporary copy.
 
 		context = RandomContext(
 			self.questions, self.settings, self.workarounds, self.language, self.ilias_version.as_tuple())
 
-		protocol = self.protocols["readjustments"]
+		protocol = self._get_postprocessing_protocol(processing_round, "readjustment")
 
 		def report(s):
 			if isinstance(s, Texttable):
@@ -423,10 +452,6 @@ class Run:
 				protocol.append(s)
 				if s:
 					master.report(s)
-
-		report("")
-		report("## READJUSTMENT ROUND %d%s" % (index + 1, " (AFTER REIMPORT)" if is_reimport else ""))
-		report("")
 
 		index = 0
 		retries = 0
@@ -803,6 +828,8 @@ class Run:
 		all_assertions_ok = False
 
 		for round_index, round in enumerate(rounds):
+			processing_round = PostProcessingRound(round_index, is_reimport)
+
 			if round == "check":
 				xls = test_driver.export_xls()
 				workbook = load_workbook(filename=io.BytesIO(xls))
@@ -817,7 +844,7 @@ class Run:
 					self.files[prefix + "exported_r%d.xlsx" % round_index] = xls
 
 				all_assertions_ok = self._check_results(
-					round_index, master, test_driver, workbook, all_recorded_results, is_reimport)
+					processing_round, master, test_driver, workbook, all_recorded_results)
 				if not all_assertions_ok:
 					break
 
@@ -829,12 +856,13 @@ class Run:
 
 			elif round == "readjust":
 				self._apply_readjustment(
-					round_index, master, test_driver, all_recorded_results, is_reimport)
+					processing_round, master, test_driver, all_recorded_results)
 
 				self._save_test(test_driver, "reimported" if is_reimport else "", "readjustments")
 
 			elif round == "manual":
-				self._apply_manual_scoring(master, test_driver, all_recorded_results)
+				self._apply_manual_scoring(
+					processing_round, master, test_driver, all_recorded_results)
 
 				self._save_test(test_driver, "reimported" if is_reimport else "", "manual scoring")
 
@@ -888,8 +916,8 @@ class Run:
 		files = self.files.copy()
 		files['protocol.txt'] = self._make_protocol().encode('utf8')
 
-		if self.protocols["readjustments"]:
-			files['readjustments/protocol.txt'] = ("\n".join(self.protocols["readjustments"])).encode('utf8')
+		for protocol_name, protocol_text in self.protocols["postprocessing"].items():
+			files['postprocessing/%s' % protocol_name] = ("\n".join(protocol_text)).encode('utf8')
 
 		for part in itertools.chain(["master"], (user.get_username() for user in self.users)):
 			files['machines/%s.txt' % part] = ("\n".join(self.protocols[part])).encode('utf8')
