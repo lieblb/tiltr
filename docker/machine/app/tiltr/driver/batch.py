@@ -301,7 +301,7 @@ class Run:
 		tab_stats["results_tab"] = test_driver.get_results_from_results_tab(usernames)
 		web_answers = test_driver.get_answers_from_details_view(self.questions)
 
-		pdfs = test_driver.export_pdf()
+		pdfs = test_driver.export_pdf(self.files)
 		prefix = 'reimport/' if processing_round.is_reimport else 'original/'
 
 		protocol = self._get_postprocessing_protocol(processing_round, "verification")

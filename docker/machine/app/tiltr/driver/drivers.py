@@ -1530,7 +1530,7 @@ class TestDriver:
 		content, _ = self._export("csv", "xlsx")
 		return content
 
-	def export_pdf(self):
+	def export_pdf(self, files):
 		self.report("exporting PDFs.")
 
 		pdfs = dict()
@@ -1549,7 +1549,11 @@ class TestDriver:
 				cookies = dict((cookie['name'], cookie['value']) for cookie in self.driver.get_cookies())
 				result = requests.get(url, cookies=cookies, verify=self.verify_ssl)
 
-				pdfs[user_id] = PDF(result.content)
+				try:
+					pdfs[user_id] = PDF(result.content)
+				except:
+					files["error/%s.pdf" % user_id] = result.content
+					raise
 
 		self._iterate_detailed_results(get_pdf)
 
