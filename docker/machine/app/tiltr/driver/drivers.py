@@ -922,7 +922,7 @@ class ExamDriver:
 			for filename, what in answer.protocol_files.items():
 				result.attach_file(filename, what.encode('utf8'))
 
-	def get_expected_result(self, language):
+	def get_expected_result(self, workarounds, language):
 		result = Result(origin=Origin.recorded)
 
 		maximum_score = Decimal(0)
@@ -945,6 +945,9 @@ class ExamDriver:
 		mark = Marks(self.exam_configuration.marks).lookup(expected_reached_percentage)
 
 		for channel in ("xls", "statistics_tab", "results_tab"):
+			if workarounds.ignore_wrong_results_in_results_tab and channel == "results_tab":
+				continue
+
 			result.add(
 				(channel, "score_reached"),
 				Result.format_score(expected_reached_score))

@@ -222,7 +222,7 @@ class TakeExamCommand:
 
 					exam_driver.close()
 
-					result = exam_driver.get_expected_result(self.admin_lang)
+					result = exam_driver.get_expected_result(self.workarounds, self.admin_lang)
 					result.attach_coverage(context.coverage)
 
 		except TiltrException as e:

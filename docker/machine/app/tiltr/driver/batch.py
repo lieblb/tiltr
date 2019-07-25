@@ -298,7 +298,8 @@ class Run:
 		tab_stats = dict()
 
 		tab_stats["statistics_tab"] = test_driver.get_results_from_statistics_tab(usernames)
-		tab_stats["results_tab"] = test_driver.get_results_from_results_tab(usernames)
+		if not self.workarounds.ignore_wrong_results_in_results_tab:
+			tab_stats["results_tab"] = test_driver.get_results_from_results_tab(usernames)
 		web_answers = test_driver.get_answers_from_details_view(self.questions)
 
 		pdfs = test_driver.export_pdf(self.files)
@@ -379,6 +380,8 @@ class Run:
 			reached_percentage = Result.score_percentage(MaybeDecimal(reached_score), maximum_score)
 
 			for channel in ("xls", "statistics_tab", "results_tab"):
+				if self.workarounds.ignore_wrong_results_in_results_tab and channel == "results_tab":
+					continue
 				result.update(
 					(channel, "score_maximum"),
 					Result.format_score(maximum_score))
@@ -392,6 +395,8 @@ class Run:
 
 			mark = Marks(self.exam_configuration.marks).lookup(reached_percentage)
 			for channel in ("xls", "statistics_tab", "results_tab"):
+				if self.workarounds.ignore_wrong_results_in_results_tab and channel == "results_tab":
+					continue
 				result.update((channel, "short_mark"), str(mark.short).strip())
 
 	def _get_postprocessing_protocol(self, processing_round: PostProcessingRound, readjustment_type):
